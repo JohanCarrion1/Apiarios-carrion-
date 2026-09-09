@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import {
   APIARY,
-  SEED_HIVES,
-  SEED_INSPECTIONS,
-  SEED_TASKS,
   uid,
-  type Hive,
-  type HiveStatus,
-  type Inspection,
   type Toast,
 } from "./data";
-import { useClock, useLocalState, useReveal } from "./hooks";
+import { useClock, useReveal } from "./hooks";
 import {
   IconBee,
   IconCheck,
@@ -23,6 +18,7 @@ import {
   IconSearch,
   IconSun,
   IconWind,
+  IconChart,
   SectionHead,
 } from "./ui";
 import Overview from "./components/Overview";
@@ -31,10 +27,29 @@ import HiveDetail from "./components/HiveDetail";
 import Production from "./components/Production";
 import Panels from "./components/Panels";
 import InspectionModal, { type InspectionDraft } from "./components/InspectionModal";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { LanguageProvider } from "./context/LanguageContext";
+import { SettingsProvider } from "./context/SettingsContext";
+import { ResponsiveHeader } from "./components/ResponsiveHeader";
+import { BottomNav } from "./components/BottomNav";
+import { FadeInUp } from "./components/Animations";
+import { saveToStorage, loadFromStorage, STORAGE_KEYS } from "./utils/storage";
+import type { Hive, Inspection, Task } from "./types/hive";
+import AddHiveModal from "./components/AddHiveModal";
+import StatsSection from "./components/StatsSection";
+import CalendarSection from "./components/CalendarSection";
+import WeatherWidget from "./components/WeatherWidget";
+import SettingsModal, { type Settings } from "./components/SettingsModal";
+import SettingsPage from "./components/SettingsPage";
+
+import { IconCalendar } from "./ui";
 
 const NAV = [
   { id: "panel", label: "Panel", icon: IconPanel },
   { id: "colmenas", label: "Colmenas", icon: IconHex },
+  { id: "estadisticas", label: "Estadísticas", icon: IconChart },
+  { id: "calendario", label: "Calendario", icon: IconCalendar },
   { id: "produccion", label: "Cosecha", icon: IconDrop },
   { id: "registro", label: "Cuaderno", icon: IconClipboard },
   { id: "tareas", label: "Tareas", icon: IconCheck },
@@ -84,34 +99,55 @@ function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activ
   const time = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <header ref={ref} className={`reveal ${inView ? "in" : ""} flex flex-wrap items-end justify-between gap-6`}>
+    <motion.header 
+      ref={ref}
+      className={`reveal ${inView ? "in" : ""} flex flex-col sm:flex-row flex-wrap items-start sm:items-end justify-between gap-6`}
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+    >
       <div>
-        <p className="tick-label mb-3 flex items-center gap-2">
+        <motion.p 
+          className="tick-label mb-3 flex items-center gap-2"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+        >
           <IconFlower className="h-3.5 w-3.5 text-honey" />
           {APIARY.name} · {APIARY.place}
-        </p>
-        <h1 className="font-display text-4xl font-black leading-[1.03] tracking-tight text-cream sm:text-5xl xl:text-6xl">
+        </motion.p>
+        <motion.h1 
+          className="font-display text-3xl sm:text-4xl md:text-5xl xl:text-6xl font-black leading-[1.03] tracking-tight text-cream"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
           El colmenar,
           <br />
           <em className="text-honey">bajo control.</em>
-        </h1>
+        </motion.h1>
       </div>
 
-      <div className="card flex items-center gap-5 px-5 py-4">
+      <motion.div 
+        className="card flex items-center gap-3 sm:gap-5 px-4 sm:px-5 py-3 sm:py-4"
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
+      >
         <div>
           <p className="tick-label">{dateCap}</p>
-          <p className="mt-1 font-mono text-2xl font-bold leading-none text-cream">
+          <p className="mt-1 font-mono text-xl sm:text-2xl font-bold leading-none text-cream">
             {time}
             <span className="ml-1 text-xs font-normal text-husk">h</span>
           </p>
         </div>
         <div className="hidden h-11 w-px bg-line sm:block" />
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 font-mono text-sm font-semibold text-cream">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <span className="flex items-center gap-1.5 font-mono text-xs sm:text-sm font-semibold text-cream">
             <IconSun className="h-4 w-4 text-honey" />
             {temp.toFixed(1)}°
           </span>
-          <span className="flex items-center gap-1.5 font-mono text-sm font-semibold text-cream">
+          <span className="flex items-center gap-1.5 font-mono text-xs sm:text-sm font-semibold text-cream">
             <IconWind className="h-4 w-4 text-husk" />
             {wind}
             <span className="text-[10px] font-normal text-husk">km/h</span>
@@ -121,7 +157,7 @@ function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activ
         <div className="hidden items-center gap-3 sm:flex">
           <svg viewBox="0 0 40 40" className="h-11 w-11 -rotate-90">
             <circle cx="20" cy="20" r="16" fill="none" stroke="#392c19" strokeWidth="4" />
-            <circle
+            <motion.circle
               cx="20"
               cy="20"
               r="16"
@@ -130,8 +166,9 @@ function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activ
               strokeWidth="4"
               strokeLinecap="round"
               pathLength={100}
-              strokeDasharray={`${activity} 100`}
-              className="transition-all duration-1000"
+              initial={{ strokeDasharray: "0 100" }}
+              animate={{ strokeDasharray: `${activity} 100` }}
+              transition={{ duration: 1, delay: 0.5 }}
             />
           </svg>
           <div>
@@ -139,27 +176,99 @@ function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activ
             <p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-husk">actividad de vuelo</p>
           </div>
         </div>
-      </div>
-    </header>
+      </motion.div>
+    </motion.header>
   );
 }
 
 /* ---------- app ---------- */
 
 export default function App() {
-  const [hives, setHives] = useLocalState<Hive[]>("panal-hives-v1", SEED_HIVES);
-  const [inspections, setInspections] = useLocalState<Inspection[]>("panal-inspections-v1", SEED_INSPECTIONS);
-  const [tasks, setTasks] = useLocalState("panal-tasks-v1", SEED_TASKS);
+  return (
+    <SettingsProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        </AuthProvider>
+      </LanguageProvider>
+    </SettingsProvider>
+  );
+}
 
-  const [selectedId, setSelectedId] = useState("C-08");
-  const [filter, setFilter] = useState<HiveStatus | "todas">("todas");
+function Dashboard() {
+  const { user } = useAuth();
+  
+  // Cargar datos desde localStorage
+  const [hives, setHives] = useState<Hive[]>([]);
+  const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [filter, setFilter] = useState<"saludable" | "revision" | "alerta" | "sin_reina" | "todas">("todas");
   const [query, setQuery] = useState("");
   const [modalHive, setModalHive] = useState<string | null>(null);
+  const [showAddHiveModal, setShowAddHiveModal] = useState(false);
+  const [editingHive, setEditingHive] = useState<Hive | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [active, setActive] = useState("panel");
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showSettingsPage, setShowSettingsPage] = useState(false);
+  const [settings, setSettings] = useState<Settings>({
+    location: {
+      name: 'Huaraz, Áncash',
+      latitude: -9.5278,
+      longitude: -77.5278,
+    },
+    photos: {
+      enabled: true,
+      quality: 'medium',
+      maxPhotos: 5,
+    },
+  });
 
   const [temp, setTemp] = useState(22.4);
   const [wind, setWind] = useState(11);
+
+  // Cargar datos al montar
+  useEffect(() => {
+    const savedHives = loadFromStorage<Hive[]>(STORAGE_KEYS.HIVES) || [];
+    const savedInspections = loadFromStorage<Inspection[]>(STORAGE_KEYS.INSPECTIONS) || [];
+    const savedTasks = loadFromStorage<Task[]>(STORAGE_KEYS.TASKS) || [];
+    const savedSettings = loadFromStorage<typeof settings>('panal_settings');
+    
+    setHives(savedHives);
+    setInspections(savedInspections);
+    setTasks(savedTasks);
+    if (savedSettings) {
+      setSettings(savedSettings);
+    }
+  }, []);
+
+  // Guardar datos cuando cambian
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.HIVES, hives);
+  }, [hives]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.INSPECTIONS, inspections);
+  }, [inspections]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.TASKS, tasks);
+  }, [tasks]);
+
+  useEffect(() => {
+    saveToStorage('panal_settings', settings);
+  }, [settings]);
+
+  // Seleccionar primera colmena cuando se cargan
+  useEffect(() => {
+    if (hives.length > 0 && !selectedId) {
+      setSelectedId(hives[0].id);
+    }
+  }, [hives, selectedId]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -185,8 +294,8 @@ export default function App() {
 
   const activity = Math.min(98, Math.max(5, Math.round(20 + (temp - 15) * 8 - wind * 1.4)));
   const alerts = hives.filter((h) => h.status === "alerta").length;
-  const pending = tasks.filter((t) => !t.done).length;
-  const selectedHive = hives.find((h) => h.id === selectedId) ?? hives[0];
+  const pending = tasks.filter((t) => !t.completed).length;
+  const selectedHive = hives.find((h) => h.id === selectedId);
 
   const pushToast = (title: string, desc?: string) => {
     const t: Toast = { id: uid(), title, desc };
@@ -194,163 +303,137 @@ export default function App() {
     setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== t.id)), 3600);
   };
 
+  // Funciones CRUD para colmenas
+  const addHive = (hive: Omit<Hive, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newHive: Hive = {
+      ...hive,
+      id: uid(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setHives(prev => [...prev, newHive]);
+    pushToast("Colmena agregada", `${hive.code} - ${hive.name || 'Sin nombre'}`);
+  };
+
+  const updateHive = (id: string, updates: Partial<Hive>) => {
+    setHives(prev => prev.map(h => 
+      h.id === id ? { ...h, ...updates, updatedAt: new Date().toISOString() } : h
+    ));
+    pushToast("Colmena actualizada");
+  };
+
+  const deleteHive = (id: string) => {
+    setHives(prev => prev.filter(h => h.id !== id));
+    if (selectedId === id) {
+      setSelectedId(hives.length > 1 ? hives.find(h => h.id !== id)?.id || "" : "");
+    }
+    pushToast("Colmena eliminada");
+  };
+
   const handleInspection = (d: InspectionDraft) => {
-    const insp: Inspection = { id: uid(), date: new Date().toISOString(), ...d };
-    setInspections((prev) => [insp, ...prev]);
-    setHives((prev) =>
-      prev.map((h) => {
-        if (h.id !== d.hiveId) return h;
-        const status: HiveStatus = d.varroa >= 3 ? "alerta" : d.queenSeen ? (h.status === "sinreina" ? "revision" : "saludable") : "revision";
-        return { ...h, brood: d.brood, honey: d.honey, varroa: d.varroa, status, lastInspection: insp.date, note: d.note };
-      })
-    );
+    const inspection: Inspection = {
+      id: uid(),
+      hiveId: d.hiveId,
+      date: new Date().toISOString(),
+      queenSeen: d.queenSeen,
+      brood: d.brood,
+      honey: d.honey,
+      varroa: d.varroa,
+      calm: d.calm,
+      note: d.note,
+    };
+    setInspections(prev => [inspection, ...prev]);
     setModalHive(null);
     pushToast("Inspección registrada", `${d.hiveId} · ${d.queenSeen ? "reina vista" : "sin ver reina"} · varroa ${d.varroa.toFixed(1)}%`);
   };
 
-  const toggleTask = (id: string) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const toggleTask = (id: string) => {
+    setTasks(prev => prev.map(t => 
+      t.id === id ? { ...t, completed: !t.completed } : t
+    ));
+  };
 
-  const addTask = (title: string) => {
-    setTasks((prev) => [{ id: uid(), title, hiveId: null, due: "Esta semana", priority: "media" as const, done: false }, ...prev]);
+  const handleAddTask = (title: string) => {
+    const newTask: Task = {
+      id: uid(),
+      title,
+      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      priority: 'media',
+      completed: false,
+    };
+    setTasks(prev => [newTask, ...prev]);
     pushToast("Tarea añadida", title);
   };
 
-  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   const openAlerts = () => {
     setFilter("alerta");
     jumpTo("colmenas");
   };
 
-  const navBtn = (n: (typeof NAV)[number], mobile = false) => {
-    const isActive = active === n.id;
-    const badge = n.id === "colmenas" ? hives.length : n.id === "tareas" ? pending : null;
-    return (
-      <button
-        key={n.id}
-        onClick={() => jumpTo(n.id)}
-        className={`group relative flex shrink-0 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${
-          mobile ? "" : "w-full"
-        } ${isActive ? "bg-pane3 text-honey" : "text-husk hover:bg-pane2 hover:text-cream"}`}
-      >
-        {!mobile && (
-          <span
-            className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-honey transition-all duration-300 ${isActive ? "opacity-100" : "opacity-0"}`}
-          />
-        )}
-        <n.icon className={`h-4.5 w-4.5 transition-transform duration-200 ${isActive ? "" : "group-hover:translate-x-0.5"}`} />
-        {n.label}
-        {badge !== null && badge > 0 && (
-          <span className={`ml-auto rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${n.id === "tareas" && isActive ? "bg-honey text-ink" : "bg-ink text-husk"}`}>
-            {badge}
-          </span>
-        )}
-      </button>
-    );
-  };
-
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen pb-20 lg:pb-0">
       <Ambient />
 
-      {/* barra lateral */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-line bg-pane/80 backdrop-blur-md lg:flex">
-        <a href="#panel" className="flex items-center gap-3 px-6 py-6">
-          <span className="hexclip flex h-11 w-10 items-center justify-center bg-honey text-ink shadow-[0_0_24px_rgba(240,164,28,.35)]">
-            <IconBee className="h-6 w-6" />
-          </span>
-          <span>
-            <span className="block font-display text-xl font-black tracking-[0.08em] text-cream">PANAL</span>
-            <span className="block font-mono text-[9px] uppercase tracking-[0.22em] text-husk">cuaderno apícola</span>
-          </span>
-        </a>
-
-        <nav className="mt-2 flex-1 space-y-1 px-3">
-          {NAV.map((n) => navBtn(n))}
-        </nav>
-
-        <div className="space-y-3 p-4">
-          <div className="rounded-xl border border-line bg-ink/60 p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold text-cream">
-              <IconFlower className="h-4 w-4 text-honey" />
-              {APIARY.name}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-husk">{APIARY.place}</p>
-            <p className="mt-2 font-mono text-[10px] tracking-wider text-husk/70">{APIARY.coords}</p>
-          </div>
-          <div className="flex items-center gap-3 px-1">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-honey font-display text-sm font-black text-ink">
-              MR
-            </span>
-            <span>
-              <span className="block text-sm font-semibold leading-tight text-cream">{APIARY.keeper}</span>
-              <span className="block font-mono text-[9px] uppercase tracking-widest text-husk">apicultora titular</span>
-            </span>
-          </div>
-        </div>
-      </aside>
+      {/* Header Responsive */}
+      <ResponsiveHeader onNavigate={jumpTo} onSettings={() => setShowSettingsPage(true)} />
 
       {/* contenido */}
-      <div className="relative z-10 lg:pl-60">
-        {/* barra superior */}
-        <div className="sticky top-0 z-30 border-b border-line bg-ink/85 backdrop-blur-md">
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
-            <a href="#panel" className="flex items-center gap-2 lg:hidden">
-              <span className="hexclip flex h-8 w-7 items-center justify-center bg-honey text-ink">
-                <IconBee className="h-4.5 w-4.5" />
-              </span>
-              <span className="font-display text-lg font-black tracking-wider text-cream">PANAL</span>
-            </a>
+      <div className="relative z-10">
+        <main className="mx-auto max-w-6xl space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 sm:pt-8 md:pt-10">
+          <FadeInUp>
+            <IntroHead temp={temp} wind={wind} activity={activity} />
+          </FadeInUp>
 
-            <label className="relative ml-auto w-full max-w-[13rem] flex-1 sm:max-w-xs sm:ml-6">
-              <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-husk" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar colmena… (C-08)"
-                className="w-full rounded-xl border border-line bg-pane py-2 pl-9 pr-3 text-sm text-cream placeholder:text-husk/60 transition-all duration-200 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
-              />
-            </label>
+          {/* Widget de Clima */}
+          <FadeInUp delay={0.1}>
+            <WeatherWidget location={settings.location} />
+          </FadeInUp>
 
-            <button
-              onClick={openAlerts}
-              className="flex items-center gap-2 rounded-xl border border-coral/40 bg-coral/10 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-coral transition-all duration-200 hover:bg-coral/20"
-              title="Ver colmenas en alerta"
+          {/* Botón de Ajustes */}
+          <div className="flex justify-end">
+            <motion.button
+              onClick={() => setShowSettingsModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <span className="pulse-dot h-2 w-2 rounded-full bg-coral" />
-              <span className="hidden sm:inline">{alerts} alertas</span>
-              <span className="sm:hidden">{alerts}</span>
-            </button>
-
-            <button
-              onClick={() => setModalHive(selectedId)}
-              className="flex shrink-0 items-center gap-2 rounded-xl bg-honey px-3.5 py-2 text-sm font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_6px_24px_rgba(240,164,28,.35)] active:scale-95 sm:px-4"
-            >
-              <IconPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Nueva inspección</span>
-              <span className="sm:hidden">Inspección</span>
-            </button>
+              <span>⚙️</span>
+              <span>Ajustes</span>
+            </motion.button>
           </div>
 
-          <nav className="flex gap-1 overflow-x-auto border-t border-line/70 px-4 py-2 lg:hidden">
-            {NAV.map((n) => navBtn(n, true))}
-          </nav>
-        </div>
-
-        <main className="mx-auto max-w-6xl space-y-20 px-4 pb-10 pt-10 sm:px-6">
-          <IntroHead temp={temp} wind={wind} activity={activity} />
-
-          <section id="panel" className="scroll-mt-32">
+          <motion.section 
+            id="panel" 
+            className="scroll-mt-32"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
             <Overview hives={hives} tasks={tasks} />
-          </section>
+          </motion.section>
 
-          <section id="colmenas" className="scroll-mt-32">
+          <motion.section 
+            id="colmenas" 
+            className="scroll-mt-32"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
             <SectionHead
               kicker="Mapa del bancal"
               title="Colmenas"
               right={
                 <p className="text-right font-mono text-xs leading-relaxed text-husk">
-                  {hives.length} colonias · 2 núcleos
+                  {hives.length} colonias
                   <br />
                   distribución por calles
                 </p>
@@ -358,33 +441,97 @@ export default function App() {
             />
             <div className="grid gap-6 lg:grid-cols-12">
               <div className="lg:col-span-8">
-                <HiveComb hives={hives} selectedId={selectedId} onSelect={setSelectedId} filter={filter} onFilter={setFilter} query={query} />
+                <HiveComb hives={hives} selectedId={selectedId} onSelect={setSelectedId} filter={filter} onFilter={setFilter} query={query} onAdd={() => setShowAddHiveModal(true)} />
               </div>
               <div className="lg:col-span-4">
-                <HiveDetail hive={selectedHive} inspections={inspections} onInspect={setModalHive} />
+                {selectedHive && (
+                  <HiveDetail 
+                    hive={selectedHive} 
+                    inspections={inspections.filter(i => i.hiveId === selectedId)} 
+                    onInspect={setModalHive}
+                    onEdit={(hive) => setEditingHive(hive)}
+                    onDelete={(id) => {
+                      if (confirm('¿Estás seguro de que deseas eliminar esta colmena?')) {
+                        deleteHive(id);
+                      }
+                    }}
+                  />
+                )}
               </div>
             </div>
-          </section>
+          </motion.section>
 
-          <section id="produccion" className="scroll-mt-32">
+          <motion.section 
+            id="estadisticas" 
+            className="scroll-mt-32"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
+            <SectionHead
+              kicker="Análisis y métricas"
+              title="Estadísticas"
+              right={<p className="font-mono text-xs text-husk">datos en tiempo real</p>}
+            />
+            <StatsSection hives={hives} inspections={inspections} />
+          </motion.section>
+
+          <motion.section 
+            id="calendario" 
+            className="scroll-mt-32"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
+            <SectionHead
+              kicker="Planificación y eventos"
+              title="Calendario"
+              right={<p className="font-mono text-xs text-husk">gestiona tus actividades</p>}
+            />
+            <CalendarSection hives={hives} tasks={tasks} />
+          </motion.section>
+
+          <motion.section 
+            id="produccion" 
+            className="scroll-mt-32"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
             <SectionHead
               kicker="Báscula y alzas"
               title="Cosecha de miel"
-              right={<p className="font-mono text-xs text-husk">comparativa 2024 / 2025</p>}
+              right={<p className="font-mono text-xs text-husk">registro de producción</p>}
             />
             <Production hivesCount={hives.length} />
-          </section>
+          </motion.section>
 
-          <section id="registro" className="scroll-mt-32">
+          <motion.section 
+            id="registro" 
+            className="scroll-mt-32"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
             <SectionHead
               kicker="Diario del apicultor"
               title="Cuaderno y tareas"
-              right={<p className="font-mono text-xs text-husk">las inspecciones se guardan en este dispositivo</p>}
+              right={<p className="font-mono text-xs text-husk">datos guardados localmente</p>}
             />
-            <Panels inspections={inspections} hives={hives} tasks={tasks} onToggle={toggleTask} onAdd={addTask} />
-          </section>
+            <Panels inspections={inspections} hives={hives} tasks={tasks} onToggle={toggleTask} onAdd={handleAddTask} />
+          </motion.section>
 
-          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-8 text-xs text-husk">
+          <motion.footer 
+            className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 border-t border-line pt-8 text-xs text-husk"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
             <span className="flex items-center gap-2">
               <span className="hexclip flex h-6 w-5 items-center justify-center bg-honey/90 text-ink">
                 <IconBee className="h-3.5 w-3.5" />
@@ -395,11 +542,14 @@ export default function App() {
             <span>
               {hives.length} colmenas · {APIARY.season}
             </span>
-          </footer>
+          </motion.footer>
         </main>
       </div>
 
-      {/* modal */}
+      {/* Bottom Navigation (móvil) */}
+      <BottomNav activeSection={active} onNavigate={jumpTo} />
+
+      {/* Modal de inspección */}
       <InspectionModal
         open={modalHive !== null}
         hives={hives}
@@ -408,10 +558,50 @@ export default function App() {
         onSubmit={handleInspection}
       />
 
+      {/* Modal de agregar/editar colmena */}
+      <AddHiveModal
+        open={showAddHiveModal || editingHive !== null}
+        hive={editingHive}
+        existingCodes={hives.map(h => h.code)}
+        onClose={() => {
+          setShowAddHiveModal(false);
+          setEditingHive(null);
+        }}
+        onSave={(hive) => {
+          if (editingHive) {
+            updateHive(editingHive.id, hive);
+          } else {
+            addHive(hive as Omit<Hive, 'id' | 'createdAt' | 'updatedAt'>);
+          }
+          setShowAddHiveModal(false);
+          setEditingHive(null);
+        }}
+      />
+
+      {/* Modal de ajustes */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        settings={settings}
+        onSettingsChange={(newSettings) => setSettings(newSettings)}
+      />
+
+      {/* Página completa de ajustes */}
+      {showSettingsPage && (
+        <SettingsPage onClose={() => setShowSettingsPage(false)} />
+      )}
+
       {/* toasts */}
-      <div className="fixed bottom-5 right-5 z-[60] flex w-72 flex-col gap-2">
+      <div className="fixed bottom-24 lg:bottom-5 right-5 z-[60] flex w-72 flex-col gap-2">
         {toasts.map((t) => (
-          <div key={t.id} className="toast-in card flex items-start gap-3 border-honey/40 p-4 shadow-[0_16px_40px_rgba(0,0,0,.5)]">
+          <motion.div 
+            key={t.id} 
+            className="toast-in card flex items-start gap-3 border-honey/40 p-4 shadow-[0_16px_40px_rgba(0,0,0,.5)]"
+            initial={{ opacity: 0, x: 100, scale: 0.8 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 100, scale: 0.8 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          >
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-honey text-ink">
               <IconCheck className="h-3.5 w-3.5" />
             </span>
@@ -419,7 +609,7 @@ export default function App() {
               <p className="text-sm font-semibold text-cream">{t.title}</p>
               {t.desc && <p className="mt-0.5 truncate font-mono text-[11px] text-husk">{t.desc}</p>}
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>

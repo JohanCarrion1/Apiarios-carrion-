@@ -45,27 +45,34 @@ export function useCountUp(target: number, start: boolean, duration = 1500, deci
   return val;
 }
 
-/** Estado persistido en localStorage. */
-export function useLocalState<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(() => {
+/** Hook para cargar datos desde Supabase con refresco automático. */
+export function useSupabaseData<T>(
+  fetcher: () => Promise<T>,
+  deps: any[] = []
+): { data: T | null; loading: boolean; error: string | null; refresh: () => Promise<void> } {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw) as T;
-    } catch {
-      /* semilla */
+      const result = await fetcher();
+      setData(result);
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar datos');
+    } finally {
+      setLoading(false);
     }
-    return initial;
-  });
+  };
 
   useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      /* sin almacenamiento */
-    }
-  }, [key, value]);
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 
-  return [value, setValue] as const;
+  return { data, loading, error, refresh };
 }
 
 /** Reloj en vivo (HH:MM). */

@@ -1,153 +1,222 @@
-import type { ReactNode } from "react";
-import { QUEEN_MARK, STATUS_META, fmtDate, relDays, type Hive, type Inspection } from "../data";
-import { IconBug, IconCrown, IconDrop, IconLayers, IconPlus, IconScale, StatusPill } from "../ui";
+import { motion } from 'framer-motion';
+import { STATUS_COLORS, type Hive, type Inspection } from "../types/hive";
+import { IconCrown, IconPlus, IconNote, IconX } from "../ui";
 
 interface Props {
   hive: Hive;
   inspections: Inspection[];
   onInspect: (id: string) => void;
+  onEdit: (hive: Hive) => void;
+  onDelete: (id: string) => void;
 }
 
-function MeterRow({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex w-28 shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-husk">
-        {icon}
-        {label}
-      </span>
-      <div className="flex-1">{children}</div>
-    </div>
-  );
+function daysAgo(date: string): string {
+  const d = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
+  if (d <= 0) return 'hoy';
+  if (d === 1) return 'hace 1 día';
+  return `hace ${d} días`;
 }
 
-function Bar({ value, max, color, grad }: { value: number; max: number; color: string; grad?: string }) {
-  return (
-    <div className="h-2 overflow-hidden rounded-full bg-ink">
-      <div
-        className="h-full rounded-full transition-all duration-700"
-        style={{ width: `${(value / max) * 100}%`, background: grad ?? color }}
-      />
-    </div>
-  );
-}
-
-export default function HiveDetail({ hive, inspections, onInspect }: Props) {
-  const meta = STATUS_META[hive.status];
-  const history = inspections.filter((i) => i.hiveId === hive.id).slice(0, 2);
-  const varroaColor = hive.varroa < 1.5 ? "#a3bf7f" : hive.varroa < 2.5 ? "#f0a41c" : "#e4603f";
-  const mark = hive.queenYear ? QUEEN_MARK[hive.queenYear] : null;
+export default function HiveDetail({ hive, inspections, onInspect, onEdit, onDelete }: Props) {
+  const color = STATUS_COLORS[hive.status];
+  const history = inspections.slice(0, 3);
+  const statusLabel = hive.status === 'sin_reina' ? 'SIN REINA' : hive.status.toUpperCase();
 
   return (
-    <aside className="lg:sticky lg:top-28">
-      <div key={hive.id} className="card fade-in relative overflow-hidden p-6">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1" style={{ background: meta.color }} />
+    <motion.aside 
+      className="lg:sticky lg:top-28"
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+    >
+      <motion.div 
+        key={hive.id}
+        className="card relative overflow-hidden"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+      >
+        {/* Barra superior de color */}
+        <motion.div 
+          className="h-2"
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          style={{ transformOrigin: 'left', background: `linear-gradient(90deg, ${color}, ${color}aa)` }}
+        />
 
-        {/* cabecera */}
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="tick-label">Colmena</p>
-            <h3 className="font-display text-5xl font-black tracking-tight text-cream">{hive.id}</h3>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <StatusPill status={hive.status} />
-            <span className="font-mono text-[10px] uppercase tracking-wider text-husk">rev. {relDays(hive.lastInspection)}</span>
-          </div>
-        </div>
-
-        {/* reina */}
-        <div
-          className="mt-5 flex items-center gap-3 rounded-xl border px-4 py-3"
-          style={{ borderColor: (mark ? mark.color : "#bd93b8") + "44", background: (mark ? mark.color : "#bd93b8") + "10" }}
-        >
-          <IconCrown className="h-5 w-5" />
-          {hive.queenYear && mark ? (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-semibold text-cream">Reina {hive.queenYear}</span>
-              <span className="h-2.5 w-2.5 rounded-full border border-ink" style={{ background: mark.color }} />
-              <span className="text-husk">marcada {mark.name}</span>
+        <div className="p-6">
+          {/* Header con código y estado */}
+          <motion.div 
+            className="flex items-start justify-between gap-3 mb-4"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div>
+              <p className="tick-label mb-1">Colmena</p>
+              <motion.h3 
+                className="font-display text-5xl font-black tracking-tight text-cream"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
+              >
+                {hive.code}
+              </motion.h3>
+              {hive.name && (
+                <p className="mt-1 text-sm text-husk italic">{hive.name}</p>
+              )}
             </div>
-          ) : (
-            <div className="text-sm">
-              <span className="font-semibold text-mauve">Sin reina</span>
-              <span className="ml-2 text-husk">introducir celda real o reina fecundada</span>
+            <div className="flex flex-col items-end gap-2">
+              <span 
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider"
+                style={{ color, background: color + "20", border: `2px solid ${color}` }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                {statusLabel}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
+                REV. {daysAgo(hive.updatedAt).toUpperCase()}
+              </span>
             </div>
+          </motion.div>
+
+          {/* Información de reina */}
+          {hive.queenYear && (
+            <motion.div 
+              className="mb-4 flex items-center gap-3 rounded-xl border border-honey/40 bg-honey/10 px-4 py-3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <IconCrown className="h-5 w-5 text-honey" />
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-cream">Reina {hive.queenYear}</span>
+                {hive.queenMarkColor && hive.queenMarkColor !== 'sin_marca' && (
+                  <>
+                    <span className="text-husk">•</span>
+                    <span className="flex items-center gap-1.5 text-husk">
+                      marcada
+                      <span 
+                        className="h-3 w-3 rounded-full border-2 border-ink" 
+                        style={{ 
+                          background: hive.queenMarkColor === 'verde' ? '#7fb069' :
+                                     hive.queenMarkColor === 'amarillo' ? '#ffc961' :
+                                     hive.queenMarkColor === 'azul' ? '#6fa8dc' :
+                                     hive.queenMarkColor === 'rojo' ? '#e4603f' :
+                                     hive.queenMarkColor === 'blanco' ? '#e8e4da' : '#666'
+                        }} 
+                      />
+                      {hive.queenMarkColor}
+                    </span>
+                  </>
+                )}
+              </div>
+            </motion.div>
           )}
+
+          {/* Ubicación */}
+          {hive.location && (
+            <motion.p 
+              className="mb-4 text-sm text-husk"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.55 }}
+            >
+              📍 {hive.location}
+            </motion.p>
+          )}
+
+          {/* Notas */}
+          {hive.notes && (
+            <motion.div
+              className="mb-4 rounded-lg border border-line bg-ink/50 p-3"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Notas</p>
+              <p className="text-sm italic leading-relaxed text-husk">"{hive.notes}"</p>
+            </motion.div>
+          )}
+
+          {/* Historial de inspecciones */}
+          {history.length > 0 && (
+            <motion.div 
+              className="mb-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+            >
+              <p className="tick-label mb-2">Últimas Inspecciones</p>
+              <div className="space-y-2">
+                {history.map((i, index) => (
+                  <motion.div 
+                    key={i.id} 
+                    className="flex items-center gap-3 rounded-lg border border-line bg-ink/60 px-3 py-2"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.7 + index * 0.1 }}
+                  >
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
+                      {new Date(i.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                    </span>
+                    {i.queenSeen && (
+                      <span className="text-[10px] text-sage">✓ Reina</span>
+                    )}
+                    <span className="ml-auto truncate text-xs text-husk">{i.note || 'Sin notas'}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Botones de acción */}
+          <motion.div 
+            className="flex gap-2 mb-3"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+          >
+            <motion.button
+              onClick={() => onEdit(hive)}
+              className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs font-medium text-husk hover:text-cream hover:border-honey/50 transition-colors flex-1"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <IconNote className="h-3.5 w-3.5" />
+              Editar
+            </motion.button>
+            <motion.button
+              onClick={() => {
+                if (confirm('¿Estás seguro de que deseas eliminar esta colmena? Esta acción no se puede deshacer.')) {
+                  onDelete(hive.id);
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-coral/30 px-3 py-2 text-xs font-medium text-coral hover:bg-coral/10 transition-colors flex-1"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <IconX className="h-3.5 w-3.5" />
+              Eliminar
+            </motion.button>
+          </motion.div>
+
+          {/* Botón grande de inspección */}
+          <motion.button
+            onClick={() => onInspect(hive.id)}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_28px_rgba(240,164,28,.4)] active:scale-[0.98]"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+          >
+            <IconPlus className="h-5 w-5" />
+            Registrar Inspección
+          </motion.button>
         </div>
-
-        {/* métricas */}
-        <div className="mt-6 space-y-4">
-          <MeterRow label="Población" icon={<span className="inline-block h-2 w-2 rounded-full bg-sage" />}>
-            <div className="flex items-center gap-1.5 pt-0.5">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span key={i} className="hexclip h-4 w-3.5" style={{ background: i < hive.population ? "#a3bf7f" : "#392c19" }} />
-              ))}
-              <span className="ml-2 font-mono text-xs text-husk">{["muy baja", "baja", "media", "buena", "fuerte"][hive.population - 1]}</span>
-            </div>
-          </MeterRow>
-
-          <MeterRow label="Cría" icon={<IconLayers className="h-3.5 w-3.5 text-husk" />}>
-            <div className="flex items-center gap-3">
-              <Bar value={hive.brood} max={10} color="#d8b25e" />
-              <span className="w-10 text-right font-mono text-xs text-cream">{hive.brood}/10</span>
-            </div>
-          </MeterRow>
-
-          <MeterRow label="Miel" icon={<IconDrop className="h-3.5 w-3.5 text-honey" />}>
-            <div className="flex items-center gap-3">
-              <Bar value={hive.honey} max={10} color="#f0a41c" grad="linear-gradient(90deg,#b97d15,#ffc961)" />
-              <span className="w-10 text-right font-mono text-xs text-cream">{hive.honey}/10</span>
-            </div>
-          </MeterRow>
-
-          <MeterRow label="Varroa" icon={<IconBug className="h-3.5 w-3.5" />}>
-            <div className="flex items-center gap-3">
-              <Bar value={hive.varroa} max={5} color={varroaColor} />
-              <span className="w-12 text-right font-mono text-xs font-semibold" style={{ color: varroaColor }}>
-                {hive.varroa.toFixed(1)}%
-              </span>
-            </div>
-          </MeterRow>
-
-          <MeterRow label="Peso" icon={<IconScale className="h-3.5 w-3.5 text-husk" />}>
-            {hive.weight !== null ? (
-              <span className="font-mono text-sm font-semibold text-cream">
-                {hive.weight.toFixed(1)} kg <span className="ml-1 text-[10px] font-normal text-husk">en báscula</span>
-              </span>
-            ) : (
-              <span className="font-mono text-xs text-husk">sin báscula</span>
-            )}
-          </MeterRow>
-        </div>
-
-        {/* nota */}
-        <p className="mt-6 border-l-2 border-honey/60 pl-3 text-sm italic leading-relaxed text-husk">“{hive.note}”</p>
-
-        {/* historial */}
-        {history.length > 0 && (
-          <div className="mt-6">
-            <p className="tick-label mb-3">Últimas entradas</p>
-            <div className="space-y-2">
-              {history.map((i) => (
-                <div key={i.id} className="flex items-center gap-3 rounded-lg border border-line bg-ink/60 px-3 py-2">
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-husk">{fmtDate(i.date)}</span>
-                  <span className="font-mono text-[11px]" style={{ color: i.varroa >= 2 ? "#e4603f" : "#a3bf7f" }}>
-                    varroa {i.varroa.toFixed(1)}%
-                  </span>
-                  <span className="ml-auto truncate text-xs text-husk">{i.note}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={() => onInspect(hive.id)}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-honey py-3 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_28px_rgba(240,164,28,.35)] active:scale-[0.98]"
-        >
-          <IconPlus className="h-4 w-4" />
-          Registrar inspección
-        </button>
-      </div>
-    </aside>
+      </motion.div>
+    </motion.aside>
   );
 }

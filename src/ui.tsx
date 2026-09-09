@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
-import { STATUS_META, type HiveStatus } from "./data";
+import { STATUS_COLORS } from "./types/hive";
 import { useReveal } from "./hooks";
+
+const STATUS_META = STATUS_COLORS;
 
 interface IconProps {
   className?: string;
@@ -140,6 +142,25 @@ export const IconNote = ({ className }: IconProps) => (
   </svg>
 );
 
+export const IconEdit = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+export const IconTrash = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+export const IconChart = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M18 20V10M12 20V4M6 20v-6" />
+  </svg>
+);
+
 /** Abeja dibujada a mano (cuerpo rayado + alas que aletean). */
 export const IconBee = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} fill="none">
@@ -157,17 +178,19 @@ export const IconBee = ({ className }: IconProps) => (
 
 /* ---------- compartidos ---------- */
 
-export function StatusPill({ status, small }: { status: HiveStatus; small?: boolean }) {
-  const meta = STATUS_META[status];
+export function StatusPill({ status, small }: { status: 'saludable' | 'revision' | 'alerta' | 'sin_reina'; small?: boolean }) {
+  const color = STATUS_META[status as keyof typeof STATUS_META];
+  if (!color) return null;
+  const label = status === 'sin_reina' ? 'Sin reina' : status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full font-mono uppercase tracking-widest ${
         small ? "px-2 py-0.5 text-[9px]" : "px-2.5 py-1 text-[10px]"
       }`}
-      style={{ color: meta.color, background: meta.color + "1c", border: `1px solid ${meta.color}55` }}
+      style={{ color, background: color + "1c", border: `1px solid ${color}55` }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />
-      {meta.label}
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      {label}
     </span>
   );
 }

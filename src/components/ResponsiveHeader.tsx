@@ -1,32 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconBee } from '../ui';
+import { IconBee, IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconHome } from '../ui';
 import { useAuth } from '../context/AuthContext';
+import Logo from './Logo';
 
 interface ResponsiveHeaderProps {
   onNavigate: (sectionId: string) => void;
   onSettings?: () => void;
+  onHome?: () => void;
+  activeSection?: string;
 }
 
-export function ResponsiveHeader({ onNavigate, onSettings }: ResponsiveHeaderProps) {
+export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection = 'panel' }: ResponsiveHeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { user, logout } = useAuth();
 
   const menuItems = [
-    { id: 'panel', label: 'Panel' },
-    { id: 'colmenas', label: 'Colmenas' },
-    { id: 'estadisticas', label: 'Estadísticas' },
-    { id: 'calendario', label: 'Calendario' },
-    { id: 'produccion', label: 'Cosecha' },
-    { id: 'registro', label: 'Cuaderno' },
-    { id: 'tareas', label: 'Tareas' },
+    { id: 'panel', label: 'Panel', icon: IconPanel },
+    { id: 'colmenas', label: 'Colmenas', icon: IconHex },
+    { id: 'estadisticas', label: 'Estadísticas', icon: IconChart },
+    { id: 'calendario', label: 'Calendario', icon: IconCalendar },
+    { id: 'produccion', label: 'Cosecha', icon: IconDrop },
+    { id: 'registro', label: 'Cuaderno', icon: IconClipboard },
+    { id: 'tareas', label: 'Tareas', icon: IconCheck },
   ];
 
   const handleLogout = () => {
     logout();
     setShowLogoutConfirm(false);
+    setIsMenuOpen(false);
   };
+
+  // Soporte para tecla Escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
 
   return (
     <>
@@ -35,107 +50,82 @@ export function ResponsiveHeader({ onNavigate, onSettings }: ResponsiveHeaderPro
         <div className="flex items-center justify-between px-4 py-3 sm:px-6">
           {/* Logo */}
           <motion.div
-            className="flex items-center gap-3"
+            className="flex items-center"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <div className="hexclip flex h-10 w-9 items-center justify-center bg-honey text-ink">
-              <IconBee className="h-5 w-5" />
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="font-display text-lg font-bold text-cream">PANAL</h1>
-              <p className="text-[10px] text-husk">Apiarios Carrión</p>
-            </div>
+            <Logo variant="compact-inline" />
           </motion.div>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-2">
-            {menuItems.map((item, index) => (
-              <motion.button
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className="px-4 py-2 text-sm font-medium text-husk hover:text-cream transition-colors rounded-lg hover:bg-pane2"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {item.label}
-              </motion.button>
-            ))}
+            {menuItems.map((item, index) => {
+              const isActive = activeSection === item.id;
+              return (
+                <motion.button
+                  key={item.id}
+                  onClick={() => onNavigate(item.id)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${
+                    isActive 
+                      ? 'bg-honey/20 text-honey border border-honey/30' 
+                      : 'text-husk hover:text-cream hover:bg-pane2'
+                  }`}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {item.label}
+                </motion.button>
+              );
+            })}
           </nav>
 
-          {/* User Menu & Logout */}
-          <div className="flex items-center gap-3">
-            {/* User Avatar */}
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-honey/20 flex items-center justify-center">
-                <span className="text-sm font-semibold text-honey">
-                  {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
-                </span>
-              </div>
-            </div>
-
-            {/* Settings Button */}
-            {onSettings && (
-              <motion.button
-                onClick={onSettings}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-husk hover:text-amber-500 transition-colors rounded-lg hover:bg-amber-500/10"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Ajustes"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="hidden sm:inline">Ajustes</span>
-              </motion.button>
-            )}
-
-            {/* Logout Button */}
+          {/* Botón de retroceso a selección */}
+          {onHome && (
             <motion.button
-              onClick={() => setShowLogoutConfirm(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-husk hover:text-coral transition-colors rounded-lg hover:bg-coral/10"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              title="Cerrar sesión"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span className="hidden sm:inline">Salir</span>
-            </motion.button>
-
-            {/* Hamburger Button */}
-            <motion.button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="lg:hidden flex flex-col gap-1.5 p-2 rounded-lg hover:bg-pane2 transition-colors"
+              onClick={onHome}
+              className="p-2 rounded-lg hover:bg-pane2 transition-colors"
+              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
+              aria-label="Volver a selección"
+              title="Volver a selección"
             >
-              <motion.span
-                className="w-5 h-0.5 bg-cream block"
-                animate={isMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
-                transition={{ duration: 0.3 }}
-              />
-              <motion.span
-                className="w-5 h-0.5 bg-cream block"
-                animate={isMenuOpen ? { opacity: 0 } : { opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              />
-              <motion.span
-                className="w-5 h-0.5 bg-cream block"
-                animate={isMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }}
-                transition={{ duration: 0.3 }}
-              />
+              <svg className="h-5 w-5 text-honey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+              </svg>
             </motion.button>
-          </div>
+          )}
+
+          {/* Hamburger Button */}
+          <motion.button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="flex flex-col gap-1.5 p-2 rounded-lg hover:bg-pane2 transition-colors"
+            whileTap={{ scale: 0.9 }}
+            aria-label="Abrir menú"
+          >
+            <motion.span
+              className="w-6 h-0.5 bg-cream block"
+              animate={isMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
+              transition={{ duration: 0.3 }}
+            />
+            <motion.span
+              className="w-6 h-0.5 bg-cream block"
+              animate={isMenuOpen ? { opacity: 0 } : { opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            />
+            <motion.span
+              className="w-6 h-0.5 bg-cream block"
+              animate={isMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }}
+              transition={{ duration: 0.3 }}
+            />
+          </motion.button>
         </div>
       </header>
 
-      {/* Mobile Menu Overlay */}
+      {/* Menu Overlay - Available on all devices */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
@@ -145,79 +135,120 @@ export function ResponsiveHeader({ onNavigate, onSettings }: ResponsiveHeaderPro
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
             />
 
-            {/* Menu Panel */}
+            {/* Menu Panel - Mini ventana lateral */}
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 bottom-0 z-50 w-72 bg-pane border-l border-line lg:hidden"
+              className="fixed top-0 right-0 bottom-0 z-50 w-[75vw] sm:w-80 bg-pane rounded-l-2xl border-l border-line shadow-[0_0_50px_rgba(0,0,0,0.5)]"
             >
               <div className="flex flex-col h-full">
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-line">
-                  <h2 className="font-display text-lg font-bold text-cream">Menú</h2>
+                {/* Header with Close Button */}
+                <div className="flex items-center justify-between p-6 border-b border-line">
+                  <h2 className="font-display text-xl font-bold text-cream">Menú</h2>
                   <motion.button
                     onClick={() => setIsMenuOpen(false)}
-                    className="p-2 rounded-lg hover:bg-pane2 transition-colors"
+                    className="flex items-center justify-center w-11 h-11 rounded-full bg-honey/10 border-2 border-honey/30 hover:bg-honey/20 hover:border-honey/50 transition-all duration-200"
+                    whileHover={{ scale: 1.1, rotate: 90 }}
                     whileTap={{ scale: 0.9 }}
+                    aria-label="Cerrar menú"
+                    title="Cerrar (Esc)"
                   >
-                    <svg className="w-5 h-5 text-cream" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <svg className="w-6 h-6 text-honey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </motion.button>
                 </div>
 
-                {/* Menu Items */}
-                <nav className="flex-1 p-4 space-y-2">
-                  {menuItems.map((item, index) => (
-                    <motion.button
-                      key={item.id}
-                      onClick={() => {
-                        onNavigate(item.id);
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-3 text-sm font-medium text-husk hover:text-cream hover:bg-pane2 rounded-lg transition-colors"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {item.label}
-                    </motion.button>
-                  ))}
-                </nav>
-
-                {/* User Info & Actions */}
-                <div className="p-4 border-t border-line">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 rounded-full bg-honey/20 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-honey">
-                        {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
-                      </span>
-                    </div>
+                {/* User Profile Section */}
+                <div className="p-6 border-b border-line bg-gradient-to-br from-honey/5 to-transparent">
+                  <div className="flex items-center gap-4">
+                    {/* Avatar */}
+                    {user?.photoURL ? (
+                      <img 
+                        src={user.photoURL} 
+                        alt={user.displayName || 'Usuario'}
+                        className="h-16 w-16 rounded-full object-cover shadow-lg"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-honey to-honeysoft flex items-center justify-center shadow-lg">
+                        <span className="text-2xl font-bold text-ink">
+                          {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+                        </span>
+                      </div>
+                    )}
+                    {/* User Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-cream truncate">
-                        {user?.name || user?.email || 'Usuario'}
+                      <p className="text-lg font-semibold text-cream truncate">
+                        {user?.displayName || 'Usuario'}
                       </p>
                       {user?.email && (
-                        <p className="text-xs text-husk truncate">{user.email}</p>
+                        <p className="text-sm text-husk truncate">{user.email}</p>
                       )}
                     </div>
                   </div>
+                </div>
+
+                {/* Navigation Menu Items */}
+                <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+                  {menuItems.map((item, index) => {
+                    const isActive = activeSection === item.id;
+                    const IconComponent = item.icon;
+                    return (
+                      <motion.button
+                        key={item.id}
+                        onClick={() => {
+                          onNavigate(item.id);
+                          setIsMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-3 relative overflow-hidden ${
+                          isActive
+                            ? 'bg-honey/20 text-honey'
+                            : 'text-husk hover:text-cream hover:bg-pane2'
+                        }`}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        whileHover={{ x: 4 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {/* Indicador de opción activa */}
+                        <motion.div
+                          className="absolute left-0 top-0 bottom-0 w-1 bg-honey"
+                          initial={{ scaleY: 0 }}
+                          animate={{ scaleY: isActive ? 1 : 0 }}
+                          transition={{ duration: 0.2 }}
+                          style={{ originY: 0.5 }}
+                        />
+                        {/* Icono */}
+                        <IconComponent className="w-5 h-5 flex-shrink-0" />
+                        {/* Label */}
+                        <span className="relative z-10">{item.label}</span>
+                      </motion.button>
+                    );
+                  })}
+                </nav>
+
+                {/* Actions Section */}
+                <div className="p-4 border-t border-line space-y-2">
                   {onSettings && (
                     <motion.button
                       onClick={() => {
                         onSettings();
                         setIsMenuOpen(false);
                       }}
-                      className="w-full mb-2 px-4 py-2 text-sm font-medium text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors flex items-center gap-2"
+                      className="w-full px-4 py-3 text-sm font-medium text-cream hover:bg-pane2 rounded-lg transition-all duration-200 flex items-center gap-3"
+                      whileHover={{ x: 4 }}
                       whileTap={{ scale: 0.98 }}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-honey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
@@ -229,10 +260,17 @@ export function ResponsiveHeader({ onNavigate, onSettings }: ResponsiveHeaderPro
                       setShowLogoutConfirm(true);
                       setIsMenuOpen(false);
                     }}
-                    className="w-full px-4 py-2 text-sm font-medium text-coral hover:bg-coral/10 rounded-lg transition-colors"
+                    className="w-full px-4 py-3 text-sm font-medium text-coral hover:bg-coral/10 rounded-lg transition-all duration-200 flex items-center gap-3"
+                    whileHover={{ x: 4 }}
                     whileTap={{ scale: 0.98 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
                   >
-                    Cerrar sesión
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Cerrar Sesión
                   </motion.button>
                 </div>
               </div>

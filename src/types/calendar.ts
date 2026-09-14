@@ -1,7 +1,13 @@
 // Tipos para eventos del calendario
-export type EventType = 'inspection' | 'harvest' | 'treatment' | 'task' | 'reminder';
+export type EventType = 'inspection' | 'harvest' | 'treatment' | 'task' | 'reminder' | 'custom';
 
 export type EventPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+
+export type ReminderType = '1day' | '3days' | '1week';
+
+export type CalendarViewType = 'month' | 'week' | 'day';
 
 export interface CalendarEvent {
   id: string;
@@ -14,6 +20,25 @@ export interface CalendarEvent {
   priority: EventPriority;
   completed: boolean;
   createdAt: string;
+  // Nuevas propiedades
+  color?: string; // Color personalizado
+  recurrence?: {
+    type: RecurrenceType;
+    interval?: number; // Para "custom": cada X días
+    endDate?: string; // Fecha límite de recurrencia
+  };
+  reminders?: ReminderType[];
+  isRecurrentInstance?: boolean; // Si es una instancia de un evento recurrente
+  parentEventId?: string; // ID del evento padre si es recurrente
+}
+
+export interface EventTemplate {
+  id: string;
+  name: string;
+  type: EventType;
+  title: string;
+  description?: string;
+  color?: string;
 }
 
 // Tipos para notificaciones
@@ -47,6 +72,7 @@ export const EVENT_COLORS: Record<EventType, string> = {
   treatment: '#e4603f', // rojo
   task: '#bd93b8', // púrpura
   reminder: '#6fa8dc', // azul
+  custom: '#f0a41c', // ámbar por defecto
 };
 
 // Etiquetas para tipos de eventos
@@ -56,6 +82,7 @@ export const EVENT_LABELS: Record<EventType, string> = {
   treatment: 'Tratamiento',
   task: 'Tarea',
   reminder: 'Recordatorio',
+  custom: 'Personalizado',
 };
 
 // Etiquetas para prioridades

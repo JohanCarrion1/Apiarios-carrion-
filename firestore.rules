@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // REGLAS PARA APIARIOS
+    // ============================================
+    match /apiarios/{apiaryId} {
+      // Solo el propietario puede leer su apiario
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // Solo el propietario puede crear, actualizar y eliminar su apiario
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // ============================================
+      // REGLAS PARA COLMENAS (subcolección de apiarios)
+      // ============================================
+      match /colmenas/{hiveId} {
+        // Solo el propietario del apiario puede leer sus colmenas
+        allow read: if request.auth != null && 
+                       request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+        
+        // Solo el propietario del apiario puede crear, actualizar y eliminar colmenas
+        allow create: if request.auth != null && 
+                         request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+        allow update: if request.auth != null && 
+                         request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+        allow delete: if request.auth != null && 
+                         request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+        
+        // ============================================
+        // REGLAS PARA INSPECCIONES (subcolección de colmenas)
+        // ============================================
+        match /inspecciones/{inspectionId} {
+          allow read, write: if request.auth != null && 
+                                request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+        }
+        
+        // ============================================
+        // REGLAS PARA COSECHAS (subcolección de colmenas)
+        // ============================================
+        match /cosechas/{harvestId} {
+          allow read, write: if request.auth != null && 
+                                request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+        }
+      }
+      
+      // ============================================
+      // REGLAS PARA TAREAS (subcolección de apiarios)
+      // ============================================
+      match /tareas/{taskId} {
+        allow read, write: if request.auth != null && 
+                              request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId;
+      }
+    }
+    
+    // ============================================
+    // REGLAS PARA COLECCIONES DE NIVEL SUPERIOR
+    // ============================================
+    
+    // Colección de inspecciones (si se usan como colección independiente)
+    match /inspecciones/{inspectionId} {
+      allow read, write: if request.auth != null && 
+                            request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+                       request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Colección de cosechas (si se usan como colección independiente)
+    match /cosechas/{harvestId} {
+      allow read, write: if request.auth != null && 
+                            request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+                       request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Colección de tareas (si se usan como colección independiente)
+    match /tareas/{taskId} {
+      allow read, write: if request.auth != null && 
+                            request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+                       request.auth.uid == request.resource.data.userId;
+    }
+    
+    // ============================================
+    // REGLAS PARA USUARIOS
+    // ============================================
+    match /users/{userId} {
+      // Solo el propietario puede leer y escribir su perfil
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

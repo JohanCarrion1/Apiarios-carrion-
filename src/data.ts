@@ -10,12 +10,6 @@ export interface Toast {
   desc?: string;
 }
 
-export const APIARY = {
-  name: "Apiario La Dehesa",
-  place: "Sierra de San Pedro · Extremadura",
-  coords: "39.46° N, 6.72° O",
-  keeper: "Marta Ruano",
-  season: "Temporada 2025",
-};
+// Constante eliminada - los datos del apiario ahora vienen del apiario activo del usuario
 
 export const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];

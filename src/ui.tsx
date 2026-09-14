@@ -161,6 +161,13 @@ export const IconChart = ({ className }: IconProps) => (
   </svg>
 );
 
+export const IconHome = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" />
+    <path d="M9 21V12h6v9" />
+  </svg>
+);
+
 /** Abeja dibujada a mano (cuerpo rayado + alas que aletean). */
 export const IconBee = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} fill="none">

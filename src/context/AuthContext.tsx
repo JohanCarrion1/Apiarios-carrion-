@@ -1,108 +1,199 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types/hive';
-import { saveToStorage, loadFromStorage, removeFromStorage, STORAGE_KEYS } from '../utils/storage';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { 
+  User,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
+import { auth, googleProvider, facebookProvider, githubProvider, translateFirebaseError, isFirebaseAvailable } from '../lib/firebase';
+import { getCurrentUserId, migrateOldData } from '../utils/storage';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => boolean;
-  register: (email: string, password: string, name?: string) => boolean;
-  logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
-  isAuthenticated: boolean;
+  loading: boolean;
+  error: string | null;
+  firebaseAvailable: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  loginWithFacebook: () => Promise<void>;
+  loginWithGithub: () => Promise<void>;
+  logout: () => Promise<void>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Usuarios de prueba (en producción esto debería estar en un backend)
-const DEMO_USERS = [
-  { email: 'demo@apiarioscarrion.com', password: 'demo123', name: 'Usuario Demo' },
-];
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const firebaseAvailable = isFirebaseAvailable();
 
+  // Detectar sesión activa al recargar y actualizar el UID
   useEffect(() => {
-    // Cargar usuario desde localStorage al iniciar
-    const savedUser = loadFromStorage<User>(STORAGE_KEYS.USER);
-    if (savedUser) {
-      setUser(savedUser);
+    console.log('🟡 [AUTH] useEffect de onAuthStateChanged montado');
+    
+    if (!auth) {
+      console.warn('⚠️ [AUTH] Firebase no está disponible, usando modo sin autenticación');
+      setLoading(false);
+      return;
     }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('🔐 [AUTH] onAuthStateChanged disparado:', user ? user.uid : 'null');
+      console.log('🔐 [AUTH] Actualizando estado user...');
+      setUser(user);
+      console.log('🔐 [AUTH] Estado user actualizado');
+      
+      // Ejecutar migración de datos si es necesario
+      if (user) {
+        migrateOldData();
+        console.log('✅ [AUTH] UID establecido para usuario:', user.uid);
+      } else {
+        console.log('🚪 [AUTH] Usuario cerró sesión');
+      }
+      
+      console.log('🔐 [AUTH] Actualizando loading a false...');
+      setLoading(false);
+      console.log('🔐 [AUTH] Loading actualizado a false');
+    });
+
+    console.log('🟡 [AUTH] Listener de onAuthStateChanged registrado');
+
+    return () => {
+      console.log('🟡 [AUTH] useEffect limpiado, desuscribiendo listener');
+      unsubscribe();
+    };
   }, []);
 
-  const login = (email: string, password: string): boolean => {
-    // Buscar en usuarios de prueba
-    const foundUser = DEMO_USERS.find(
-      u => u.email === email && u.password === password
-    );
-
-    if (foundUser) {
-      const userData: User = { email: foundUser.email, name: foundUser.name };
-      setUser(userData);
-      saveToStorage(STORAGE_KEYS.USER, userData);
-      return true;
+  // Login con email y contraseña
+  const login = async (email: string, password: string) => {
+    console.log('🟡 [AUTH] login() iniciado');
+    if (!auth) {
+      const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
-
-    // Verificar si el usuario está registrado en localStorage
-    const registeredUsers = loadFromStorage<Array<{ email: string; password: string; name?: string }>>('panal_registered_users') || [];
-    const registeredUser = registeredUsers.find(u => u.email === email && u.password === password);
-
-    if (registeredUser) {
-      const userData: User = { email: registeredUser.email, name: registeredUser.name };
-      setUser(userData);
-      saveToStorage(STORAGE_KEYS.USER, userData);
-      return true;
-    }
-
-    return false;
-  };
-
-  const register = (email: string, password: string, name?: string): boolean => {
-    // Verificar si el email ya existe
-    const registeredUsers = loadFromStorage<Array<{ email: string; password: string; name?: string }>>('panal_registered_users') || [];
-    
-    if (registeredUsers.some(u => u.email === email)) {
-      return false; // Email ya registrado
-    }
-
-    if (DEMO_USERS.some(u => u.email === email)) {
-      return false; // Email ya existe en demo
-    }
-
-    // Registrar nuevo usuario
-    const newUser = { email, password, name };
-    registeredUsers.push(newUser);
-    saveToStorage('panal_registered_users', registeredUsers);
-
-    // Iniciar sesión automáticamente
-    const userData: User = { email, name };
-    setUser(userData);
-    saveToStorage(STORAGE_KEYS.USER, userData);
-
-    return true;
-  };
-
-  const logout = () => {
-    setUser(null);
-    removeFromStorage(STORAGE_KEYS.USER);
-  };
-
-  const updateUser = (updates: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...updates };
-      setUser(updatedUser);
-      saveToStorage(STORAGE_KEYS.USER, updatedUser);
+    try {
+      setError(null);
+      console.log('🟡 [AUTH] Llamando a signInWithEmailAndPassword...');
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ [AUTH] signInWithEmailAndPassword completado:', result.user.uid);
+    } catch (error: any) {
+      console.error('❌ [AUTH] Error en login:', error.code, error.message);
+      const errorMessage = translateFirebaseError(error.code);
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
+
+  // Registro con email y contraseña
+  const register = async (email: string, password: string) => {
+    if (!auth) {
+      const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+    try {
+      setError(null);
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      const errorMessage = translateFirebaseError(error.code);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Login con Google
+  const loginWithGoogle = async () => {
+    if (!auth || !googleProvider) {
+      const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+    try {
+      setError(null);
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      const errorMessage = translateFirebaseError(error.code);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Login con Facebook
+  const loginWithFacebook = async () => {
+    if (!auth || !facebookProvider) {
+      const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+    try {
+      setError(null);
+      await signInWithPopup(auth, facebookProvider);
+    } catch (error: any) {
+      const errorMessage = translateFirebaseError(error.code);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Login con GitHub
+  const loginWithGithub = async () => {
+    if (!auth || !githubProvider) {
+      const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+    try {
+      setError(null);
+      await signInWithPopup(auth, githubProvider);
+    } catch (error: any) {
+      const errorMessage = translateFirebaseError(error.code);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Cerrar sesión
+  const logout = async () => {
+    if (!auth) {
+      const errorMsg = 'Firebase no está configurado.';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+    try {
+      setError(null);
+      await signOut(auth);
+    } catch (error: any) {
+      const errorMessage = translateFirebaseError(error.code);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Limpiar error
+  const clearError = () => setError(null);
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      login,
-      register,
-      logout,
-      updateUser,
-      isAuthenticated: !!user,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
+        firebaseAvailable,
+        login,
+        register,
+        loginWithGoogle,
+        loginWithFacebook,
+        loginWithGithub,
+        logout,
+        clearError,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

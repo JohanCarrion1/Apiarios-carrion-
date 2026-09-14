@@ -4,6 +4,8 @@ export type HiveStatus = 'saludable' | 'revision' | 'alerta' | 'sin_reina';
 
 export type QueenMarkColor = 'verde' | 'amarillo' | 'azul' | 'rojo' | 'blanco' | 'sin_marca';
 
+export type EntityType = 'colmena' | 'nucleo';
+
 export interface Hive {
   id: string;
   code: string;
@@ -13,13 +15,25 @@ export interface Hive {
   queenMarkColor?: QueenMarkColor;
   status: HiveStatus;
   notes?: string;
+  entityType?: EntityType; // 'colmena' por defecto si no existe
   createdAt: string;
   updatedAt: string;
 }
 
+// Función helper para obtener el tipo de entidad
+export const getEntityType = (hive: Hive): EntityType => {
+  return hive.entityType || 'colmena';
+};
+
+// Función helper para verificar si es un núcleo
+export const isNucleus = (hive: Hive): boolean => {
+  return getEntityType(hive) === 'nucleo';
+};
+
 export interface Inspection {
   id: string;
   hiveId: string;
+  entityType?: EntityType; // 'colmena' por defecto si no existe
   date: string;
   queenSeen: boolean;
   brood: number;
@@ -36,6 +50,7 @@ export interface Task {
   dueDate: string;
   priority: 'alta' | 'media' | 'baja';
   completed: boolean;
+  completedAt?: string;
 }
 
 export interface User {

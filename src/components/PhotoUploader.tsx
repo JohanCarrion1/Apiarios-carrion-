@@ -15,6 +15,8 @@ export default function PhotoUploader({
   maxPhotos = 5,
   maxFileSizeMB = 10,
 }: PhotoUploaderProps) {
+  console.log('📸 [PHOTO] PhotoUploader renderizado con', photos.length, 'fotos');
+  
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<PhotoData | null>(null);
@@ -24,9 +26,14 @@ export default function PhotoUploader({
   const totalSizeMB = totalSize / (1024 * 1024);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('📸 [PHOTO] handleFileSelect iniciado');
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      console.log('⚠️ [PHOTO] No hay archivos seleccionados');
+      return;
+    }
 
+    console.log('📸 [PHOTO] Archivos seleccionados:', files.length);
     setError(null);
     setIsUploading(true);
 
@@ -35,28 +42,35 @@ export default function PhotoUploader({
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        console.log('📸 [PHOTO] Procesando archivo:', file.name, 'Tamaño:', file.size, 'bytes');
 
         // Validar tipo de archivo
         if (!file.type.startsWith('image/')) {
+          console.error('❌ [PHOTO] Tipo de archivo no válido:', file.type);
           setError('Solo se permiten archivos de imagen');
           continue;
         }
 
         // Validar tamaño
         const fileSizeMB = file.size / (1024 * 1024);
+        console.log('📸 [PHOTO] Tamaño en MB:', fileSizeMB.toFixed(2));
         if (fileSizeMB > maxFileSizeMB) {
+          console.error('❌ [PHOTO] Archivo demasiado grande');
           setError(`La imagen "${file.name}" es demasiado grande (máximo ${maxFileSizeMB}MB)`);
           continue;
         }
 
         // Validar límite de fotos
         if (photos.length + newPhotos.length >= maxPhotos) {
+          console.warn('⚠️ [PHOTO] Límite de fotos alcanzado');
           setError(`Máximo ${maxPhotos} fotos permitidas`);
           break;
         }
 
+        console.log('📸 [PHOTO] Comprimiendo imagen...');
         // Comprimir imagen
         const compressed = await compressImage(file, 800, 0.7);
+        console.log('✅ [PHOTO] Imagen comprimida, tamaño:', compressed.length, 'bytes');
         
         newPhotos.push({
           id: generateId(),
@@ -64,19 +78,26 @@ export default function PhotoUploader({
           timestamp: Date.now(),
           size: compressed.length,
         });
+        console.log('✅ [PHOTO] Foto agregada al array, total:', newPhotos.length);
       }
 
       if (newPhotos.length > 0) {
+        console.log('✅ [PHOTO] Llamando onPhotosChange con', newPhotos.length, 'fotos nuevas');
+        console.log('📸 [PHOTO] Fotos actuales:', photos.length, '+ nuevas:', newPhotos.length, '= total:', photos.length + newPhotos.length);
         onPhotosChange([...photos, ...newPhotos]);
+        console.log('✅ [PHOTO] onPhotosChange completado');
+      } else {
+        console.warn('⚠️ [PHOTO] No se agregaron fotos nuevas');
       }
     } catch (err) {
+      console.error('❌ [PHOTO] Error en handleFileSelect:', err);
       setError('Error al procesar las imágenes');
-      console.error(err);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      console.log('📸 [PHOTO] handleFileSelect finalizado');
     }
   };
 

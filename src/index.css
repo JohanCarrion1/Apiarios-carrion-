@@ -237,3 +237,88 @@ html {
   }
   html { scroll-behavior: auto; }
 }
+
+/* ============================================
+   LEAFLET MAP STYLES
+   ============================================ */
+
+/* Ajustes para el mapa de Leaflet */
+.leaflet-container {
+  font-family: var(--font-body);
+  background: var(--color-pane);
+}
+
+/* Controles del mapa */
+.leaflet-control-zoom {
+  border: 1px solid var(--color-line) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background: var(--color-pane2) !important;
+  color: var(--color-cream) !important;
+  border-bottom: 1px solid var(--color-line) !important;
+  transition: all 0.2s ease;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--color-pane3) !important;
+  color: var(--color-honey) !important;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
+}
+
+/* Atribución del mapa */
+.leaflet-control-attribution {
+  background: rgba(27, 20, 12, 0.8) !important;
+  color: var(--color-husk) !important;
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px 0 0 0 !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--color-honey) !important;
+}
+
+/* Marcador del mapa */
+.leaflet-marker-icon {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Popup del mapa */
+.leaflet-popup-content-wrapper {
+  background: var(--color-pane2) !important;
+  color: var(--color-cream) !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--color-line) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--color-pane2) !important;
+  border: 1px solid var(--color-line) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--color-husk) !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: var(--color-honey) !important;
+}
+
+/* Escala del mapa */
+.leaflet-control-scale {
+  margin-bottom: 10px !important;
+}
+
+.leaflet-control-scale-line {
+  background: rgba(27, 20, 12, 0.8) !important;
+  border-color: var(--color-honey) !important;
+  color: var(--color-cream) !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+}

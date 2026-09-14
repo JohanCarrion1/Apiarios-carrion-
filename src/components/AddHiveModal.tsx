@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconX } from '../ui';
-import type { Hive, HiveStatus, QueenMarkColor } from '../types/hive';
+import type { Hive, HiveStatus, QueenMarkColor, EntityType } from '../types/hive';
 import { HIVE_STATUS_LABELS, QUEEN_MARK_COLORS } from '../types/hive';
 
 interface AddHiveModalProps {
   open: boolean;
   hive: Hive | null;
   existingCodes: string[];
+  entityType?: EntityType;
   onClose: () => void;
   onSave: (hive: Partial<Hive>) => void;
 }
 
-export default function AddHiveModal({ open, hive, existingCodes, onClose, onSave }: AddHiveModalProps) {
+export default function AddHiveModal({ open, hive, existingCodes, entityType = 'colmena', onClose, onSave }: AddHiveModalProps) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
@@ -24,18 +25,19 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
   const [error, setError] = useState('');
   const [autoCode, setAutoCode] = useState(true);
 
-  // Generar código automático
+  // Generar código automático según el tipo de entidad
   const generateNextCode = () => {
+    const prefix = entityType === 'nucleo' ? 'N-' : 'C-';
     const numbers = existingCodes
       .map(c => {
-        const match = c.match(/C-(\d+)/);
+        const match = c.match(new RegExp(`${prefix}(\\d+)`));
         return match ? parseInt(match[1]) : 0;
       })
       .filter(n => n > 0);
     
     const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
     const nextNum = maxNum + 1;
-    return `C-${nextNum.toString().padStart(2, '0')}`;
+    return `${prefix}${nextNum.toString().padStart(2, '0')}`;
   };
 
   useEffect(() => {
@@ -66,7 +68,8 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
       }
       setError('');
     }
-  }, [open, hive, existingCodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, hive]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +99,7 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
       queenMarkColor,
       status,
       notes: notes.trim() || undefined,
+      entityType: entityType,
       updatedAt: lastInspection ? new Date(lastInspection).toISOString() : new Date().toISOString(),
     });
   };
@@ -129,9 +133,9 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
               {/* Header */}
               <div className="border-b border-line p-6 flex items-start justify-between">
                 <div>
-                  <p className="tick-label mb-1.5">{hive ? 'Editar' : 'Nueva'} Colmena</p>
+                  <p className="tick-label mb-1.5">{hive ? 'Editar' : 'Nuevo'} {entityType === 'nucleo' ? 'Núcleo' : 'Colmena'}</p>
                   <h3 className="font-display text-3xl font-black tracking-tight text-cream">
-                    {hive ? 'Editar Colmena' : 'Nueva Colmena'}
+                    {hive ? 'Editar' : 'Nuevo'} {entityType === 'nucleo' ? 'Núcleo' : 'Colmena'}
                   </h3>
                 </div>
                 <motion.button
@@ -172,7 +176,7 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
                           setCode(e.target.value);
                           setAutoCode(false);
                         }}
-                        placeholder="Ej: C-01, C-02"
+                        placeholder={entityType === 'nucleo' ? "Ej: N-01, N-02" : "Ej: C-01, C-02"}
                         required
                         disabled={autoCode && !hive}
                         className="flex-1 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)] disabled:opacity-50"
@@ -240,7 +244,10 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
                       </label>
                       <select
                         value={queenYear || ''}
-                        onChange={(e) => setQueenYear(e.target.value ? parseInt(e.target.value) : undefined)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setQueenYear(value ? parseInt(value) : undefined);
+                        }}
                         className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream focus:border-honey/70"
                       >
                         <option value="">Sin especificar</option>
@@ -257,7 +264,10 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
                       </label>
                       <select
                         value={queenMarkColor || ''}
-                        onChange={(e) => setQueenMarkColor(e.target.value as QueenMarkColor || undefined)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setQueenMarkColor(value ? value as QueenMarkColor : undefined);
+                        }}
                         className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream focus:border-honey/70"
                       >
                         <option value="">Sin especificar</option>
@@ -301,7 +311,9 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
                     <input
                       type="date"
                       value={lastInspection}
-                      onChange={(e) => setLastInspection(e.target.value)}
+                      onChange={(e) => {
+                        setLastInspection(e.target.value);
+                      }}
                       className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream focus:border-honey/70"
                     />
                   </div>
@@ -337,7 +349,7 @@ export default function AddHiveModal({ open, hive, existingCodes, onClose, onSav
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
-                      {hive ? 'Guardar Cambios' : 'Crear Colmena'}
+                      {hive ? 'Guardar Cambios' : entityType === 'nucleo' ? 'Crear Núcleo' : 'Crear Colmena'}
                     </motion.button>
                   </div>
                 </form>

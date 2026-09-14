@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useTranslation } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { loadHives, saveHives, loadInspections, saveInspections, loadTasks, saveTasks, loadEvents, saveEvents, clearUserData } from '../utils/storage';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -10,7 +11,7 @@ interface SettingsPageProps {
 
 export default function SettingsPage({ onClose }: SettingsPageProps) {
   const { t, language, setLanguage } = useTranslation();
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const { settings, updateSettings } = useSettings();
   const [activeSection, setActiveSection] = useState('profile');
   const [storageUsed, setStorageUsed] = useState(0);
@@ -40,10 +41,10 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
 
   const handleExportData = () => {
     const data = {
-      hives: JSON.parse(localStorage.getItem('hives') || '[]'),
-      inspections: JSON.parse(localStorage.getItem('inspections') || '[]'),
-      tasks: JSON.parse(localStorage.getItem('tasks') || '[]'),
-      events: JSON.parse(localStorage.getItem('events') || '[]'),
+      hives: loadHives(),
+      inspections: loadInspections(),
+      tasks: loadTasks(),
+      events: loadEvents(),
       settings: JSON.parse(localStorage.getItem('settings') || '{}'),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -63,10 +64,10 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.hives) localStorage.setItem('hives', JSON.stringify(data.hives));
-        if (data.inspections) localStorage.setItem('inspections', JSON.stringify(data.inspections));
-        if (data.tasks) localStorage.setItem('tasks', JSON.stringify(data.tasks));
-        if (data.events) localStorage.setItem('events', JSON.stringify(data.events));
+        if (data.hives) saveHives(data.hives);
+        if (data.inspections) saveInspections(data.inspections);
+        if (data.tasks) saveTasks(data.tasks);
+        if (data.events) saveEvents(data.events);
         if (data.settings) localStorage.setItem('settings', JSON.stringify(data.settings));
         alert(t('message.saved'));
         window.location.reload();
@@ -78,7 +79,7 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
   };
 
   const handleExportCSV = () => {
-    const hives = JSON.parse(localStorage.getItem('hives') || '[]');
+    const hives = loadHives();
     const csv = [
       ['Código', 'Nombre', 'Estado', 'Reina', 'Ubicación', 'Notas'].join(','),
       ...hives.map((h: any) => [h.code, h.name, h.status, h.queenYear, h.location, h.notes].join(','))
@@ -96,7 +97,7 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
   const handleDeleteAllData = () => {
     const confirmation = prompt(t('settings.data.typeToConfirm'));
     if (confirmation === 'BORRAR') {
-      localStorage.clear();
+      clearUserData();
       alert(t('message.deleted'));
       window.location.reload();
     }
@@ -122,11 +123,19 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
         return (
           <div className="space-y-6">
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center text-3xl font-bold text-amber-500">
-                {user?.name?.charAt(0).toUpperCase() || 'U'}
-              </div>
+              {user?.photoURL ? (
+                <img 
+                  src={user.photoURL} 
+                  alt={user.displayName || 'Usuario'}
+                  className="w-20 h-20 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center text-3xl font-bold text-amber-500">
+                  {user?.displayName?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              )}
               <div>
-                <h3 className="text-xl font-bold text-cream">{user?.name}</h3>
+                <h3 className="text-xl font-bold text-cream">{user?.displayName || 'Usuario'}</h3>
                 <p className="text-sm text-cream/60">{user?.email}</p>
               </div>
             </div>
@@ -137,10 +146,11 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
               </label>
               <input
                 type="text"
-                value={user?.name || ''}
-                onChange={(e) => updateUser({ name: e.target.value })}
-                className="w-full bg-ink/50 border border-line rounded-lg px-4 py-2 text-cream focus:outline-none focus:border-amber-500"
+                value={user?.displayName || ''}
+                disabled
+                className="w-full bg-ink/30 border border-line rounded-lg px-4 py-2 text-cream/60 cursor-not-allowed"
               />
+              <p className="text-xs text-husk mt-1">El nombre se actualiza desde tu proveedor de autenticación</p>
             </div>
 
             <div>

@@ -1,13 +1,20 @@
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { STATUS_COLORS, type Hive, type Inspection } from "../types/hive";
 import { IconCrown, IconPlus, IconNote, IconX } from "../ui";
 
 interface Props {
   hive: Hive;
   inspections: Inspection[];
+  totalHives: number;
   onInspect: (id: string) => void;
   onEdit: (hive: Hive) => void;
   onDelete: (id: string) => void;
+  onShowToast: (message: string, type: 'success' | 'error') => void;
+  onDuplicate?: (hive: Hive) => void;
+  onExport?: (hive: Hive) => void;
+  tags?: string[];
+  onToggleTag?: (tag: string) => void;
 }
 
 function daysAgo(date: string): string {
@@ -17,10 +24,50 @@ function daysAgo(date: string): string {
   return `hace ${d} días`;
 }
 
-export default function HiveDetail({ hive, inspections, onInspect, onEdit, onDelete }: Props) {
+export default function HiveDetail({ 
+  hive, 
+  inspections, 
+  totalHives, 
+  onInspect, 
+  onEdit, 
+  onDelete, 
+  onShowToast,
+  onDuplicate,
+  onExport,
+  tags = [],
+  onToggleTag,
+}: Props) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   const color = STATUS_COLORS[hive.status];
   const history = inspections.slice(0, 3);
   const statusLabel = hive.status === 'sin_reina' ? 'SIN REINA' : hive.status.toUpperCase();
+
+  const handleDeleteClick = () => {
+    if (totalHives <= 1) {
+      onShowToast('Debe tener al menos una colmena. Agregue otra antes de eliminar esta.', 'error');
+      return;
+    }
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    
+    try {
+      // Simular pequeño delay para mostrar loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      onDelete(hive.id);
+      onShowToast(`Colmena ${hive.code} eliminada correctamente`, 'success');
+      setShowDeleteModal(false);
+    } catch (error) {
+      onShowToast('Error al eliminar la colmena', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <motion.aside 
@@ -171,6 +218,38 @@ export default function HiveDetail({ hive, inspections, onInspect, onEdit, onDel
             </motion.div>
           )}
 
+          {/* Etiquetas */}
+          {onToggleTag && (
+            <motion.div
+              className="mb-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.75 }}
+            >
+              <p className="tick-label mb-2">Etiquetas</p>
+              <div className="flex flex-wrap gap-2">
+                {['Alta producción', 'Reina nueva', 'Problemas', 'Experimental'].map(tag => {
+                  const isActive = tags.includes(tag);
+                  return (
+                    <motion.button
+                      key={tag}
+                      onClick={() => onToggleTag(tag)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                        isActive
+                          ? 'bg-honey text-ink'
+                          : 'bg-ink/50 text-husk hover:bg-ink/70'
+                      }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {tag}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
           {/* Botones de acción */}
           <motion.div 
             className="flex gap-2 mb-3"
@@ -188,11 +267,7 @@ export default function HiveDetail({ hive, inspections, onInspect, onEdit, onDel
               Editar
             </motion.button>
             <motion.button
-              onClick={() => {
-                if (confirm('¿Estás seguro de que deseas eliminar esta colmena? Esta acción no se puede deshacer.')) {
-                  onDelete(hive.id);
-                }
-              }}
+              onClick={handleDeleteClick}
               className="flex items-center gap-1.5 rounded-lg border border-coral/30 px-3 py-2 text-xs font-medium text-coral hover:bg-coral/10 transition-colors flex-1"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -201,6 +276,43 @@ export default function HiveDetail({ hive, inspections, onInspect, onEdit, onDel
               Eliminar
             </motion.button>
           </motion.div>
+
+          {/* Botones adicionales: Duplicar y Exportar */}
+          {(onDuplicate || onExport) && (
+            <motion.div
+              className="flex gap-2 mb-3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.85 }}
+            >
+              {onDuplicate && (
+                <motion.button
+                  onClick={() => onDuplicate(hive)}
+                  className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs font-medium text-husk hover:text-cream hover:border-honey/50 transition-colors flex-1"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Duplicar
+                </motion.button>
+              )}
+              {onExport && (
+                <motion.button
+                  onClick={() => onExport(hive)}
+                  className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs font-medium text-husk hover:text-cream hover:border-honey/50 transition-colors flex-1"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Compartir
+                </motion.button>
+              )}
+            </motion.div>
+          )}
 
           {/* Botón grande de inspección */}
           <motion.button
@@ -217,6 +329,112 @@ export default function HiveDetail({ hive, inspections, onInspect, onEdit, onDel
           </motion.button>
         </div>
       </motion.div>
+
+      {/* Modal de Confirmación de Eliminación */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <>
+            {/* Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isDeleting && setShowDeleteModal(false)}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            />
+
+            {/* Modal */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="card relative max-w-md w-full p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Icono de advertencia */}
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                  className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20"
+                >
+                  <span className="text-4xl">⚠️</span>
+                </motion.div>
+
+                {/* Título */}
+                <motion.h3
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-center font-display text-2xl font-bold text-cream mb-2"
+                >
+                  Eliminar Colmena
+                </motion.h3>
+
+                {/* Mensaje */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-center mb-6"
+                >
+                  <p className="text-husk mb-3">
+                    ¿Estás seguro de eliminar <strong className="text-cream">{hive.code}</strong>?
+                  </p>
+                  <div className="rounded-lg border border-coral/30 bg-coral/10 p-3">
+                    <p className="text-xs text-coral">
+                      <strong>⚠️ Advertencia:</strong> Se eliminarán también todas las inspecciones, cosechas y tareas asociadas a esta colmena. Esta acción no se puede deshacer.
+                    </p>
+                  </div>
+                </motion.div>
+
+                {/* Botones */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="flex gap-3"
+                >
+                  <motion.button
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={isDeleting}
+                    className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    whileHover={!isDeleting ? { scale: 1.02 } : {}}
+                    whileTap={!isDeleting ? { scale: 0.98 } : {}}
+                  >
+                    Cancelar
+                  </motion.button>
+                  <motion.button
+                    onClick={handleConfirmDelete}
+                    disabled={isDeleting}
+                    className="flex-1 px-4 py-3 text-sm font-semibold text-cream bg-coral rounded-lg hover:bg-coral/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    whileHover={!isDeleting ? { scale: 1.02 } : {}}
+                    whileTap={!isDeleting ? { scale: 0.98 } : {}}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                          className="w-4 h-4 border-2 border-cream border-t-transparent rounded-full"
+                        />
+                        Eliminando...
+                      </>
+                    ) : (
+                      <>
+                        <IconX className="h-4 w-4" />
+                        Eliminar
+                      </>
+                    )}
+                  </motion.button>
+                </motion.div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.aside>
   );
 }

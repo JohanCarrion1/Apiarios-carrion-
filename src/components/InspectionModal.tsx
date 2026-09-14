@@ -102,6 +102,7 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('📝 [INSPECTION] Enviando inspección con', photos.length, 'fotos');
     onSubmit({
       hiveId,
       queenSeen,
@@ -113,6 +114,11 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
       photos,
     });
   };
+
+  // Log para debug de fotos
+  useEffect(() => {
+    console.log('📸 [INSPECTION] Estado de fotos actualizado:', photos.length, 'fotos');
+  }, [photos]);
 
   return (
     <AnimatePresence>

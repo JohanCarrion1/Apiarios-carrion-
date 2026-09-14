@@ -1,342 +1,322 @@
-# 🐝 PANAL - Sistema de Control de Colmenas
+# 🐝 PANAL - Apiarios Carrión
 
-## ✅ Aplicación 100% Funcional con Gestión Completa de Colmenas
+Sistema completo de gestión apícola con autenticación Firebase y separación de datos por usuario.
 
-La aplicación PANAL ha sido completamente transformada con **gestión CRUD de colmenas**, **sistema de autenticación con localStorage**, **animaciones profesionales** y **diseño responsive** optimizado para todos los dispositivos.
+## 🚀 Características
 
----
+- ✅ **Autenticación Firebase**: Google, Facebook, GitHub, Email/Password
+- ✅ **Datos separados por usuario**: Cada usuario tiene su propio historial
+- ✅ **Gestión de colmenas**: Mapa hexagonal interactivo
+- ✅ **Registro de inspecciones**: Cuaderno de campo completo
+- ✅ **Control de cosechas**: Registro de producción de miel
+- ✅ **Gestión de tareas**: Sistema de tareas pendientes
+- ✅ **Calendario de eventos**: Planificación de actividades
+- ✅ **Estadísticas**: Gráficos y métricas en tiempo real
+- ✅ **Diseño responsive**: Optimizado para móvil y desktop
+- ✅ **Persistencia local**: Datos guardados en localStorage
 
-## 🎯 Características Principales
+## 📋 Requisitos
 
-### 🔐 Sistema de Autenticación Completo
+- Node.js 18+ 
+- npm o yarn
+- Cuenta de Firebase (gratuita)
 
-**Login/Registro:**
-- ✅ Página de login con diseño responsive
-- ✅ Formulario de inicio de sesión (email/password)
-- ✅ Formulario de registro (email/password/nombre)
-- ✅ Usuario demo: `demo@apiarioscarrion.com` / `demo123`
-- ✅ Persistencia de sesión en localStorage
-- ✅ Validación de campos y mensajes de error
+## 🔧 Instalación
 
-**Cierre de Sesión:**
-- ✅ Botón "Salir" en el header (esquina superior derecha)
-- ✅ Modal de confirmación: "¿Deseas cerrar sesión?"
-- ✅ Limpieza de sesión y redirección automática al login
+### 1. Clonar el repositorio
 
-**Protección de Rutas:**
-- ✅ Verificación de sesión al cargar la app
-- ✅ Redirección al login si no hay sesión activa
-- ✅ Componente `ProtectedRoute` para rutas protegidas
+```bash
+git clone <tu-repositorio>
+cd panal
+```
 
-### 📝 Gestión CRUD Completa de Colmenas
-
-**Agregar Colmena:**
-- ✅ Botón "Agregar" visible en la sección de colmenas
-- ✅ Modal con formulario completo:
-  - Código/Número (obligatorio, único)
-  - Nombre opcional
-  - Ubicación
-  - Año de la reina (2020-2026)
-  - Color de marca de reina
-  - Estado inicial
-  - Notas adicionales
-- ✅ Validación de código único
-- ✅ Toast de confirmación
-
-**Editar Colmena:**
-- ✅ Botón "Editar" (lápiz) en la ficha de colmena
-- ✅ Formulario con datos cargados
-- ✅ Actualización en tiempo real del mapa
-- ✅ Toast de confirmación
-
-**Eliminar Colmena:**
-- ✅ Botón "Eliminar" (X) en la ficha de colmena
-- ✅ Confirmación antes de eliminar
-- ✅ Eliminación automática del mapa
-- ✅ Toast de confirmación
-
-### 💾 Persistencia de Datos con localStorage
-
-**Datos Guardados:**
-- ✅ Usuario autenticado
-- ✅ Lista de colmenas
-- ✅ Inspecciones
-- ✅ Tareas
-
-**Sincronización Automática:**
-- ✅ Los datos se guardan automáticamente al cambiar
-- ✅ Los datos se cargan al iniciar la aplicación
-- ✅ Persistencia entre recargas de página
-- ✅ Persistencia entre sesiones
-
-### 🎨 Animaciones Profesionales (Framer Motion)
-
-- ✅ **Fade-in suave** al cargar cada sección
-- ✅ **Stagger effect** en tarjetas de colmenas
-- ✅ **Transiciones suaves** entre pestañas
-- ✅ **Hover effects** en botones y tarjetas
-- ✅ **Pulse animation** en colmenas con alerta
-- ✅ **Modal transitions** con scale + fade
-- ✅ **Count-up** en estadísticas
-- ✅ **Loading states** animados
-
-### 📱 Diseño Responsive Completo
-
-**Móvil (< 640px):**
-- ✅ Bottom navigation tipo app
-- ✅ Menú hamburguesa animado
-- ✅ Grid de colmenas: 2 columnas
-- ✅ Touch-friendly (44px mínimo)
-
-**Tablet (640px - 1024px):**
-- ✅ Bottom navigation visible
-- ✅ Grid de colmenas: 3-4 columnas
-- ✅ Layout de 2 columnas
-
-**Desktop (> 1024px):**
-- ✅ Navegación en header
-- ✅ Grid de colmenas: 5-6 columnas
-- ✅ Layout completo
-
-### 🎯 Funcionalidades Completas
-
-- ✅ **Dashboard**: estadísticas en tiempo real
-- ✅ **Mapa de colmenas**: visualización hexagonal interactiva
-- ✅ **Ficha de colmena**: detalles, editar, eliminar
-- ✅ **Registro de inspecciones**: modal con sliders
-- ✅ **Cosechas**: registro de producción
-- ✅ **Tareas**: gestión de pendientes
-- ✅ **Cuaderno de campo**: historial de inspecciones
-- ✅ **Monitoreo ambiental**: temperatura, viento, actividad
-
----
-
-## 🚀 Inicio Rápido
-
-### 1. Instalar Dependencias
+### 2. Instalar dependencias
 
 ```bash
 npm install
 ```
 
-### 2. Ejecutar en Modo Desarrollo
+### 3. Configurar Firebase
+
+#### 3.1 Crear proyecto en Firebase
+
+1. Ve a [Firebase Console](https://console.firebase.google.com/)
+2. Haz clic en "Agregar proyecto"
+3. Sigue los pasos para crear el proyecto
+
+#### 3.2 Habilitar Authentication
+
+1. En el panel de Firebase, ve a "Authentication"
+2. Haz clic en "Comenzar"
+3. Ve a la pestaña "Sign-in method"
+4. Habilita los proveedores que quieras usar:
+   - **Email/Password**: Activar directamente
+   - **Google**: Activar y configurar
+   - **Facebook**: Requiere configuración adicional (ver abajo)
+   - **GitHub**: Activar y configurar
+
+#### 3.3 Configurar Facebook (opcional)
+
+1. Ve a [Facebook Developers](https://developers.facebook.com/)
+2. Crea una app o selecciona una existente
+3. Agrega el producto "Facebook Login"
+4. En "Configuración" > "Básico", copia el "App ID" y "App Secret"
+5. En "Facebook Login" > "Configuración", agrega esta URL de redireccionamiento:
+   ```
+   https://tu-proyecto.firebaseapp.com/__/auth/handler
+   ```
+6. En Firebase Authentication > Facebook, pega el App ID y App Secret
+
+#### 3.4 Obtener credenciales de Firebase
+
+1. Ve a "Configuración del proyecto" (ícono de engranaje)
+2. En "Tus aplicaciones", haz clic en "Agregar aplicación" y selecciona "Web"
+3. Registra la app con un nombre (ej: "Apiarios Carrión Web")
+4. Copia el objeto `firebaseConfig`
+
+### 4. Configurar variables de entorno
+
+Copia el archivo `.env.example` a `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Edita el archivo `.env` con tus credenciales de Firebase:
+
+```env
+VITE_FIREBASE_API_KEY=tu-api-key-aqui
+VITE_FIREBASE_AUTH_DOMAIN=tu-proyecto.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=tu-project-id
+VITE_FIREBASE_STORAGE_BUCKET=tu-proyecto.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+VITE_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+```
+
+### 5. Ejecutar en desarrollo
 
 ```bash
 npm run dev
 ```
 
-### 3. Iniciar Sesión
+La aplicación estará disponible en `http://localhost:5173`
 
-**Usuario Demo:**
-```
-Email: demo@apiarioscarrion.com
-Password: demo123
-```
+### 6. Compilar para producción
 
-**O crear cuenta nueva:**
-- Click en "¿No tienes cuenta? Crear cuenta nueva"
-- Llena el formulario de registro
-- Inicia sesión automáticamente
-
-### 4. Probar Funcionalidades
-
-**Agregar Colmena:**
-1. Ir a sección "Colmenas"
-2. Click en botón "Agregar" (arriba a la derecha)
-3. Llenar formulario (código obligatorio)
-4. Click en "Agregar colmena"
-
-**Editar Colmena:**
-1. Seleccionar colmena en el mapa
-2. Click en "Editar" en la ficha
-3. Modificar datos
-4. Click en "Guardar cambios"
-
-**Eliminar Colmena:**
-1. Seleccionar colmena en el mapa
-2. Click en "Eliminar" en la ficha
-3. Confirmar en el diálogo
-
-**Cerrar Sesión:**
-1. Click en botón "Salir" (header, esquina superior derecha)
-2. Confirmar en modal
-3. Redirige al login
-
----
-
-## 📁 Estructura del Proyecto
-
-```
-src/
-├── utils/
-│   └── storage.ts              # Utilidades de localStorage
-├── types/
-│   └── hive.ts                 # Tipos de datos
-├── context/
-│   └── AuthContext.tsx         # Contexto de autenticación
-├── components/
-│   ├── Animations.tsx          # Componentes de animación
-│   ├── AddHiveModal.tsx        # Modal agregar/editar colmena
-│   ├── BottomNav.tsx           # Navegación inferior móvil
-│   ├── ResponsiveHeader.tsx    # Header con logout
-│   ├── Login.tsx               # Página de login/registro
-│   ├── ProtectedRoute.tsx      # Rutas protegidas
-│   ├── Overview.tsx            # Dashboard con estadísticas
-│   ├── HiveComb.tsx            # Mapa hexagonal
-│   ├── HiveDetail.tsx          # Ficha de colmena
-│   ├── InspectionModal.tsx     # Modal de inspección
-│   ├── Production.tsx          # Sección de cosechas
-│   └── Panels.tsx              # Cuaderno y tareas
-├── hooks.ts                    # Custom hooks
-├── data.ts                     # Constantes y exportaciones
-├── ui.tsx                      # Iconos y componentes UI
-└── App.tsx                     # Componente principal
+```bash
+npm run build
 ```
 
----
+Los archivos compilados estarán en la carpeta `dist/`
 
-## 🔒 Seguridad
+## 🔐 Sistema de Autenticación
 
-### Autenticación
-- ✅ Validación de credenciales
-- ✅ Sesión persistente con localStorage
-- ✅ Protección de rutas
-- ✅ Limpieza de sesión al cerrar
+### Registro de usuario
 
-### Validación de Datos
-- ✅ Código único para colmenas
-- ✅ Confirmación antes de eliminar
-- ✅ Validación de formularios
-- ✅ Mensajes de error claros
+1. Abre la aplicación
+2. Haz clic en "Crear cuenta nueva"
+3. Ingresa email y contraseña (mínimo 6 caracteres)
+4. Haz clic en "Crear Cuenta"
 
----
+### Inicio de sesión
 
-## 🎨 Paleta de Colores
+Puedes iniciar sesión de 4 formas:
+
+1. **Email/Password**: Ingresa email y contraseña
+2. **Google**: Haz clic en "Continuar con Google"
+3. **Facebook**: Haz clic en "Continuar con Facebook"
+4. **GitHub**: Haz clic en "Continuar con GitHub"
+
+### Separación de datos
+
+Cada usuario tiene sus propios datos completamente separados:
+
+- `hives_USERID` → Colmenas del usuario
+- `inspections_USERID` → Inspecciones del usuario
+- `harvests_USERID` → Cosechas del usuario
+- `tasks_USERID` → Tareas del usuario
+- `events_USERID` → Eventos del usuario
+
+Cuando cierras sesión, tus datos quedan guardados pero no visibles. Al iniciar sesión con otra cuenta, se cargan los datos de esa cuenta.
+
+## 📱 Uso de la Aplicación
+
+### Panel Principal
+
+- Vista general del colmenar
+- Estadísticas rápidas
+- Acceso rápido a todas las secciones
+
+### Colmenas
+
+- Mapa hexagonal interactivo
+- Agregar, editar y eliminar colmenas
+- Ver detalles de cada colmena
+- Filtrar por estado (saludable, revisión, alerta, sin reina)
+- Sistema de búsqueda
+- Indicadores visuales de salud
+
+### Cuaderno de Campo
+
+- Registro detallado de inspecciones
+- Formulario completo con validaciones
+- Historial de inspecciones
+- Búsqueda y filtros avanzados
+- Estadísticas en tiempo real
+- Alertas automáticas
+- Plantillas de inspección
+- Exportar a CSV
+
+### Cosecha
+
+- Registro de producción de miel
+- Tipos de miel (milflores, azahar, romero, etc.)
+- Precio estimado de venta
+- Meta de producción anual
+- Ranking de colmenas más productivas
+- Predicción de cosecha
+- Alertas de producción
+- Exportar reportes
+
+### Tareas
+
+- Gestión de tareas pendientes
+- Prioridades (alta, media, baja)
+- Fechas de vencimiento
+- Marcar como completadas
+- Filtros y ordenamiento
+
+### Calendario
+
+- Calendario mensual interactivo
+- Crear eventos (inspecciones, tratamientos, cosechas)
+- Eventos recurrentes
+- Recordatorios automáticos
+- Exportar calendario (ICS/CSV)
+- Atajos de teclado
+
+### Estadísticas
+
+- Gráficos de producción
+- Comparativas anuales
+- Distribución de estados
+- Evolución de varroa
+- Métricas en tiempo real
+
+## 🎨 Personalización
+
+### Cambiar colores
+
+Edita `src/index.css` para modificar la paleta de colores:
 
 ```css
-/* Fondo */
---color-ink: #131009;
---color-pane: #1b140c;
-
-/* Texto */
---color-cream: #f3e9d4;
---color-husk: #a3906a;
-
-/* Acentos */
---color-honey: #f0a41c;
---color-honeysoft: #ffc961;
-
-/* Estados */
---color-sage: #a3bf7f;    /* Saludable */
---color-coral: #e4603f;   /* Alerta */
---color-mauve: #bd93b8;   /* Sin reina */
+:root {
+  --color-honey: #f0a41c;
+  --color-ink: #1a1a1a;
+  --color-cream: #f5f5f5;
+  /* ... más colores */
+}
 ```
 
----
+### Cambiar nombre del apiario
 
-## 📖 Documentación
+Edita `src/data.ts`:
 
-- **HIVE_MANAGEMENT.md** - Guía completa de gestión de colmenas
-- **ANIMATIONS_AND_RESPONSIVE.md** - Detalle de animaciones
-- **SETUP_GUIDE.md** - Configuración de Supabase (opcional)
-- **AUTH_README.md** - Documentación de autenticación
-- **QUICKSTART.md** - Inicio rápido
+```typescript
+export const APIARY = {
+  name: "Tu Nombre de Apiario",
+  location: "Tu Ubicación",
+  // ...
+};
+```
 
----
+## 🐛 Solución de Problemas
+
+### Error: "Invalid API key"
+
+- Verifica que copiaste correctamente las credenciales de Firebase
+- Asegúrate de que el archivo `.env` está en la raíz del proyecto
+- Reinicia el servidor de desarrollo
+
+### Error: "auth/network-request-failed"
+
+- Verifica tu conexión a internet
+- Verifica que las credenciales de Firebase son correctas
+- Verifica que habilitaste Authentication en Firebase
+
+### Los datos no se guardan
+
+- Verifica que el usuario está autenticado
+- Verifica que localStorage está habilitado en el navegador
+- Revisa la consola del navegador para errores
+
+### Error de CORS con Facebook
+
+- Verifica que agregaste la URL de redireccionamiento correcta en Facebook Developers
+- La URL debe ser: `https://tu-proyecto.firebaseapp.com/__/auth/handler`
+
+## 📚 Estructura del Proyecto
+
+```
+panal/
+├── src/
+│   ├── components/          # Componentes React
+│   │   ├── Login.tsx        # Página de login
+│   │   ├── Dashboard.tsx    # Panel principal
+│   │   ├── HivesSection.tsx # Gestión de colmenas
+│   │   ├── NotebookSection.tsx # Cuaderno de campo
+│   │   ├── Production.tsx   # Gestión de cosechas
+│   │   ├── TasksSection.tsx # Gestión de tareas
+│   │   ├── CalendarSection.tsx # Calendario
+│   │   ├── StatsSection.tsx # Estadísticas
+│   │   └── ...
+│   ├── context/             # Contextos de React
+│   │   ├── AuthContext.tsx  # Autenticación
+│   │   ├── LanguageContext.tsx # Idioma
+│   │   └── SettingsContext.tsx # Configuración
+│   ├── lib/                 # Librerías y configuración
+│   │   └── firebase.ts      # Configuración de Firebase
+│   ├── utils/               # Utilidades
+│   │   └── storage.ts       # Funciones de localStorage
+│   ├── types/               # Tipos TypeScript
+│   │   └── hive.ts          # Tipos de datos
+│   ├── App.tsx              # Componente principal
+│   └── main.tsx             # Punto de entrada
+├── .env.example             # Ejemplo de variables de entorno
+├── package.json             # Dependencias
+└── README.md                # Este archivo
+```
 
 ## 🛠️ Tecnologías
 
 - **React 18** - Framework de UI
 - **TypeScript** - Tipado estático
 - **Vite** - Build tool
-- **Tailwind CSS 4** - Estilos utilitarios
-- **Framer Motion** - Animaciones profesionales
-- **localStorage** - Persistencia de datos
+- **TailwindCSS** - Estilos
+- **Firebase** - Autenticación
+- **Framer Motion** - Animaciones
+- **Recharts** - Gráficos
+- **date-fns** - Manejo de fechas
+- **React Router** - Navegación
+
+## 📄 Licencia
+
+Este proyecto es de código abierto y está disponible bajo la licencia MIT.
+
+## 🤝 Contribuciones
+
+Las contribuciones son bienvenidas. Por favor:
+
+1. Fork el proyecto
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+## 📧 Contacto
+
+Para preguntas o soporte, abre un issue en el repositorio.
 
 ---
 
-## 🎯 Flujo Completo
-
-```
-1. Usuario abre la app
-   ↓
-2. Verifica sesión en localStorage
-   ↓
-3a. No hay sesión → Muestra Login
-3b. Hay sesión → Muestra Dashboard
-   ↓
-4. Usuario interactúa con la app
-   - Agrega colmenas
-   - Registra inspecciones
-   - Crea tareas
-   ↓
-5. Datos se guardan en localStorage
-   ↓
-6. Usuario cierra sesión
-   ↓
-7. Redirige al Login
-   ↓
-8. Usuario vuelve a entrar
-   ↓
-9. Sus datos persisten
-```
-
----
-
-## 📊 Tipos de Datos
-
-### Colmena
-```typescript
-interface Hive {
-  id: string;
-  code: string;              // Código único
-  name?: string;             // Nombre opcional
-  location?: string;         // Ubicación
-  queenYear?: number;        // Año de la reina
-  queenMarkColor?: QueenMarkColor;
-  status: HiveStatus;        // Estado
-  notes?: string;            // Notas
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
-### Estados
-- `saludable` - Verde
-- `revision` - Amarillo
-- `alerta` - Rojo
-- `sin_reina` - Púrpura
-
----
-
-## ✅ Estado del Proyecto
-
-- ✅ Build exitoso
-- ✅ Sin errores de TypeScript
-- ✅ Autenticación completa con localStorage
-- ✅ CRUD completo de colmenas
-- ✅ Persistencia de datos
-- ✅ Animaciones profesionales
-- ✅ Diseño responsive
-- ✅ Listo para producción
-
----
-
-## 🎉 ¡Listo!
-
-Tu aplicación PANAL ahora cuenta con:
-- 🔐 Sistema de autenticación completo
-- 📝 CRUD completo de colmenas
-- 💾 Persistencia de datos en localStorage
-- 🎨 Animaciones profesionales
-- 📱 Diseño responsive optimizado
-- 👆 Experiencia touch-friendly
-- 🚀 Listo para producción
-
-**Happy Beekeeping! 🐝**
-
----
-
-**Versión:** 4.0.0  
-**Fecha:** 2026-03-19  
-**Estado:** ✅ Producción Ready con Gestión Completa
+**Desarrollado con 🐝 para apicultores profesionales**

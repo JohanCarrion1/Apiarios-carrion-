@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isToday, isTomorrow, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -75,8 +76,29 @@ export default function EventPanel({
 
   const dateLabel = formatDateLabel(selectedDate);
 
+  // Soporte para tecla Escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+  
   return (
     <AnimatePresence>
+      {/* Overlay para cerrar al hacer click fuera */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
+        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
+      />
+
       <motion.div
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
@@ -87,7 +109,7 @@ export default function EventPanel({
         {/* Header */}
         <div className="sticky top-0 bg-pane border-b border-line p-6 z-10">
           <div className="flex items-start justify-between mb-4">
-            <div>
+            <div className="flex-1 pr-4">
               <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">
                 {format(selectedDate, 'dd/MM/yyyy')}
               </p>
@@ -95,21 +117,26 @@ export default function EventPanel({
                 {dateLabel}
               </h2>
             </div>
+            
+            {/* Botón X mejorado - Más grande y visible */}
             <motion.button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-pane2 transition-colors"
+              className="flex items-center justify-center w-11 h-11 rounded-full bg-honey/10 border-2 border-honey/30 hover:bg-honey/20 hover:border-honey/50 transition-all duration-200"
               whileHover={{ scale: 1.1, rotate: 90 }}
               whileTap={{ scale: 0.9 }}
+              aria-label="Cerrar panel"
+              title="Cerrar (Esc)"
             >
-              <svg className="w-5 h-5 text-cream" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg className="w-6 h-6 text-honey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </motion.button>
           </div>
 
+          {/* Botón Agregar Evento */}
           <motion.button
             onClick={onAddEvent}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-honey py-3 font-semibold text-ink transition-all hover:bg-honeysoft"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all hover:bg-honeysoft hover:shadow-lg"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -119,7 +146,6 @@ export default function EventPanel({
             Agregar Evento
           </motion.button>
         </div>
-
         {/* Lista de eventos */}
         <div className="p-6">
           {dayEvents.length === 0 ? (

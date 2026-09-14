@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  APIARY,
   uid,
   type Toast,
 } from "./data";
 import { useClock, useReveal } from "./hooks";
+import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests } from './utils/storage';
 import {
   IconBee,
   IconCheck,
@@ -20,30 +21,32 @@ import {
   IconWind,
   IconChart,
   SectionHead,
+  IconCalendar,
 } from "./ui";
 import Overview from "./components/Overview";
-import HiveComb from "./components/HiveComb";
-import HiveDetail from "./components/HiveDetail";
+import DashboardPanel from "./components/Dashboard";
+import HivesSection from "./components/HivesSection";
 import Production from "./components/Production";
-import Panels from "./components/Panels";
+import NotebookSection from "./components/NotebookSection";
+import SelectionScreen from "./components/SelectionScreen";
+import StorePlaceholder from "./components/StorePlaceholder";
+import TasksSection from "./components/TasksSection";
 import InspectionModal, { type InspectionDraft } from "./components/InspectionModal";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./components/Login";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { SettingsProvider } from "./context/SettingsContext";
+import { ActiveApiaryProvider } from "./context/ActiveApiaryContext";
+
 import { ResponsiveHeader } from "./components/ResponsiveHeader";
-import { BottomNav } from "./components/BottomNav";
 import { FadeInUp } from "./components/Animations";
-import { saveToStorage, loadFromStorage, STORAGE_KEYS } from "./utils/storage";
 import type { Hive, Inspection, Task } from "./types/hive";
 import AddHiveModal from "./components/AddHiveModal";
 import StatsSection from "./components/StatsSection";
 import CalendarSection from "./components/CalendarSection";
-import WeatherWidget from "./components/WeatherWidget";
-import SettingsModal, { type Settings } from "./components/SettingsModal";
 import SettingsPage from "./components/SettingsPage";
-
-import { IconCalendar } from "./ui";
+import ApiaryFlow from "./components/ApiaryFlow";
 
 const NAV = [
   { id: "panel", label: "Panel", icon: IconPanel },
@@ -54,8 +57,6 @@ const NAV = [
   { id: "registro", label: "Cuaderno", icon: IconClipboard },
   { id: "tareas", label: "Tareas", icon: IconCheck },
 ] as const;
-
-const SECTION_IDS = NAV.map((n) => n.id);
 
 /* ---------- ambiente ---------- */
 
@@ -89,7 +90,7 @@ function Ambient() {
 
 /* ---------- cabecera de página ---------- */
 
-function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activity: number }) {
+function IntroHead({ temp, wind, activity, apiaryName, apiaryLocation }: { temp: number; wind: number; activity: number; apiaryName: string; apiaryLocation: string }) {
   const now = useClock();
   const { ref, inView } = useReveal();
   const dateCap = (() => {
@@ -114,7 +115,7 @@ function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activ
           transition={{ delay: 0.2 }}
         >
           <IconFlower className="h-3.5 w-3.5 text-honey" />
-          {APIARY.name} · {APIARY.place}
+          {apiaryName || 'Sin apiario seleccionado'}{apiaryLocation ? ` · ${apiaryLocation}` : ''}
         </motion.p>
         <motion.h1 
           className="font-display text-3xl sm:text-4xl md:text-5xl xl:text-6xl font-black leading-[1.03] tracking-tight text-cream"
@@ -184,84 +185,209 @@ function IntroHead({ temp, wind, activity }: { temp: number; wind: number; activ
 /* ---------- app ---------- */
 
 export default function App() {
+  console.log('🟣 [APP] App renderizado');
+  
   return (
-    <SettingsProvider>
-      <LanguageProvider>
-        <AuthProvider>
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        </AuthProvider>
-      </LanguageProvider>
-    </SettingsProvider>
+    <BrowserRouter>
+      <SettingsProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <ActiveApiaryProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/seleccionar"
+                element={
+                  <ProtectedRoute>
+                    <SelectionScreen />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/tienda"
+                element={
+                  <ProtectedRoute>
+                    <StorePlaceholder />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/apiarios"
+                element={
+                  <ProtectedRoute>
+                    <ApiaryFlow />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/apiarios/:id"
+                element={
+                  <ProtectedRoute>
+                    <ApiaryFlow />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <DashboardWrapper />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/:id"
+                element={
+                  <ProtectedRoute>
+                    <DashboardWrapper />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/" element={<Navigate to="/seleccionar" replace />} />
+              <Route path="*" element={<Navigate to="/seleccionar" replace />} />
+            </Routes>
+            </ActiveApiaryProvider>
+          </AuthProvider>
+        </LanguageProvider>
+      </SettingsProvider>
+    </BrowserRouter>
   );
 }
 
-function Dashboard() {
+function DashboardWrapper() {
+  const { id } = useParams<{ id: string }>();
+  if (!id) {
+    return <Navigate to="/apiarios" replace />;
+  }
+  return <Dashboard apiaryId={id} />;
+}
+
+function Dashboard({ apiaryId }: { apiaryId: string }) {
+  console.log('🟣 [DASHBOARD] Dashboard renderizado');
   const { user } = useAuth();
+  const navigate = useNavigate();
+  console.log('🟣 [DASHBOARD] User en Dashboard:', user ? user.uid : 'null');
+  console.log('🟣 [DASHBOARD] Apiario ID:', apiaryId);
   
-  // Cargar datos desde localStorage
+  // Cargar datos del apiario
+  const [apiaryName, setApiaryName] = useState<string>('');
+  const [apiaryLocation, setApiaryLocation] = useState<string>('');
+  const [apiaries, setApiaries] = useState<any[]>([]);
+  
+  // Cargar datos desde localStorage (separados por usuario Y apiario)
   const [hives, setHives] = useState<Hive[]>([]);
+  const [nuclei, setNuclei] = useState<Hive[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // Estados para colmenas
   const [selectedId, setSelectedId] = useState<string>("");
   const [filter, setFilter] = useState<"saludable" | "revision" | "alerta" | "sin_reina" | "todas">("todas");
   const [query, setQuery] = useState("");
   const [modalHive, setModalHive] = useState<string | null>(null);
   const [showAddHiveModal, setShowAddHiveModal] = useState(false);
   const [editingHive, setEditingHive] = useState<Hive | null>(null);
+
+  // Estados para núcleos
+  const [selectedNucleusId, setSelectedNucleusId] = useState<string | null>(null);
+  const [modalNucleus, setModalNucleus] = useState<string | null>(null);
+  const [showAddNucleusModal, setShowAddNucleusModal] = useState(false);
+  const [editingNucleus, setEditingNucleus] = useState<Hive | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [active, setActive] = useState("panel");
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [activeSection, setActiveSection] = useState<"panel" | "colmenas" | "estadisticas" | "calendario" | "produccion" | "registro" | "tareas">("panel");
   const [showSettingsPage, setShowSettingsPage] = useState(false);
-  const [settings, setSettings] = useState<Settings>({
-    location: {
-      name: 'Huaraz, Áncash',
-      latitude: -9.5278,
-      longitude: -77.5278,
-    },
-    photos: {
-      enabled: true,
-      quality: 'medium',
-      maxPhotos: 5,
-    },
-  });
 
   const [temp, setTemp] = useState(22.4);
   const [wind, setWind] = useState(11);
 
-  // Cargar datos al montar
+  // Cargar datos del apiario
   useEffect(() => {
-    const savedHives = loadFromStorage<Hive[]>(STORAGE_KEYS.HIVES) || [];
-    const savedInspections = loadFromStorage<Inspection[]>(STORAGE_KEYS.INSPECTIONS) || [];
-    const savedTasks = loadFromStorage<Task[]>(STORAGE_KEYS.TASKS) || [];
-    const savedSettings = loadFromStorage<typeof settings>('panal_settings');
-    
-    setHives(savedHives);
-    setInspections(savedInspections);
-    setTasks(savedTasks);
-    if (savedSettings) {
-      setSettings(savedSettings);
+    if (user && apiaryId) {
+      // Guardar el apiario actual como último activo
+      localStorage.setItem('lastActiveApiarioId', apiaryId);
+      
+      const apiariesKey = `apiarios_${user.uid}`;
+      const apiariesJson = localStorage.getItem(apiariesKey);
+      if (apiariesJson) {
+        const apiariesList = JSON.parse(apiariesJson);
+        setApiaries(apiariesList);
+        const apiary = apiariesList.find((a: any) => a.id === apiaryId);
+        if (apiary) {
+          setApiaryName(apiary.name || '');
+          setApiaryLocation(apiary.location || '');
+        }
+      }
     }
-  }, []);
+  }, [user, apiaryId]);
+  
+  // Función para cambiar de apiario
+  const handleChangeApiary = () => {
+    navigate('/apiarios');
+  };
+
+  // Cargar datos al montar o cuando cambia el usuario o apiario
+  useEffect(() => {
+    console.log('🟣 [DASHBOARD] useEffect de carga de datos ejecutado');
+    console.log('🟣 [DASHBOARD] User:', user ? user.uid : 'null');
+    console.log('🟣 [DASHBOARD] Apiario activo:', apiaryId);
+    
+    if (user && apiaryId) {
+      console.log('🟣 [DASHBOARD] Cargando datos desde localStorage...');
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      
+      const loadedHives = loadHives(storageKeySuffix);
+      const loadedNuclei = loadNuclei(storageKeySuffix);
+      const loadedInspections = loadInspections(storageKeySuffix);
+      const loadedTasks = loadTasks(storageKeySuffix);
+      
+      console.log('🟣 [DASHBOARD] Datos cargados:', {
+        hives: loadedHives.length,
+        nuclei: loadedNuclei.length,
+        inspections: loadedInspections.length,
+        tasks: loadedTasks.length
+      });
+      
+      setHives(loadedHives);
+      setNuclei(loadedNuclei);
+      setInspections(loadedInspections);
+      setTasks(loadedTasks);
+    } else {
+      // Si no hay apiario activo, limpiar datos
+      setHives([]);
+      setNuclei([]);
+      setInspections([]);
+      setTasks([]);
+    }
+  }, [user, apiaryId]);
 
   // Guardar datos cuando cambian
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.HIVES, hives);
-  }, [hives]);
+    if (user && apiaryId) {
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveHives(hives, storageKeySuffix);
+    }
+  }, [hives, user, apiaryId]);
 
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.INSPECTIONS, inspections);
-  }, [inspections]);
+    if (user && apiaryId) {
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveNuclei(nuclei, storageKeySuffix);
+    }
+  }, [nuclei, user, apiaryId]);
 
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.TASKS, tasks);
-  }, [tasks]);
+    if (user && apiaryId) {
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveInspections(inspections, storageKeySuffix);
+    }
+  }, [inspections, user, apiaryId]);
 
   useEffect(() => {
-    saveToStorage('panal_settings', settings);
-  }, [settings]);
+    if (user && apiaryId) {
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveTasks(tasks, storageKeySuffix);
+    }
+  }, [tasks, user, apiaryId]);
 
   // Seleccionar primera colmena cuando se cargan
   useEffect(() => {
@@ -278,24 +404,9 @@ function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) if (e.isIntersecting) setActive(e.target.id);
-      },
-      { rootMargin: "-30% 0px -60% 0px" }
-    );
-    SECTION_IDS.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) io.observe(el);
-    });
-    return () => io.disconnect();
-  }, []);
-
   const activity = Math.min(98, Math.max(5, Math.round(20 + (temp - 15) * 8 - wind * 1.4)));
-  const alerts = hives.filter((h) => h.status === "alerta").length;
-  const pending = tasks.filter((t) => !t.completed).length;
   const selectedHive = hives.find((h) => h.id === selectedId);
+  const pending = tasks.filter((t) => !t.completed).length;
 
   const pushToast = (title: string, desc?: string) => {
     const t: Toast = { id: uid(), title, desc };
@@ -312,7 +423,7 @@ function Dashboard() {
       updatedAt: new Date().toISOString(),
     };
     setHives(prev => [...prev, newHive]);
-    pushToast("Colmena agregada", `${hive.code} - ${hive.name || 'Sin nombre'}`);
+    pushToast("Colmena agregada", `${newHive.code} - ${newHive.name || 'Sin nombre'}`);
   };
 
   const updateHive = (id: string, updates: Partial<Hive>) => {
@@ -324,10 +435,46 @@ function Dashboard() {
 
   const deleteHive = (id: string) => {
     setHives(prev => prev.filter(h => h.id !== id));
+    setInspections(prev => prev.filter(i => i.hiveId !== id));
+    setTasks(prev => prev.filter(t => t.hiveId !== id));
+    
     if (selectedId === id) {
-      setSelectedId(hives.length > 1 ? hives.find(h => h.id !== id)?.id || "" : "");
+      const remainingHives = hives.filter(h => h.id !== id);
+      setSelectedId(remainingHives.length > 0 ? remainingHives[0].id : "");
     }
     pushToast("Colmena eliminada");
+  };
+
+  // Funciones CRUD para núcleos
+  const addNucleus = (nucleus: Omit<Hive, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newNucleus: Hive = {
+      ...nucleus,
+      id: uid(),
+      entityType: 'nucleo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setNuclei(prev => [...prev, newNucleus]);
+    pushToast("Núcleo agregado", `${newNucleus.code} - ${newNucleus.name || 'Sin nombre'}`);
+  };
+
+  const updateNucleus = (id: string, updates: Partial<Hive>) => {
+    setNuclei(prev => prev.map(n => 
+      n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n
+    ));
+    pushToast("Núcleo actualizado");
+  };
+
+  const deleteNucleus = (id: string) => {
+    setNuclei(prev => prev.filter(n => n.id !== id));
+    setInspections(prev => prev.filter(i => i.hiveId !== id));
+    setTasks(prev => prev.filter(t => t.hiveId !== id));
+    
+    if (selectedNucleusId === id) {
+      const remainingNuclei = nuclei.filter(n => n.id !== id);
+      setSelectedNucleusId(remainingNuclei.length > 0 ? remainingNuclei[0].id : null);
+    }
+    pushToast("Núcleo eliminado");
   };
 
   const handleInspection = (d: InspectionDraft) => {
@@ -347,6 +494,15 @@ function Dashboard() {
     pushToast("Inspección registrada", `${d.hiveId} · ${d.queenSeen ? "reina vista" : "sin ver reina"} · varroa ${d.varroa.toFixed(1)}%`);
   };
 
+  const handleInspectNucleus = (id: string) => {
+    setModalNucleus(id);
+    pushToast("Inspección de núcleo", `${id}`);
+  };
+
+  const handleAddNucleus = () => {
+    setShowAddNucleusModal(true);
+  };
+
   const toggleTask = (id: string) => {
     setTasks(prev => prev.map(t => 
       t.id === id ? { ...t, completed: !t.completed } : t
@@ -354,6 +510,7 @@ function Dashboard() {
   };
 
   const handleAddTask = (title: string) => {
+    console.log('✅ [APP] Agregando tarea:', title);
     const newTask: Task = {
       id: uid(),
       title,
@@ -362,19 +519,19 @@ function Dashboard() {
       completed: false,
     };
     setTasks(prev => [newTask, ...prev]);
+    console.log('✅ [APP] Tarea agregada al estado, total tareas:', tasks.length + 1);
     pushToast("Tarea añadida", title);
   };
 
-  const jumpTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
-    }
+  const handleDeleteTask = (id: string) => {
+    console.log('🗑️ [APP] Eliminando tarea:', id);
+    setTasks(prev => prev.filter(t => t.id !== id));
+    console.log('🗑️ [APP] Tarea eliminada del estado, total tareas:', tasks.length - 1);
+    pushToast("Tarea eliminada");
   };
 
-  const openAlerts = () => {
-    setFilter("alerta");
-    jumpTo("colmenas");
+  const jumpTo = (id: string) => {
+    setActiveSection(id as typeof activeSection);
   };
 
   return (
@@ -382,148 +539,185 @@ function Dashboard() {
       <Ambient />
 
       {/* Header Responsive */}
-      <ResponsiveHeader onNavigate={jumpTo} onSettings={() => setShowSettingsPage(true)} />
+      <ResponsiveHeader 
+        onNavigate={jumpTo} 
+        onSettings={() => setShowSettingsPage(true)}
+        onHome={() => navigate('/seleccionar')}
+        activeSection={activeSection}
+      />
 
       {/* contenido */}
       <div className="relative z-10">
         <main className="mx-auto max-w-6xl space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 sm:pt-8 md:pt-10">
           <FadeInUp>
-            <IntroHead temp={temp} wind={wind} activity={activity} />
+            <IntroHead temp={temp} wind={wind} activity={activity} apiaryName={apiaryName} apiaryLocation={apiaryLocation} />
           </FadeInUp>
 
-          {/* Widget de Clima */}
-          <FadeInUp delay={0.1}>
-            <WeatherWidget location={settings.location} />
-          </FadeInUp>
+          {/* Renderizado condicional de secciones */}
+          <AnimatePresence mode="wait">
+            {activeSection === 'panel' && (
+              <motion.section
+                key="panel"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <DashboardPanel 
+                  hives={hives} 
+                  tasks={tasks}
+                  inspections={inspections}
+                  onNavigate={(section) => setActiveSection(section as typeof activeSection)}
+                  onAddHive={() => setShowAddHiveModal(true)}
+                  onAddInspection={() => setModalHive(selectedId || hives[0]?.id || null)}
+                  onAddTask={() => {
+                    setActiveSection('tareas');
+                  }}
+                  weather={{
+                    temperature: 22,
+                    condition: 'Parcialmente nublado',
+                    rainProbability: 30
+                  }}
+                  apiaryName={apiaryName}
+                  apiaryLocation={apiaryLocation}
+                  onChangeApiary={handleChangeApiary}
+                  apiaries={apiaries}
+                  currentApiaryId={apiaryId}
+                  onSelectApiary={(id) => {
+                    if (id) {
+                      navigate(`/dashboard/${id}`);
+                    } else {
+                      navigate('/apiarios');
+                    }
+                  }}
+                />
+              </motion.section>
+            )}
 
-          {/* Botón de Ajustes */}
-          <div className="flex justify-end">
-            <motion.button
-              onClick={() => setShowSettingsModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <span>⚙️</span>
-              <span>Ajustes</span>
-            </motion.button>
-          </div>
+            {activeSection === 'colmenas' && (
+              <motion.section
+                key="colmenas"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Mapa del bancal"
+                  title="Colmenas y Núcleos"
+                  right={
+                    <p className="text-right font-mono text-xs leading-relaxed text-husk">
+                      {hives.length} colmenas · {nuclei.length} núcleos
+                      <br />
+                      ambos visibles
+                    </p>
+                  }
+                />
+                <HivesSection
+                  hives={hives}
+                  nuclei={nuclei}
+                  selectedHiveId={selectedId}
+                  selectedNucleusId={selectedNucleusId}
+                  onSelectHive={setSelectedId}
+                  onSelectNucleus={setSelectedNucleusId}
+                  onAddHive={() => setShowAddHiveModal(true)}
+                  onAddNucleus={handleAddNucleus}
+                  onEditHive={(hive: Hive) => setEditingHive(hive)}
+                  onEditNucleus={(nucleus: Hive) => setEditingNucleus(nucleus)}
+                  onDeleteHive={deleteHive}
+                  onDeleteNucleus={deleteNucleus}
+                  onInspectHive={(id) => setModalHive(id)}
+                  onInspectNucleus={handleInspectNucleus}
+                  onShowToast={pushToast}
+                />
+              </motion.section>
+            )}
 
-          <motion.section 
-            id="panel" 
-            className="scroll-mt-32"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-          >
-            <Overview hives={hives} tasks={tasks} />
-          </motion.section>
+            {activeSection === 'estadisticas' && (
+              <motion.section
+                key="estadisticas"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Análisis y métricas"
+                  title="Estadísticas"
+                  right={<p className="font-mono text-xs text-husk">datos en tiempo real</p>}
+                />
+                <StatsSection />
+              </motion.section>
+            )}
 
-          <motion.section 
-            id="colmenas" 
-            className="scroll-mt-32"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-          >
-            <SectionHead
-              kicker="Mapa del bancal"
-              title="Colmenas"
-              right={
-                <p className="text-right font-mono text-xs leading-relaxed text-husk">
-                  {hives.length} colonias
-                  <br />
-                  distribución por calles
-                </p>
-              }
-            />
-            <div className="grid gap-6 lg:grid-cols-12">
-              <div className="lg:col-span-8">
-                <HiveComb hives={hives} selectedId={selectedId} onSelect={setSelectedId} filter={filter} onFilter={setFilter} query={query} onAdd={() => setShowAddHiveModal(true)} />
-              </div>
-              <div className="lg:col-span-4">
-                {selectedHive && (
-                  <HiveDetail 
-                    hive={selectedHive} 
-                    inspections={inspections.filter(i => i.hiveId === selectedId)} 
-                    onInspect={setModalHive}
-                    onEdit={(hive) => setEditingHive(hive)}
-                    onDelete={(id) => {
-                      if (confirm('¿Estás seguro de que deseas eliminar esta colmena?')) {
-                        deleteHive(id);
-                      }
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          </motion.section>
+            {activeSection === 'calendario' && (
+              <motion.section
+                key="calendario"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Planificación y eventos"
+                  title="Calendario"
+                  right={<p className="font-mono text-xs text-husk">gestiona tus actividades</p>}
+                />
+                <CalendarSection hives={hives} />
+              </motion.section>
+            )}
 
-          <motion.section 
-            id="estadisticas" 
-            className="scroll-mt-32"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-          >
-            <SectionHead
-              kicker="Análisis y métricas"
-              title="Estadísticas"
-              right={<p className="font-mono text-xs text-husk">datos en tiempo real</p>}
-            />
-            <StatsSection hives={hives} inspections={inspections} />
-          </motion.section>
+            {activeSection === 'produccion' && (
+              <motion.section
+                key="produccion"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Báscula y alzas"
+                  title="Cosecha de miel"
+                  right={<p className="font-mono text-xs text-husk">registro de producción</p>}
+                />
+                <Production hives={hives} />
+              </motion.section>
+            )}
 
-          <motion.section 
-            id="calendario" 
-            className="scroll-mt-32"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-          >
-            <SectionHead
-              kicker="Planificación y eventos"
-              title="Calendario"
-              right={<p className="font-mono text-xs text-husk">gestiona tus actividades</p>}
-            />
-            <CalendarSection hives={hives} tasks={tasks} />
-          </motion.section>
+            {activeSection === 'registro' && (
+              <motion.section
+                key="registro"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Diario del apicultor"
+                  title="Cuaderno de Campo"
+                  right={<p className="font-mono text-xs text-husk">inspecciones registradas</p>}
+                />
+                <NotebookSection hives={hives} />
+              </motion.section>
+            )}
 
-          <motion.section 
-            id="produccion" 
-            className="scroll-mt-32"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-          >
-            <SectionHead
-              kicker="Báscula y alzas"
-              title="Cosecha de miel"
-              right={<p className="font-mono text-xs text-husk">registro de producción</p>}
-            />
-            <Production hivesCount={hives.length} />
-          </motion.section>
-
-          <motion.section 
-            id="registro" 
-            className="scroll-mt-32"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-          >
-            <SectionHead
-              kicker="Diario del apicultor"
-              title="Cuaderno y tareas"
-              right={<p className="font-mono text-xs text-husk">datos guardados localmente</p>}
-            />
-            <Panels inspections={inspections} hives={hives} tasks={tasks} onToggle={toggleTask} onAdd={handleAddTask} />
-          </motion.section>
+            {activeSection === 'tareas' && (
+              <motion.section
+                key="tareas"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Gestión de pendientes"
+                  title="Tareas"
+                  right={<p className="font-mono text-xs text-husk">{pending} pendientes</p>}
+                />
+                <TasksSection tasks={tasks} onToggle={toggleTask} onAdd={handleAddTask} onDelete={handleDeleteTask} />
+              </motion.section>
+            )}
+          </AnimatePresence>
 
           <motion.footer 
             className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 border-t border-line pt-8 text-xs text-husk"
@@ -538,18 +732,17 @@ function Dashboard() {
               </span>
               <b className="font-display text-sm tracking-wider text-cream">PANAL</b> — cuaderno apícola digital
             </span>
-            <span className="font-mono">{APIARY.coords}</span>
+            <span className="font-mono">
+              {apiaryLocation || 'Sin ubicación'}
+            </span>
             <span>
-              {hives.length} colmenas · {APIARY.season}
+              {hives.length} colmenas · {nuclei.length} núcleos
             </span>
           </motion.footer>
         </main>
       </div>
 
-      {/* Bottom Navigation (móvil) */}
-      <BottomNav activeSection={active} onNavigate={jumpTo} />
-
-      {/* Modal de inspección */}
+      {/* Modal de inspección de colmena */}
       <InspectionModal
         open={modalHive !== null}
         hives={hives}
@@ -558,11 +751,21 @@ function Dashboard() {
         onSubmit={handleInspection}
       />
 
+      {/* Modal de inspección de núcleo */}
+      <InspectionModal
+        open={modalNucleus !== null}
+        hives={nuclei}
+        initialHive={modalNucleus ?? (selectedNucleusId || '')}
+        onClose={() => setModalNucleus(null)}
+        onSubmit={handleInspection}
+      />
+
       {/* Modal de agregar/editar colmena */}
       <AddHiveModal
         open={showAddHiveModal || editingHive !== null}
         hive={editingHive}
         existingCodes={hives.map(h => h.code)}
+        entityType="colmena"
         onClose={() => {
           setShowAddHiveModal(false);
           setEditingHive(null);
@@ -578,12 +781,25 @@ function Dashboard() {
         }}
       />
 
-      {/* Modal de ajustes */}
-      <SettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        settings={settings}
-        onSettingsChange={(newSettings) => setSettings(newSettings)}
+      {/* Modal de agregar/editar núcleo */}
+      <AddHiveModal
+        open={showAddNucleusModal || editingNucleus !== null}
+        hive={editingNucleus}
+        existingCodes={nuclei.map(n => n.code)}
+        entityType="nucleo"
+        onClose={() => {
+          setShowAddNucleusModal(false);
+          setEditingNucleus(null);
+        }}
+        onSave={(nucleus) => {
+          if (editingNucleus) {
+            updateNucleus(editingNucleus.id, nucleus);
+          } else {
+            addNucleus(nucleus as Omit<Hive, 'id' | 'createdAt' | 'updatedAt'>);
+          }
+          setShowAddNucleusModal(false);
+          setEditingNucleus(null);
+        }}
       />
 
       {/* Página completa de ajustes */}

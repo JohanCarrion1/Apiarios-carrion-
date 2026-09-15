@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconBee, IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconHome, IconQueen, IconPackage } from '../ui';
+import { IconBee, IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconHome, IconQueen, IconPackage, IconLayers } from '../ui';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 import NotificationBell from './NotificationBell';
@@ -50,6 +49,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
     { id: 'registro', label: 'Cuaderno', icon: IconClipboard },
     { id: 'tareas', label: 'Tareas', icon: IconCheck },
     { id: 'inventario', label: 'Inventario', icon: IconPackage },
+    { id: 'transferencias', label: 'Transferencias', icon: IconLayers },
   ];
 
   const handleLogout = () => {
@@ -133,16 +133,19 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
             {onHome && !isStandalone && (
               <motion.button
                 onClick={onHome}
-                className="flex items-center gap-1.5 rounded-full bg-honey px-3 py-1.5 text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(240,164,28,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-95"
+                className="flex items-center justify-center rounded-full bg-honey px-3 py-[3px] min-h-[26px] text-[10px] font-medium leading-none whitespace-nowrap text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(240,164,28,.35)]"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.92 }}
                 aria-label="Regresar a inicio"
                 title="Regresar a inicio"
               >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-                </svg>
-                <span>Regresar a inicio</span>
+                <span className="md:hidden">Volver a inicio</span>
+                <span className="hidden md:inline-flex items-center gap-2">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                  </svg>
+                  Regresar a inicio
+                </span>
               </motion.button>
             )}
 
@@ -344,49 +347,47 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
 
       {/* Logout Confirmation Modal */}
       <AnimatePresence>
-        {showLogoutConfirm &&
-          createPortal(
-            <>
-              <motion.div
-                className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => setShowLogoutConfirm(false)}
-              />
-              <motion.div
-                className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-                aria-modal="true"
-                role="dialog"
-                onClick={() => setShowLogoutConfirm(false)}
-              >
-                <div className="card p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-                  <h3 className="font-display text-xl font-bold text-cream mb-2">¿Deseas cerrar sesión?</h3>
-                  <p className="text-sm text-husk mb-6">Tu sesión actual se cerrará y deberás iniciar sesión nuevamente.</p>
-                  <div className="flex gap-3">
-                    <motion.button
-                      onClick={() => setShowLogoutConfirm(false)}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      Cancelar
-                    </motion.button>
-                    <motion.button
-                      onClick={handleLogout}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-ink bg-coral rounded-lg hover:bg-coral/90 transition-colors"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      Cerrar sesión
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            </>,
-            document.body,
-          )}
+        {showLogoutConfirm && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            aria-modal="true"
+            role="dialog"
+          >
+            {/* Backdrop - tapa TODA la pantalla */}
+            <motion.div
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowLogoutConfirm(false)}
+            />
+
+            {/* Modal - centrado encima del backdrop */}
+            <div className="card relative p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-display text-xl font-bold text-cream mb-2">¿Deseas cerrar sesión?</h3>
+              <p className="text-sm text-husk mb-6">Tu sesión actual se cerrará y deberás iniciar sesión nuevamente.</p>
+              <div className="flex gap-3">
+                <motion.button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancelar
+                </motion.button>
+                <motion.button
+                  onClick={handleLogout}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-ink bg-coral rounded-lg hover:bg-coral/90 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cerrar sesión
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </>
   );

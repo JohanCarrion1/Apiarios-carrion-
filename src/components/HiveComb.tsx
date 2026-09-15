@@ -52,7 +52,6 @@ export default function HiveComb({
   selectedForCompare = [],
   onToggleCompare,
   calculateHealth,
-  title = 'Colmenas',
   countLabel = 'colonias',
   distributionLabel = 'distribución por calles',
   allChipLabel = 'TODAS',
@@ -76,9 +75,7 @@ export default function HiveComb({
     (filter !== "todas" && h.status !== filter) ||
     (query.trim() !== "" && !h.code.toLowerCase().includes(query.trim().toLowerCase()));
 
-  // Calcular estadísticas para el header
-  const totalColonies = hives.length;
-  const totalNuclei = hives.filter(h => h.code.includes('N')).length;
+  // Calcular estadísticas para los chips
   const healthyCount = hives.filter(h => h.status === 'saludable').length;
   const revisionCount = hives.filter(h => h.status === 'revision').length;
   const alertCount = hives.filter(h => h.status === 'alerta').length;
@@ -212,34 +209,6 @@ export default function HiveComb({
 
   return (
     <div>
-      {/* Header con resumen general */}
-      <motion.div 
-        className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-ink text-honey">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-mono uppercase tracking-wider text-husk mb-0.5">Mapa del Bancal</p>
-            <h3 className="font-display text-2xl font-bold text-cream">{title}</h3>
-          </div>
-        </div>
-        
-        <div className="text-right">
-          <p className="font-mono text-sm text-cream">
-            <span className="font-bold">{totalColonies}</span> {countLabel}
-            {totalNuclei > 0 && <span className="text-husk"> · <span className="font-bold">{totalNuclei}</span> núcleos</span>}
-          </p>
-          <p className="text-xs text-husk mt-0.5">{distributionLabel}</p>
-        </div>
-      </motion.div>
-
       {/* Filtros tipo pill */}
       <motion.div 
         className="mb-6 flex flex-wrap items-center gap-2"

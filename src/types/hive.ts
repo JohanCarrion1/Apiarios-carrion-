@@ -49,11 +49,18 @@ export interface Inspection {
 export interface Task {
   id: string;
   title: string;
+  description?: string;
   hiveId?: string;
+  colmenaId?: string;
   dueDate: string;
   priority: 'alta' | 'media' | 'baja';
+  tipo?: 'simple' | 'recurrente';
+  recurrencia?: number;
+  asignado?: string;
+  estado?: 'pendiente' | 'completada';
   completed: boolean;
   completedAt?: string;
+  createdAt?: string;
 }
 
 export interface User {

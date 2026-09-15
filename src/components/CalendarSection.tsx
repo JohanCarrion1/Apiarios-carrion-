@@ -917,7 +917,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
               </svg>
               Exportar
             </motion.button>
-            <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-line bg-pane p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+            <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-line bg-pane p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-w-[calc(100vw-1.5rem)]">
               <button
                 onClick={() => handleExportCalendar('ics')}
                 className="w-full text-left px-3 py-2 rounded-lg text-sm text-cream hover:bg-pane2 transition-colors"
@@ -945,7 +945,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
               </svg>
               Atajos
             </motion.button>
-            <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-line bg-pane p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+            <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-line bg-pane p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-w-[calc(100vw-1.5rem)]">
               <p className="text-xs font-semibold text-cream mb-2">Atajos de teclado:</p>
               <div className="space-y-1 text-xs text-husk">
                 <div className="flex justify-between"><span>Ir a hoy</span><kbd className="px-2 py-0.5 bg-ink rounded">H</kbd></div>

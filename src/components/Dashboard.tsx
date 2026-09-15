@@ -42,6 +42,8 @@ interface DashboardProps {
   apiaryName?: string;
   apiaryLocation?: string;
   onChangeApiary?: () => void;
+  onCreateApiary?: () => void;
+  onManageApiaries?: () => void;
   apiaries?: any[];
   currentApiaryId?: string;
   onSelectApiary?: (id: string) => void;
@@ -84,6 +86,8 @@ export default function Dashboard({
   apiaryName,
   apiaryLocation,
   onChangeApiary,
+  onCreateApiary,
+  onManageApiaries,
   apiaries = [],
   currentApiaryId = '',
   onSelectApiary = () => {},
@@ -92,6 +96,16 @@ export default function Dashboard({
   const { ref, inView } = useReveal();
   const [showSummary, setShowSummary] = useState(false);
   const [showApiarySelector, setShowApiarySelector] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const handleSelectApiary = (id: string) => {
+    if (id === currentApiaryId) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      onSelectApiary(id);
+      setTimeout(() => setIsTransitioning(false), 100);
+    }, 200);
+  };
   
   // Cargar cosechas desde localStorage
   const [harvests, setHarvests] = useState<any[]>(() => {
@@ -268,6 +282,11 @@ export default function Dashboard({
   };
   
   return (
+    <div
+      className={`transition-all duration-200 ease-in-out ${
+        isTransitioning ? 'opacity-0 scale-98' : 'opacity-100 scale-100'
+      }`}
+    >
     <motion.div 
       ref={ref}
       className="space-y-6"
@@ -307,7 +326,7 @@ export default function Dashboard({
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="absolute right-0 top-full mt-2 w-80 card p-4 z-50 max-h-96 overflow-y-auto"
+                className="absolute right-0 top-full mt-2 w-80 card p-4 z-50 max-h-96 overflow-y-auto max-w-[calc(100vw-1.5rem)]"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="space-y-2">
@@ -319,7 +338,7 @@ export default function Dashboard({
                       <motion.button
                         key={apiary.id}
                         onClick={() => {
-                          onSelectApiary(apiary.id);
+                          handleSelectApiary(apiary.id);
                           setShowApiarySelector(false);
                         }}
                         className={`w-full text-left p-3 rounded-lg transition-all ${
@@ -349,11 +368,13 @@ export default function Dashboard({
                     ))
                   )}
 
-                  {/* Opción para gestionar apiarios */}
+{/* Opción para gestionar apiarios */}
                   <motion.button
                     onClick={() => {
                       setShowApiarySelector(false);
-                      if (onChangeApiary) {
+                      if (onManageApiaries) {
+                        onManageApiaries();
+                      } else if (onChangeApiary) {
                         onChangeApiary();
                       }
                     }}
@@ -367,6 +388,26 @@ export default function Dashboard({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       <span className="text-honey text-sm font-semibold">Gestionar mis apiarios</span>
+                    </div>
+                  </motion.button>
+
+                  {/* Opción para crear un nuevo apiario */}
+                  <motion.button
+                    onClick={() => {
+                      setShowApiarySelector(false);
+                      if (onCreateApiary) {
+                        onCreateApiary();
+                      }
+                    }}
+                    className="w-full text-left p-3 rounded-lg bg-honey/60 border border-honey text-ink hover:bg-honey/70 transition-all mt-2"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="text-sm font-semibold">+ Crear nuevo apiario</span>
                     </div>
                   </motion.button>
                 </div>
@@ -994,5 +1035,6 @@ export default function Dashboard({
         </motion.div>
       </Card>
     </motion.div>
+    </div>
   );
 }

@@ -26,8 +26,22 @@ export interface BreedingLot {
   notas: string;
   fotos?: PhotoData[];
   fechaCreacion: string;
-  estadoHistorial: { estado: BreedingStatus; fecha: string }[];
+  estadoHistorial: { estado: BreedingStatus | 'aceptacion'; fecha: string; descripcion?: string }[];
+  acceptance?: {
+    acceptedCount: number;
+    totalCount: number;
+    percentage: number;
+    notes?: string;
+    registeredAt: string;
+  };
 }
+
+export const ACCEPTANCE_BADGES = (percentage: number) => {
+  if (percentage >= 70) return { label: 'Alta aceptación', color: '#a3bf7f', bg: 'bg-sage/15 border-sage/40 text-sage' };
+  if (percentage >= 40) return { label: 'Aceptación media', color: '#f0a41c', bg: 'bg-honey/15 border-honey/40 text-honey' };
+  if (percentage === 0) return { label: 'Sin aceptación', color: '#e4603f', bg: 'bg-coral/15 border-coral/40 text-coral' };
+  return { label: 'Baja aceptación', color: '#e4603f', bg: 'bg-coral/15 border-coral/40 text-coral' };
+};
 
 export const BREEDING_STATUS_LABELS: Record<BreedingStatus, string> = {
   enRealeras: 'En Realeras',

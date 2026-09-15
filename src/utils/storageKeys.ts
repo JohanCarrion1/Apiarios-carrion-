@@ -1,8 +1,10 @@
 import { useAuth } from '../context/AuthContext';
 import { useActiveApiary } from '../context/ActiveApiaryContext';
+import { entityKey, loadData, saveData } from '../utils/storage';
 
 /**
  * Hook para obtener claves de almacenamiento separadas por usuario y apiario
+ * (claves versionadas panal_v1_user_...).
  */
 export function useStorageKeys() {
   const { user } = useAuth();
@@ -12,15 +14,15 @@ export function useStorageKeys() {
 
   // Claves globales del usuario (independientes del apiario)
   const getUserKey = (key: string): string => {
-    if (!userId) throw new Error('Usuario no autenticado');
-    return `${key}_${userId}`;
+    if (!userId) return entityKey(key);
+    return entityKey(key, { userId });
   };
 
   // Claves específicas del apiario activo
   const getApiaryKey = (key: string): string => {
-    if (!userId) throw new Error('Usuario no autenticado');
-    if (!activeApiaryId) throw new Error('No hay apiario activo seleccionado');
-    return `${key}_${userId}_${activeApiaryId}`;
+    if (!userId) return entityKey(key);
+    if (!activeApiaryId) return entityKey(key);
+    return entityKey(key, { userId, apiaryId: activeApiaryId });
   };
 
   // Verificar si hay un apiario activo
@@ -42,32 +44,15 @@ export function useStorageKeys() {
  */
 export const userStorage = {
   save: <T>(key: string, userId: string, data: T): void => {
-    try {
-      const storageKey = `${key}_${userId}`;
-      localStorage.setItem(storageKey, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-    }
+    saveData(key, data, { userId, force: true });
   },
 
   load: <T>(key: string, userId: string, defaultValue: T): T => {
-    try {
-      const storageKey = `${key}_${userId}`;
-      const item = localStorage.getItem(storageKey);
-      return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-      console.error('Error loading from localStorage:', error);
-      return defaultValue;
-    }
+    return loadData(key, defaultValue, { userId });
   },
 
   remove: (key: string, userId: string): void => {
-    try {
-      const storageKey = `${key}_${userId}`;
-      localStorage.removeItem(storageKey);
-    } catch (error) {
-      console.error('Error removing from localStorage:', error);
-    }
+    localStorage.removeItem(entityKey(key, { userId }));
   },
 };
 
@@ -76,47 +61,21 @@ export const userStorage = {
  */
 export const apiaryStorage = {
   save: <T>(key: string, userId: string, apiaryId: string, data: T): void => {
-    try {
-      const storageKey = `${key}_${userId}_${apiaryId}`;
-      localStorage.setItem(storageKey, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-    }
+    saveData(key, data, { userId, apiaryId, force: true });
   },
 
   load: <T>(key: string, userId: string, apiaryId: string, defaultValue: T): T => {
-    try {
-      const storageKey = `${key}_${userId}_${apiaryId}`;
-      const item = localStorage.getItem(storageKey);
-      return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-      console.error('Error loading from localStorage:', error);
-      return defaultValue;
-    }
+    return loadData(key, defaultValue, { userId, apiaryId });
   },
 
   remove: (key: string, userId: string, apiaryId: string): void => {
-    try {
-      const storageKey = `${key}_${userId}_${apiaryId}`;
-      localStorage.removeItem(storageKey);
-    } catch (error) {
-      console.error('Error removing from localStorage:', error);
-    }
+    localStorage.removeItem(entityKey(key, { userId, apiaryId }));
   },
 };
 
 /**
- * Esquema de claves de almacenamiento:
- * 
- * Datos del usuario (independientes del apiario):
- * - activeApiary_{userId} → ID del apiario activo
- * 
- * Datos del apiario (dependientes del apiario activo):
- * - hives_{userId}_{apiaryId} → Colmenas del apiario
- * - inspections_{userId}_{apiaryId} → Inspecciones del apiario
- * - harvests_{userId}_{apiaryId} → Cosechas del apiario
- * - tasks_{userId}_{apiaryId} → Tareas del apiario
- * - events_{userId}_{apiaryId} → Eventos del apiario
- * - favorites_{userId}_{apiaryId} → Favoritos del apiario
- * - tags_{userId}_{apiaryId} → Etiquetas del apiario
+ * Esquema de claves de almacenamiento versionadas:
+ *   panal_v1_user_${userId}_<entidad>            → datos del usuario
+ *   panal_v1_user_${userId}_<entidad>_${apiaryId} → datos del apiario
+ *   panal_v1_user_${userId}_backup_<entidad>     → backups rotativos (3)
  */

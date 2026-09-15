@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getUserApiaries, createApiary, type Apiary } from '../services/apiaryService';
+import { saveLastActiveApiaryId } from '../utils/storage';
 import PhotoUploader from './PhotoUploader';
 import type { PhotoData } from '../services/photos';
 
@@ -68,18 +69,10 @@ export default function ApiarySelector() {
       
       console.log('✅ [APIARY] Apiario creado exitosamente:', apiaryId);
       
-      // Recargar apiarios
-      console.log('🔄 [APIARY] Recargando lista de apiarios...');
-      await loadApiaries();
-      
-      // Limpiar formulario
-      setNewApiaryName('');
-      setNewApiaryLocation('');
-      setNewApiaryPhotos([]);
-      setShowCreateForm(false);
-      
-      // Navegar al apiario recién creado usando Link nativo
-      console.log('✅ [APIARY] Apiario creado, el usuario puede hacer clic en la tarjeta para navegar');
+      // Guardar como último activo y entrar directo al dashboard del nuevo apiario
+      saveLastActiveApiaryId(apiaryId, user.uid);
+      console.log('✅ [APIARY] Navegando directo al dashboard del apiario creado');
+      navigate(`/dashboard/${apiaryId}`);
     } catch (error: any) {
       console.error('❌ [APIARY] Error al crear apiario:', error);
       console.error('❌ [APIARY] Error completo:', {
@@ -215,7 +208,7 @@ export default function ApiarySelector() {
                   <button
                     onClick={() => {
                       // Guardar el ID del apiario como último activo
-                      localStorage.setItem('lastActiveApiarioId', apiary.id);
+                      if (user) saveLastActiveApiaryId(apiary.id, user.uid);
                       // Navegar al dashboard
                       navigate(`/dashboard/${apiary.id}`);
                     }}

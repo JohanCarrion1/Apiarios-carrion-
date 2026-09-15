@@ -229,6 +229,15 @@ export function computeReminders({
         `Nacimiento ${lotTag} de cría de reinas`,
         `Nacimiento estimado del lote ${lot.tipo}`.trim()
       );
+      // Revisión de aceptación de celdas al día 3 del traslarve
+      if (!lot.acceptance) {
+        push(
+          'breeding',
+          addDays(startOfDay(parseISO(lot.fechaInicio)), 3),
+          `Lote #${lot.id.slice(-6).toUpperCase()}: día de revisar aceptación de celdas`,
+          'A los 3 días del traslarve revisa cuántas celdas fueron aceptadas'
+        );
+      }
     });
   }
 

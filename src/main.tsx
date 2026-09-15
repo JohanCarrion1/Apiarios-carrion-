@@ -2,6 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import { runMigrations } from "./utils/storage";
+
+// Migración automática de claves legado a claves versionadas antes de
+// arrancar la app. NUNCA borra la clave vieja (queda como respaldo).
+runMigrations();
 
 // Error Boundary para capturar errores de React
 class ErrorBoundary extends React.Component<

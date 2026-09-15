@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { STATUS_COLORS, type Hive, type HiveStatus } from "../types/hive";
+import type { Hive, Inspection } from "../types/hive";
 import type { Queen, QueenChange } from '../types/queen';
 import type { BreedingLot } from '../types/breeding';
 import HiveComb from './HiveComb';
@@ -27,15 +27,19 @@ interface HivesSectionProps {
   onUpdateNucleusPhotos?: (id: string, fotos: PhotoData[]) => void;
   queens?: Queen[];
   queenHistory?: QueenChange[];
+  inspections?: Inspection[];
+  nextHiveCode?: string;
   onRegisterQueen?: (hive: Hive) => void;
   onEditQueen?: (queen: Queen) => void;
   onChangeQueen?: (queen: Queen, hive: Hive) => void;
   onMarkQueenLost?: (queen: Queen) => void;
   breedingLots?: BreedingLot[];
   onShowQueenLot?: (loteId: string) => void;
+  apiaries?: { id: string; name?: string }[];
+  currentApiaryId?: string;
+  onConvertNucleus?: (hive: Hive) => void;
+  onTransfer?: (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => void;
 }
-
-type SortOption = 'code' | 'lastInspection' | 'status' | 'health';
 
 export default function HivesSection({
   hives,
@@ -57,41 +61,26 @@ export default function HivesSection({
   onUpdateNucleusPhotos,
   queens = [],
   queenHistory = [],
+  inspections,
+  nextHiveCode,
   onRegisterQueen,
   onEditQueen,
   onChangeQueen,
   onMarkQueenLost,
   breedingLots = [],
   onShowQueenLot,
+  apiaries = [],
+  currentApiaryId,
+  onConvertNucleus,
+  onTransfer,
 }: HivesSectionProps) {
   // Estados para colmenas
   const [searchQueryHives, setSearchQueryHives] = useState('');
-  const [filterHives, setFilterHives] = useState<HiveStatus | "todas">("todas");
-  const [sortByHives, setSortByHives] = useState<SortOption>('code');
 
   // Estados para núcleos
   const [searchQueryNuclei, setSearchQueryNuclei] = useState('');
-  const [filterNuclei, setFilterNuclei] = useState<HiveStatus | "todas">("todas");
-  const [sortByNuclei, setSortByNuclei] = useState<SortOption>('code');
 
-  // Calcular salud
-  const calculateHealth = (hive: Hive): number => {
-    let health = 100;
-    const daysSinceInspection = Math.floor(
-      (Date.now() - new Date(hive.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
-    );
-    if (daysSinceInspection > 30) health -= 40;
-    else if (daysSinceInspection > 14) health -= 20;
-    else if (daysSinceInspection > 7) health -= 10;
-    
-    if (hive.status === 'alerta') health -= 30;
-    else if (hive.status === 'sin_reina') health -= 50;
-    else if (hive.status === 'revision') health -= 15;
-    
-    return Math.max(0, Math.min(100, health));
-  };
-
-  // Filtrar y ordenar colmenas
+  // Filtrar colmenas
   const filteredHives = useMemo(() => {
     let result = [...hives];
     
@@ -103,30 +92,10 @@ export default function HivesSection({
       );
     }
     
-    if (filterHives !== 'todas') {
-      result = result.filter(h => h.status === filterHives);
-    }
-    
-    result.sort((a, b) => {
-      switch (sortByHives) {
-        case 'code':
-          return a.code.localeCompare(b.code);
-        case 'lastInspection':
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        case 'status':
-          const statusOrder = { alerta: 0, sin_reina: 1, revision: 2, saludable: 3 };
-          return statusOrder[a.status] - statusOrder[b.status];
-        case 'health':
-          return calculateHealth(b) - calculateHealth(a);
-        default:
-          return 0;
-      }
-    });
-    
     return result;
-  }, [hives, searchQueryHives, filterHives, sortByHives]);
+  }, [hives, searchQueryHives]);
 
-  // Filtrar y ordenar núcleos
+  // Filtrar núcleos
   const filteredNuclei = useMemo(() => {
     let result = [...nuclei];
     
@@ -138,28 +107,8 @@ export default function HivesSection({
       );
     }
     
-    if (filterNuclei !== 'todas') {
-      result = result.filter(h => h.status === filterNuclei);
-    }
-    
-    result.sort((a, b) => {
-      switch (sortByNuclei) {
-        case 'code':
-          return a.code.localeCompare(b.code);
-        case 'lastInspection':
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        case 'status':
-          const statusOrder = { alerta: 0, sin_reina: 1, revision: 2, saludable: 3 };
-          return statusOrder[a.status] - statusOrder[b.status];
-        case 'health':
-          return calculateHealth(b) - calculateHealth(a);
-        default:
-          return 0;
-      }
-    });
-    
     return result;
-  }, [nuclei, searchQueryNuclei, filterNuclei, sortByNuclei]);
+  }, [nuclei, searchQueryNuclei]);
 
   const selectedHive = hives.find(h => h.id === selectedHiveId);
   const selectedNucleus = nuclei.find(h => h.id === selectedNucleusId);
@@ -194,10 +143,14 @@ export default function HivesSection({
 
       {/* BLOQUE 1: COLMENAS */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
           <div>
             <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Mapa del bancal</p>
             <h2 className="font-display text-3xl font-bold text-cream">Colmenas</h2>
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-mono text-cream">{filteredHives.length} colonia{filteredHives.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-husk">distribución por calles</p>
           </div>
         </div>
 
@@ -225,31 +178,6 @@ export default function HivesSection({
               </button>
             )}
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={filterHives}
-              onChange={(e) => setFilterHives(e.target.value as HiveStatus | "todas")}
-              className="rounded-xl border border-line bg-ink/50 px-4 py-2.5 text-sm text-cream"
-            >
-              <option value="todas">Todas</option>
-              <option value="saludable">Saludable</option>
-              <option value="revision">Revisión</option>
-              <option value="alerta">Alerta</option>
-              <option value="sin_reina">Sin reina</option>
-            </select>
-
-            <select
-              value={sortByHives}
-              onChange={(e) => setSortByHives(e.target.value as SortOption)}
-              className="rounded-xl border border-line bg-ink/50 px-4 py-2.5 text-sm text-cream"
-            >
-              <option value="code">Código</option>
-              <option value="lastInspection">Última inspección</option>
-              <option value="status">Estado</option>
-              <option value="health">Salud</option>
-            </select>
-          </div>
         </div>
 
         {/* Mapa de colmenas */}
@@ -268,7 +196,7 @@ export default function HivesSection({
         {selectedHive && (
           <HiveDetail
             hive={selectedHive}
-            inspections={[]}
+            inspections={(inspections || []).filter(i => i.hiveId === selectedHive.id)}
             totalHives={hives.length}
             onInspect={onInspectHive}
             onEdit={onEditHive}
@@ -283,16 +211,25 @@ export default function HivesSection({
             onMarkQueenLost={onMarkQueenLost}
             breedingLots={breedingLots}
             onShowQueenLot={onShowQueenLot}
+            apiaries={apiaries}
+            currentApiaryId={currentApiaryId}
+            nextHiveCode={nextHiveCode}
+            onConvertNucleus={onConvertNucleus}
+            onTransfer={onTransfer}
           />
         )}
       </div>
 
       {/* BLOQUE 2: NÚCLEOS */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
           <div>
             <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Mapa del bancal</p>
             <h2 className="font-display text-3xl font-bold text-cream">Núcleos</h2>
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-mono text-cream">{filteredNuclei.length} núcleo{filteredNuclei.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-husk">distribución por calles</p>
           </div>
         </div>
 
@@ -320,31 +257,6 @@ export default function HivesSection({
               </button>
             )}
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={filterNuclei}
-              onChange={(e) => setFilterNuclei(e.target.value as HiveStatus | "todas")}
-              className="rounded-xl border border-line bg-ink/50 px-4 py-2.5 text-sm text-cream"
-            >
-              <option value="todas">Todos</option>
-              <option value="saludable">Saludable</option>
-              <option value="revision">Revisión</option>
-              <option value="alerta">Alerta</option>
-              <option value="sin_reina">Sin reina</option>
-            </select>
-
-            <select
-              value={sortByNuclei}
-              onChange={(e) => setSortByNuclei(e.target.value as SortOption)}
-              className="rounded-xl border border-line bg-ink/50 px-4 py-2.5 text-sm text-cream"
-            >
-              <option value="code">Código</option>
-              <option value="lastInspection">Última inspección</option>
-              <option value="status">Estado</option>
-              <option value="health">Salud</option>
-            </select>
-          </div>
         </div>
 
         {/* Mapa de núcleos */}
@@ -370,7 +282,7 @@ export default function HivesSection({
         {selectedNucleus && (
           <HiveDetail
             hive={selectedNucleus}
-            inspections={[]}
+            inspections={(inspections || []).filter(i => i.hiveId === selectedNucleus.id)}
             totalHives={nuclei.length}
             onInspect={onInspectNucleus}
             onEdit={onEditNucleus}
@@ -385,6 +297,11 @@ export default function HivesSection({
             onMarkQueenLost={onMarkQueenLost}
             breedingLots={breedingLots}
             onShowQueenLot={onShowQueenLot}
+            apiaries={apiaries}
+            currentApiaryId={currentApiaryId}
+            nextHiveCode={nextHiveCode}
+            onConvertNucleus={onConvertNucleus}
+            onTransfer={onTransfer}
           />
         )}
       </div>

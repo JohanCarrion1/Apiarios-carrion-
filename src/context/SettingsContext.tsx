@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { loadSettings, saveSettings } from '../utils/storage';
 
 interface Settings {
   theme: 'dark' | 'light' | 'auto';
@@ -85,19 +86,18 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => {
-    const saved = localStorage.getItem('settings');
-    if (!saved) return defaultSettings;
+    const saved = loadSettings();
+    if (!saved || Object.keys(saved).length === 0) return defaultSettings;
     try {
-      const parsed = JSON.parse(saved);
       return {
         ...defaultSettings,
-        ...parsed,
+        ...saved,
         notifications: {
           ...defaultSettings.notifications,
-          ...(parsed.notifications || {}),
+          ...(saved.notifications || {}),
           kinds: {
             ...defaultSettings.notifications.kinds,
-            ...(parsed.notifications?.kinds || {}),
+            ...(saved.notifications?.kinds || {}),
           },
         },
       };
@@ -107,7 +107,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    localStorage.setItem('settings', JSON.stringify(settings));
+    saveSettings(settings);
     
     // Aplicar tema
     const root = document.documentElement;

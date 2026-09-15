@@ -1,7 +1,22 @@
 // ============================================
 // SERVICIOS DE APIARIOS Y COLMENAS EN LOCALSTORAGE
 // ============================================
+// Toda lectura/escritura pasa por la capa central de almacenamiento
+// versionada (utils/storage.ts) con backups rotativos y migración.
 import type { PhotoData } from './photos';
+import {
+  loadApiaries,
+  saveApiaries,
+  loadHives,
+  saveHives,
+  loadInspections,
+  saveInspections,
+  loadHarvests,
+  saveHarvests,
+  loadTasks,
+  saveTasks,
+  removeApiaryData,
+} from '../utils/storage';
 
 // Interfaz para Apiario
 export interface Apiary {
@@ -13,6 +28,7 @@ export interface Apiary {
     lat: number;
     lng: number;
   };
+  altitud?: number;
   fotos?: PhotoData[];
   createdAt: string;
   updatedAt: string;
@@ -42,25 +58,7 @@ const generateId = (): string => {
   return `apiary_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
-const getApiariesKey = (userId: string): string => {
-  return `apiarios_${userId}`;
-};
-
-const getHivesKey = (userId: string, apiaryId: string): string => {
-  return `hives_${userId}_${apiaryId}`;
-};
-
-const getInspectionsKey = (userId: string, apiaryId: string): string => {
-  return `inspections_${userId}_${apiaryId}`;
-};
-
-const getHarvestsKey = (userId: string, apiaryId: string): string => {
-  return `harvests_${userId}_${apiaryId}`;
-};
-
-const getTasksKey = (userId: string, apiaryId: string): string => {
-  return `tasks_${userId}_${apiaryId}`;
-};
+const getSuffix = (userId: string, apiaryId: string): string => `_${userId}_${apiaryId}`;
 
 // ============================================
 // SERVICIOS DE APIARIOS
@@ -74,13 +72,12 @@ export async function createApiary(
   name: string, 
   location: string,
   coordinates?: { lat: number; lng: number },
-  fotos?: PhotoData[]
+  fotos?: PhotoData[],
+  altitud?: number
 ): Promise<string> {
   console.log('🔍 [LOCALSTORAGE] === INICIO createApiary ===');
-  console.log('🔍 [LOCALSTORAGE] Parámetros recibidos:', { userId, name, location, coordinates, fotosCount: fotos?.length });
   
   try {
-    // Validar parámetros
     if (!userId) {
       throw new Error('userId es requerido');
     }
@@ -88,7 +85,6 @@ export async function createApiary(
       throw new Error('name es requerido y no puede estar vacío');
     }
     
-    // Construir datos del apiario
     const apiaryData: Apiary = {
       id: generateId(),
       userId: userId,
@@ -98,7 +94,6 @@ export async function createApiary(
       updatedAt: new Date().toISOString(),
     };
 
-    // Agregar coordenadas si están disponibles
     if (coordinates && coordinates.lat !== undefined && coordinates.lng !== undefined) {
       apiaryData.coordinates = {
         lat: Number(coordinates.lat),
@@ -106,34 +101,25 @@ export async function createApiary(
       };
     }
 
-    // Guardar fotos del apiario
+    if (typeof altitud === 'number' && !Number.isNaN(altitud)) {
+      apiaryData.altitud = altitud;
+    }
+
     if (fotos && fotos.length > 0) {
       apiaryData.fotos = fotos;
     }
 
-    console.log('📝 [LOCALSTORAGE] Datos a guardar:', JSON.stringify(apiaryData, null, 2));
-    
-    // Obtener apiarios existentes
-    const apiariesKey = getApiariesKey(userId);
-    const existingApiariesJson = localStorage.getItem(apiariesKey);
-    const existingApiaries: Apiary[] = existingApiariesJson ? JSON.parse(existingApiariesJson) : [];
-    
-    // Agregar nuevo apiario
+    const existingApiaries = loadApiaries(userId);
     existingApiaries.push(apiaryData);
-    
-    // Guardar en localStorage
-    localStorage.setItem(apiariesKey, JSON.stringify(existingApiaries));
-    
+    saveApiaries(existingApiaries, userId);
+
     console.log('✅ [LOCALSTORAGE] Apiario creado exitosamente');
     console.log('✅ [LOCALSTORAGE] ID del apiario:', apiaryData.id);
-    console.log('🔍 [LOCALSTORAGE] === FIN createApiary (EXITOSO) ===');
     
     return apiaryData.id;
   } catch (error: any) {
-    console.error('❌ [LOCALSTORAGE] === ERROR EN createApiary ===');
-    console.error('❌ [LOCALSTORAGE] Error completo:', error);
-    console.error('❌ [LOCALSTORAGE] Error message:', error.message);
-    throw new Error(`Error al crear el apiario: ${error.message || 'Error desconocido'}`);
+    console.error('❌ [LOCALSTORAGE] Error al crear apiario:', error?.message || error);
+    throw new Error(`Error al crear el apiario: ${error?.message || 'Error desconocido'}`);
   }
 }
 
@@ -142,14 +128,8 @@ export async function createApiary(
  */
 export async function getUserApiaries(userId: string): Promise<Apiary[]> {
   try {
-    const apiariesKey = getApiariesKey(userId);
-    const apiariesJson = localStorage.getItem(apiariesKey);
-    const apiaries: Apiary[] = apiariesJson ? JSON.parse(apiariesJson) : [];
-    
-    // Ordenar por fecha de creación (más reciente primero)
+    const apiaries = loadApiaries(userId);
     apiaries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    console.log('✅ [LOCALSTORAGE] Apiarios obtenidos:', apiaries.length);
     return apiaries;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener apiarios:', error);
@@ -163,8 +143,7 @@ export async function getUserApiaries(userId: string): Promise<Apiary[]> {
 export async function getApiary(userId: string, apiaryId: string): Promise<Apiary | null> {
   try {
     const apiaries = await getUserApiaries(userId);
-    const apiary = apiaries.find(a => a.id === apiaryId);
-    return apiary || null;
+    return apiaries.find(a => a.id === apiaryId) || null;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener apiario:', error);
     return null;
@@ -176,22 +155,17 @@ export async function getApiary(userId: string, apiaryId: string): Promise<Apiar
  */
 export async function updateApiary(userId: string, apiaryId: string, updates: Partial<Apiary>): Promise<void> {
   try {
-    const apiariesKey = getApiariesKey(userId);
-    const apiariesJson = localStorage.getItem(apiariesKey);
-    const apiaries: Apiary[] = apiariesJson ? JSON.parse(apiariesJson) : [];
-    
+    const apiaries = loadApiaries(userId);
     const index = apiaries.findIndex(a => a.id === apiaryId);
     if (index === -1) {
       throw new Error('Apiario no encontrado');
     }
-    
     apiaries[index] = {
       ...apiaries[index],
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    
-    localStorage.setItem(apiariesKey, JSON.stringify(apiaries));
+    saveApiaries(apiaries, userId);
     console.log('✅ [LOCALSTORAGE] Apiario actualizado:', apiaryId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al actualizar apiario:', error);
@@ -204,19 +178,13 @@ export async function updateApiary(userId: string, apiaryId: string, updates: Pa
  */
 export async function deleteApiary(userId: string, apiaryId: string): Promise<void> {
   try {
-    const apiariesKey = getApiariesKey(userId);
-    const apiariesJson = localStorage.getItem(apiariesKey);
-    const apiaries: Apiary[] = apiariesJson ? JSON.parse(apiariesJson) : [];
-    
+    const apiaries = loadApiaries(userId);
     const filteredApiaries = apiaries.filter(a => a.id !== apiaryId);
-    localStorage.setItem(apiariesKey, JSON.stringify(filteredApiaries));
-    
-    // También eliminar datos asociados al apiario
-    localStorage.removeItem(getHivesKey(userId, apiaryId));
-    localStorage.removeItem(getInspectionsKey(userId, apiaryId));
-    localStorage.removeItem(getHarvestsKey(userId, apiaryId));
-    localStorage.removeItem(getTasksKey(userId, apiaryId));
-    
+    saveApiaries(filteredApiaries, userId);
+
+    // Eliminar datos asociados al apiario (acción explícita del usuario)
+    removeApiaryData(userId, apiaryId);
+
     console.log('✅ [LOCALSTORAGE] Apiario eliminado:', apiaryId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al eliminar apiario:', error);
@@ -246,13 +214,11 @@ export async function createHive(
       updatedAt: new Date().toISOString(),
     };
 
-    const hivesKey = getHivesKey(userId, apiaryId);
-    const existingHivesJson = localStorage.getItem(hivesKey);
-    const existingHives: HiveWithApiary[] = existingHivesJson ? JSON.parse(existingHivesJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const existingHives = loadHives(suffix);
     existingHives.push(newHive);
-    localStorage.setItem(hivesKey, JSON.stringify(existingHives));
-    
+    saveHives(existingHives, suffix);
+
     console.log('✅ [LOCALSTORAGE] Colmena creada:', hiveId);
     return hiveId;
   } catch (error: any) {
@@ -266,14 +232,9 @@ export async function createHive(
  */
 export async function getApiaryHives(userId: string, apiaryId: string): Promise<HiveWithApiary[]> {
   try {
-    const hivesKey = getHivesKey(userId, apiaryId);
-    const hivesJson = localStorage.getItem(hivesKey);
-    const hives: HiveWithApiary[] = hivesJson ? JSON.parse(hivesJson) : [];
-    
-    // Ordenar por fecha de creación
+    const suffix = getSuffix(userId, apiaryId);
+    const hives = loadHives(suffix) as HiveWithApiary[];
     hives.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    
-    console.log('✅ [LOCALSTORAGE] Colmenas obtenidas:', hives.length);
     return hives;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener colmenas:', error);
@@ -287,8 +248,7 @@ export async function getApiaryHives(userId: string, apiaryId: string): Promise<
 export async function getHive(userId: string, apiaryId: string, hiveId: string): Promise<HiveWithApiary | null> {
   try {
     const hives = await getApiaryHives(userId, apiaryId);
-    const hive = hives.find(h => h.id === hiveId);
-    return hive || null;
+    return hives.find(h => h.id === hiveId) || null;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener colmena:', error);
     return null;
@@ -300,22 +260,18 @@ export async function getHive(userId: string, apiaryId: string, hiveId: string):
  */
 export async function updateHive(userId: string, apiaryId: string, hiveId: string, updates: Partial<HiveWithApiary>): Promise<void> {
   try {
-    const hivesKey = getHivesKey(userId, apiaryId);
-    const hivesJson = localStorage.getItem(hivesKey);
-    const hives: HiveWithApiary[] = hivesJson ? JSON.parse(hivesJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const hives = loadHives(suffix) as HiveWithApiary[];
     const index = hives.findIndex(h => h.id === hiveId);
     if (index === -1) {
       throw new Error('Colmena no encontrada');
     }
-    
     hives[index] = {
       ...hives[index],
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    
-    localStorage.setItem(hivesKey, JSON.stringify(hives));
+    saveHives(hives, suffix);
     console.log('✅ [LOCALSTORAGE] Colmena actualizada:', hiveId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al actualizar colmena:', error);
@@ -328,13 +284,10 @@ export async function updateHive(userId: string, apiaryId: string, hiveId: strin
  */
 export async function deleteHive(userId: string, apiaryId: string, hiveId: string): Promise<void> {
   try {
-    const hivesKey = getHivesKey(userId, apiaryId);
-    const hivesJson = localStorage.getItem(hivesKey);
-    const hives: HiveWithApiary[] = hivesJson ? JSON.parse(hivesJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const hives = loadHives(suffix) as HiveWithApiary[];
     const filteredHives = hives.filter(h => h.id !== hiveId);
-    localStorage.setItem(hivesKey, JSON.stringify(filteredHives));
-    
+    saveHives(filteredHives, suffix);
     console.log('✅ [LOCALSTORAGE] Colmena eliminada:', hiveId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al eliminar colmena:', error);
@@ -359,12 +312,10 @@ export async function createInspection(userId: string, apiaryId: string, inspect
       updatedAt: new Date().toISOString(),
     };
 
-    const inspectionsKey = getInspectionsKey(userId, apiaryId);
-    const existingInspectionsJson = localStorage.getItem(inspectionsKey);
-    const existingInspections: any[] = existingInspectionsJson ? JSON.parse(existingInspectionsJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const existingInspections = loadInspections(suffix);
     existingInspections.push(newInspection);
-    localStorage.setItem(inspectionsKey, JSON.stringify(existingInspections));
+    saveInspections(existingInspections, suffix);
     
     console.log('✅ [LOCALSTORAGE] Inspección creada:', inspectionId);
     return inspectionId;
@@ -379,14 +330,9 @@ export async function createInspection(userId: string, apiaryId: string, inspect
  */
 export async function getApiaryInspections(userId: string, apiaryId: string): Promise<any[]> {
   try {
-    const inspectionsKey = getInspectionsKey(userId, apiaryId);
-    const inspectionsJson = localStorage.getItem(inspectionsKey);
-    const inspections: any[] = inspectionsJson ? JSON.parse(inspectionsJson) : [];
-    
-    // Ordenar por fecha de creación (más reciente primero)
+    const suffix = getSuffix(userId, apiaryId);
+    const inspections = loadInspections(suffix);
     inspections.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    console.log('✅ [LOCALSTORAGE] Inspecciones obtenidas:', inspections.length);
     return inspections;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener inspecciones:', error);
@@ -399,22 +345,18 @@ export async function getApiaryInspections(userId: string, apiaryId: string): Pr
  */
 export async function updateInspection(userId: string, apiaryId: string, inspectionId: string, updates: any): Promise<void> {
   try {
-    const inspectionsKey = getInspectionsKey(userId, apiaryId);
-    const inspectionsJson = localStorage.getItem(inspectionsKey);
-    const inspections: any[] = inspectionsJson ? JSON.parse(inspectionsJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const inspections = loadInspections(suffix);
     const index = inspections.findIndex(i => i.id === inspectionId);
     if (index === -1) {
       throw new Error('Inspección no encontrada');
     }
-    
     inspections[index] = {
       ...inspections[index],
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    
-    localStorage.setItem(inspectionsKey, JSON.stringify(inspections));
+    saveInspections(inspections, suffix);
     console.log('✅ [LOCALSTORAGE] Inspección actualizada:', inspectionId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al actualizar inspección:', error);
@@ -427,13 +369,10 @@ export async function updateInspection(userId: string, apiaryId: string, inspect
  */
 export async function deleteInspection(userId: string, apiaryId: string, inspectionId: string): Promise<void> {
   try {
-    const inspectionsKey = getInspectionsKey(userId, apiaryId);
-    const inspectionsJson = localStorage.getItem(inspectionsKey);
-    const inspections: any[] = inspectionsJson ? JSON.parse(inspectionsJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const inspections = loadInspections(suffix);
     const filteredInspections = inspections.filter(i => i.id !== inspectionId);
-    localStorage.setItem(inspectionsKey, JSON.stringify(filteredInspections));
-    
+    saveInspections(filteredInspections, suffix);
     console.log('✅ [LOCALSTORAGE] Inspección eliminada:', inspectionId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al eliminar inspección:', error);
@@ -458,13 +397,11 @@ export async function createHarvest(userId: string, apiaryId: string, harvestDat
       updatedAt: new Date().toISOString(),
     };
 
-    const harvestsKey = getHarvestsKey(userId, apiaryId);
-    const existingHarvestsJson = localStorage.getItem(harvestsKey);
-    const existingHarvests: any[] = existingHarvestsJson ? JSON.parse(existingHarvestsJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const existingHarvests = loadHarvests(suffix);
     existingHarvests.push(newHarvest);
-    localStorage.setItem(harvestsKey, JSON.stringify(existingHarvests));
-    
+    saveHarvests(existingHarvests, suffix);
+
     console.log('✅ [LOCALSTORAGE] Cosecha creada:', harvestId);
     return harvestId;
   } catch (error: any) {
@@ -478,14 +415,9 @@ export async function createHarvest(userId: string, apiaryId: string, harvestDat
  */
 export async function getApiaryHarvests(userId: string, apiaryId: string): Promise<any[]> {
   try {
-    const harvestsKey = getHarvestsKey(userId, apiaryId);
-    const harvestsJson = localStorage.getItem(harvestsKey);
-    const harvests: any[] = harvestsJson ? JSON.parse(harvestsJson) : [];
-    
-    // Ordenar por fecha de creación (más reciente primero)
+    const suffix = getSuffix(userId, apiaryId);
+    const harvests = loadHarvests(suffix);
     harvests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    console.log('✅ [LOCALSTORAGE] Cosechas obtenidas:', harvests.length);
     return harvests;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener cosechas:', error);
@@ -498,22 +430,18 @@ export async function getApiaryHarvests(userId: string, apiaryId: string): Promi
  */
 export async function updateHarvest(userId: string, apiaryId: string, harvestId: string, updates: any): Promise<void> {
   try {
-    const harvestsKey = getHarvestsKey(userId, apiaryId);
-    const harvestsJson = localStorage.getItem(harvestsKey);
-    const harvests: any[] = harvestsJson ? JSON.parse(harvestsJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const harvests = loadHarvests(suffix);
     const index = harvests.findIndex(h => h.id === harvestId);
     if (index === -1) {
       throw new Error('Cosecha no encontrada');
     }
-    
     harvests[index] = {
       ...harvests[index],
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    
-    localStorage.setItem(harvestsKey, JSON.stringify(harvests));
+    saveHarvests(harvests, suffix);
     console.log('✅ [LOCALSTORAGE] Cosecha actualizada:', harvestId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al actualizar cosecha:', error);
@@ -526,13 +454,10 @@ export async function updateHarvest(userId: string, apiaryId: string, harvestId:
  */
 export async function deleteHarvest(userId: string, apiaryId: string, harvestId: string): Promise<void> {
   try {
-    const harvestsKey = getHarvestsKey(userId, apiaryId);
-    const harvestsJson = localStorage.getItem(harvestsKey);
-    const harvests: any[] = harvestsJson ? JSON.parse(harvestsJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const harvests = loadHarvests(suffix);
     const filteredHarvests = harvests.filter(h => h.id !== harvestId);
-    localStorage.setItem(harvestsKey, JSON.stringify(filteredHarvests));
-    
+    saveHarvests(filteredHarvests, suffix);
     console.log('✅ [LOCALSTORAGE] Cosecha eliminada:', harvestId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al eliminar cosecha:', error);
@@ -557,13 +482,11 @@ export async function createTask(userId: string, apiaryId: string, taskData: any
       updatedAt: new Date().toISOString(),
     };
 
-    const tasksKey = getTasksKey(userId, apiaryId);
-    const existingTasksJson = localStorage.getItem(tasksKey);
-    const existingTasks: any[] = existingTasksJson ? JSON.parse(existingTasksJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const existingTasks = loadTasks(suffix);
     existingTasks.push(newTask);
-    localStorage.setItem(tasksKey, JSON.stringify(existingTasks));
-    
+    saveTasks(existingTasks, suffix);
+
     console.log('✅ [LOCALSTORAGE] Tarea creada:', taskId);
     return taskId;
   } catch (error: any) {
@@ -577,14 +500,9 @@ export async function createTask(userId: string, apiaryId: string, taskData: any
  */
 export async function getApiaryTasks(userId: string, apiaryId: string): Promise<any[]> {
   try {
-    const tasksKey = getTasksKey(userId, apiaryId);
-    const tasksJson = localStorage.getItem(tasksKey);
-    const tasks: any[] = tasksJson ? JSON.parse(tasksJson) : [];
-    
-    // Ordenar por fecha de creación (más reciente primero)
+    const suffix = getSuffix(userId, apiaryId);
+    const tasks = loadTasks(suffix);
     tasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    console.log('✅ [LOCALSTORAGE] Tareas obtenidas:', tasks.length);
     return tasks;
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al obtener tareas:', error);
@@ -597,22 +515,18 @@ export async function getApiaryTasks(userId: string, apiaryId: string): Promise<
  */
 export async function updateTask(userId: string, apiaryId: string, taskId: string, updates: any): Promise<void> {
   try {
-    const tasksKey = getTasksKey(userId, apiaryId);
-    const tasksJson = localStorage.getItem(tasksKey);
-    const tasks: any[] = tasksJson ? JSON.parse(tasksJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const tasks = loadTasks(suffix);
     const index = tasks.findIndex(t => t.id === taskId);
     if (index === -1) {
       throw new Error('Tarea no encontrada');
     }
-    
     tasks[index] = {
       ...tasks[index],
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    
-    localStorage.setItem(tasksKey, JSON.stringify(tasks));
+    saveTasks(tasks, suffix);
     console.log('✅ [LOCALSTORAGE] Tarea actualizada:', taskId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al actualizar tarea:', error);
@@ -625,13 +539,10 @@ export async function updateTask(userId: string, apiaryId: string, taskId: strin
  */
 export async function deleteTask(userId: string, apiaryId: string, taskId: string): Promise<void> {
   try {
-    const tasksKey = getTasksKey(userId, apiaryId);
-    const tasksJson = localStorage.getItem(tasksKey);
-    const tasks: any[] = tasksJson ? JSON.parse(tasksJson) : [];
-    
+    const suffix = getSuffix(userId, apiaryId);
+    const tasks = loadTasks(suffix);
     const filteredTasks = tasks.filter(t => t.id !== taskId);
-    localStorage.setItem(tasksKey, JSON.stringify(filteredTasks));
-    
+    saveTasks(filteredTasks, suffix);
     console.log('✅ [LOCALSTORAGE] Tarea eliminada:', taskId);
   } catch (error: any) {
     console.error('❌ [LOCALSTORAGE] Error al eliminar tarea:', error);

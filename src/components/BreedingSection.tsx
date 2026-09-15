@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { differenceInDays, parseISO, format, subMonths, isAfter } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -19,6 +18,7 @@ interface BreedingSectionProps {
   onAddCalendarEvent: (event: { title: string; date: string; description: string }) => void;
   onDeleteCalendarEvent: (titlePattern: string) => void;
   onAddCuadernoEntry: (text: string) => void;
+  onShowToast?: (title: string, desc?: string) => void;
   queens?: Queen[];
   focusLotId?: string | null;
   onConsumeFocusLot?: () => void;
@@ -31,7 +31,7 @@ const formatDate = (iso: string) => format(parseISO(iso), 'd MMM yyyy', { locale
 
 export default function BreedingSection({
   hives, nuclei, breedingLots, onUpdateLots,
-  onAddCalendarEvent, onDeleteCalendarEvent, onAddCuadernoEntry,
+  onAddCalendarEvent, onDeleteCalendarEvent, onAddCuadernoEntry, onShowToast,
   queens = [],
   focusLotId,
   onConsumeFocusLot,
@@ -54,6 +54,17 @@ export default function BreedingSection({
     return () => window.removeEventListener('keydown', onKey);
   }, [confirmDeleteLotId]);
 
+  useEffect(() => {
+    if (!openStateMenuId) return;
+    const onClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-state-menu]')) {
+        setOpenStateMenuId(null);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', onClick), 0);
+    return () => document.removeEventListener('click', onClick);
+  }, [openStateMenuId]);
+
   const today = new Date();
 
   const activeLots = useMemo(() =>
@@ -72,6 +83,13 @@ export default function BreedingSection({
   }, [breedingLots, today]);
 
   const fecundandoCount = breedingLots.filter(l => l.estado === 'fecundando').length;
+
+  const avgAcceptance = useMemo(() => {
+    const withAcceptance = breedingLots.filter(l => l.acceptance);
+    if (withAcceptance.length === 0) return null;
+    const sum = withAcceptance.reduce((acc, l) => acc + (l.acceptance?.percentage ?? 0), 0);
+    return Math.round(sum / withAcceptance.length);
+  }, [breedingLots]);
 
   const getColonyLabel = (id: string) => {
     const colony = allColonies.find(c => c.id === id);
@@ -152,16 +170,33 @@ export default function BreedingSection({
     if (!lot) return;
     const now = new Date().toISOString();
     const newEstado = updates.estado;
+    const newAcceptance = updates.acceptance;
+    let estadoHistorial = lot.estadoHistorial;
+    if (newEstado) {
+      estadoHistorial = [...estadoHistorial, { estado: newEstado, fecha: now }];
+    }
+    if (newAcceptance) {
+      estadoHistorial = [...estadoHistorial, {
+        estado: 'aceptacion',
+        fecha: now,
+        descripcion: `Aceptadas: ${newAcceptance.acceptedCount}/${newAcceptance.totalCount} celdas (${newAcceptance.percentage}%)`,
+      }];
+    }
     const updated: BreedingLot = {
       ...lot,
       ...updates,
-      estadoHistorial: newEstado
-        ? [...lot.estadoHistorial, { estado: newEstado, fecha: now }]
-        : lot.estadoHistorial,
+      estadoHistorial,
     };
     onUpdateLots(breedingLots.map(l => l.id === lotId ? updated : l));
     if (newEstado) {
       onAddCuadernoEntry(`Lote de cría cambiado a ${BREEDING_STATUS_LABELS[newEstado]}`);
+    }
+    if (newAcceptance) {
+      onAddCuadernoEntry(`Lote ${lot.id.slice(-6).toUpperCase()}: aceptación de ${newAcceptance.acceptedCount}/${newAcceptance.totalCount} celdas (${newAcceptance.percentage}%)`);
+      onShowToast?.(
+        'Aceptación registrada',
+        `${newAcceptance.acceptedCount}/${newAcceptance.totalCount} (${newAcceptance.percentage}%)`,
+      );
     }
   };
 
@@ -187,6 +222,7 @@ export default function BreedingSection({
         <h2 className="font-display text-3xl font-bold tracking-tight text-cream sm:text-4xl">Cría de Reinas</h2>
         <p className="mt-1 font-mono text-xs text-husk">
           {activeLots.length} lotes activos{fecundandoCount > 0 ? ` · ${fecundandoCount} en fecundación` : ''}
+          {avgAcceptance !== null ? ` · Promedio de aceptación: ${avgAcceptance}%` : ''}
         </p>
       </div>
 
@@ -228,6 +264,11 @@ export default function BreedingSection({
                           {alert.text}
                         </span>
                       )}
+                      {!lot.acceptance && daysElapsed >= 3 && (
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono font-semibold border bg-orange-400/15 border-orange-400/40 text-orange-400">
+                          Revisar aceptación
+                        </span>
+                      )}
                     </div>
                     <p className="font-semibold text-cream text-sm">
                       Donante: {getColonyLabel(lot.coloniaDonante)}
@@ -238,7 +279,7 @@ export default function BreedingSection({
                   </div>
                   <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     {/* Cambiar estado */}
-                    <div className="relative">
+                    <div className="relative" data-state-menu>
                       <motion.button
                         onClick={() => setOpenStateMenuId(openStateMenuId === lot.id ? null : lot.id)}
                         className="rounded-lg border border-honey/40 bg-honey/10 px-3 py-1.5 text-[11px] font-semibold text-honey hover:bg-honey/20"
@@ -250,18 +291,20 @@ export default function BreedingSection({
                         <motion.div
                           initial={{ opacity: 0, y: -6 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="absolute right-0 top-full mt-1 w-48 card p-2 z-40"
+                          className="absolute left-0 top-full mt-1 min-w-full w-max max-w-[min(256px,calc(100vw-2rem))] card p-2 z-40"
+                          style={{ maxWidth: 'min(256px, calc(100vw - 2rem))' }}
                         >
                           {STATUS_FLOW
                             .filter(s => s !== lot.estado && s !== 'perdidas')
                             .map(s => (
                               <button
                                 key={s}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleUpdate(lot.id, { estado: s });
                                   setOpenStateMenuId(null);
                                 }}
-                                className="w-full text-left px-3 py-2 text-sm text-cream hover:bg-pane2 rounded-lg transition-colors"
+                                className="block w-full text-left whitespace-nowrap px-3 py-2 text-sm text-cream hover:bg-pane2 rounded-lg transition-colors"
                               >
                                 {BREEDING_STATUS_LABELS[s]}
                               </button>
@@ -327,6 +370,7 @@ export default function BreedingSection({
                       </div>
                       <p className="text-xs text-husk">
                         {formatDate(lot.fechaInicio)} · {daysElapsed} días · {BREEDING_STATUS_LABELS[lot.estado]}
+                        {lot.acceptance ? ` · ${lot.acceptance.percentage}% aceptación` : ''}
                       </p>
                     </div>
                   </div>
@@ -369,6 +413,7 @@ export default function BreedingSection({
             lot={selectedLot}
             hives={hives}
             nuclei={nuclei}
+            breedingLots={breedingLots}
             onClose={() => setDetailLotId(null)}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
@@ -450,53 +495,57 @@ export default function BreedingSection({
 
       {/* Confirmación de eliminación desde la lista */}
       <AnimatePresence>
-        {confirmDeleteLotId &&
-          createPortal(
+        {confirmDeleteLotId && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* Backdrop - tapa TODA la pantalla */}
             <motion.div
-              className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
               onClick={() => setConfirmDeleteLotId(null)}
+            />
+
+            {/* Modal - centrado encima del backdrop */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card relative max-w-sm w-full p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
             >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-                className="card max-w-sm w-full p-6"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h4 className="font-display text-xl font-bold text-cream mb-2">¿Eliminar lote?</h4>
-                <p className="text-sm text-husk mb-5">
-                  Esta acción no se puede deshacer. Los eventos del calendario asociados también se eliminarán.
-                </p>
-                <div className="flex gap-2">
-                  <motion.button
-                    onClick={() => {
-                      handleDelete(confirmDeleteLotId);
-                      setConfirmDeleteLotId(null);
-                    }}
-                    className="flex-1 rounded-xl bg-coral py-2 text-sm font-semibold text-white hover:bg-coral/90"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Eliminar
-                  </motion.button>
-                  <motion.button
-                    onClick={() => setConfirmDeleteLotId(null)}
-                    className="flex-1 rounded-xl border border-line py-2 text-sm font-medium text-husk hover:bg-ink/50"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Cancelar
-                  </motion.button>
-                </div>
-              </motion.div>
-            </motion.div>,
-            document.body,
-          )}
+              <h4 className="font-display text-xl font-bold text-cream mb-2">¿Eliminar lote?</h4>
+              <p className="text-sm text-husk mb-5">
+                Esta acción no se puede deshacer. Los eventos del calendario asociados también se eliminarán.
+              </p>
+              <div className="flex gap-2">
+                <motion.button
+                  onClick={() => {
+                    handleDelete(confirmDeleteLotId);
+                    setConfirmDeleteLotId(null);
+                  }}
+                  className="flex-1 rounded-xl bg-coral py-2 text-sm font-semibold text-white hover:bg-coral/90"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Eliminar
+                </motion.button>
+                <motion.button
+                  onClick={() => setConfirmDeleteLotId(null)}
+                  className="flex-1 rounded-xl border border-line py-2 text-sm font-medium text-husk hover:bg-ink/50"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancelar
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

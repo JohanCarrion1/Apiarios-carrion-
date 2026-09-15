@@ -19,7 +19,7 @@ export default function Login() {
     console.log('🔵 [LOGIN] User actual:', user ? user.uid : 'null');
     
     if (user) {
-      console.log('✅ [LOGIN] Usuario autenticado, redirigiendo a /seleccionar');
+      console.log('✅ [LOGIN] Usuario autenticado, redirigiendo a la pantalla de bienvenida');
       navigate('/seleccionar', { replace: true });
     }
   }, [user, navigate]);

@@ -7,7 +7,7 @@ import {
 } from "./data";
 import { useClock, useReveal, useWeather } from "./hooks";
 import { getWeatherDescription } from "./services/weather";
-import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests, saveHarvests, loadEvents, saveEvents, loadBreedingLots, saveBreedingLots, loadCuadernoEntries, saveCuadernoEntries, loadQueens, saveQueens, loadQueenHistory, saveQueenHistory, loadInventory, saveInventory } from './utils/storage';
+import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests, saveHarvests, loadEvents, saveEvents, loadBreedingLots, saveBreedingLots, loadCuadernoEntries, saveCuadernoEntries, loadQueens, saveQueens, loadQueenHistory, saveQueenHistory, loadInventory, saveInventory, loadApiaries, saveLastActiveApiaryId, loadLastActiveApiaryId, onDataRestored } from './utils/storage';
 import { formatHour } from './utils/formatTime';
 import type { Queen, QueenChange, QueenChangeReason } from './types/queen';
 import { getQueenAlert, queenColorForYear } from './types/queen';
@@ -17,8 +17,7 @@ import InventorySection from './components/InventorySection';
 import QueenForm from './components/QueenForm';
 import type { QueenFormData } from './components/QueenForm';
 import QueenLostModal from './components/QueenLostModal';
-import {
-  IconBee,
+import { IconBee,
   IconCheck,
   IconClipboard,
   IconDrop,
@@ -32,6 +31,7 @@ import {
   IconChart,
   IconQueen,
   IconPackage,
+  IconLayers,
   SectionHead,
   IconCalendar,
 } from "./ui";
@@ -43,6 +43,7 @@ import NotebookSection from "./components/NotebookSection";
 import SelectionScreen from "./components/SelectionScreen";
 import StorePlaceholder from "./components/StorePlaceholder";
 import TasksSection from "./components/TasksSection";
+import type { TaskFormData } from "./components/TaskForm";
 import InspectionModal, { type InspectionDraft } from "./components/InspectionModal";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./components/Login";
@@ -70,8 +71,12 @@ import AddHiveModal from "./components/AddHiveModal";
 import StatsSection from "./components/StatsSection";
 import CalendarSection from "./components/CalendarSection";
 import SettingsPage from "./components/SettingsPage";
-import ApiaryFlow from "./components/ApiaryFlow";
+import CreateApiaryModal from "./components/CreateApiaryModal";
+import ManageApiariesModal from "./components/ManageApiariesModal";
+import { updateApiary, deleteApiary, type Apiary } from "./services/apiaryService";
 import BreedingSection from "./components/BreedingSection";
+import TransferHistorySection from "./components/TransferHistorySection";
+import { convertNucleoToColmena, transferHiveToApiary, transferNucleoToApiary, getNextHiveCode } from "./services/transfers";
 import type { BreedingLot, CuadernoEntry } from "./types/breeding";
 import { differenceInDays } from "date-fns";
 
@@ -85,6 +90,7 @@ const NAV = [
   { id: "registro", label: "Cuaderno", icon: IconClipboard },
   { id: "tareas", label: "Tareas", icon: IconCheck },
   { id: "inventario", label: "Inventario", icon: IconPackage },
+  { id: "transferencias", label: "Transferencias", icon: IconLayers },
 ] as const;
 
 /* ---------- ambiente ---------- */
@@ -243,7 +249,7 @@ export default function App() {
                 path="/apiarios"
                 element={
                   <ProtectedRoute>
-                    <ApiaryFlow />
+                    <ApiariosRedirect />
                   </ProtectedRoute>
                 }
               />
@@ -251,7 +257,7 @@ export default function App() {
                 path="/apiarios/:id"
                 element={
                   <ProtectedRoute>
-                    <ApiaryFlow />
+                    <ApiariosRedirect />
                   </ProtectedRoute>
                 }
               />
@@ -271,8 +277,8 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route path="/" element={<Navigate to="/seleccionar" replace />} />
-              <Route path="*" element={<Navigate to="/seleccionar" replace />} />
+              <Route path="/" element={<ProtectedRoute><HomeRedirect /></ProtectedRoute>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             <InstallPrompt />
             <PWAUpdateToast />
@@ -286,10 +292,98 @@ export default function App() {
 
 function DashboardWrapper() {
   const { id } = useParams<{ id: string }>();
-  if (!id) {
-    return <Navigate to="/apiarios" replace />;
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [resolved, setResolved] = useState<
+    | { kind: 'dashboard'; apiaryId: string }
+    | { kind: 'redirect'; to: string }
+    | { kind: 'onboarding' }
+    | null
+  >(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const apiaries = loadApiaries(user.uid);
+
+    if (id) {
+      const exists = apiaries.find((a: any) => a.id === id);
+      if (exists) {
+        setResolved({ kind: 'dashboard', apiaryId: id });
+      } else if (apiaries.length > 0) {
+        setResolved({ kind: 'redirect', to: '/dashboard' });
+      } else {
+        setResolved({ kind: 'onboarding' });
+      }
+      return;
+    }
+
+    if (apiaries.length === 0) {
+      setResolved({ kind: 'onboarding' });
+      return;
+    }
+
+    // Entrar directo al último apiario usado (o al primero si no existe/borrado)
+    const lastActiveId = loadLastActiveApiaryId(user.uid);
+    const lastApiary = apiaries.find((a: any) => a.id === lastActiveId);
+    const target = lastApiary ? lastApiary.id : apiaries[0].id;
+    saveLastActiveApiaryId(target, user.uid);
+    setResolved({ kind: 'redirect', to: `/dashboard/${target}` });
+  }, [user, id]);
+
+  if (!user) return null;
+
+  if (resolved === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-ink">
+        <p className="text-husk font-mono text-sm">Cargando apiario...</p>
+      </div>
+    );
   }
-  return <Dashboard apiaryId={id} />;
+
+  if (resolved.kind === 'redirect') {
+    return <Navigate to={resolved.to} replace />;
+  }
+
+  if (resolved.kind === 'onboarding') {
+    return (
+      <CreateApiaryModal
+        open
+        variant="screen"
+        title="Crea tu primer apiario"
+        subtitle="Comienza registrando tu primer apiario para gestionar sus colmenas en el dashboard."
+        submitLabel="Crear y entrar al dashboard"
+        onCreated={(newId) => navigate(`/dashboard/${newId}`)}
+      />
+    );
+  }
+
+  return <Dashboard apiaryId={resolved.apiaryId} />;
+}
+
+// La pantalla "Mis Apiarios" deja de ser ruta de entrada: cualquier visita
+// manual a /apiarios redirige al dashboard.
+function ApiariosRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/dashboard/${id}` : '/dashboard'} replace />;
+}
+
+/* ---------- ruteo de inicio ---------- */
+
+// Puerta de entrada tras el login/recarga. Lleva SIEMPRE directo al panel
+// del último apiario usado (o al onboarding si no hay apiarios). La pantalla
+// "Mis Apiarios" (/apiarios) queda eliminada como entrada: si se escribe a
+// mano, /apiarios redirige al dashboard.
+function HomeRedirect() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) return; // aún no autenticado
+    navigate('/dashboard', { replace: true });
+  }, [user, navigate]);
+
+  return null;
 }
 
 function Dashboard({ apiaryId }: { apiaryId: string }) {
@@ -323,6 +417,13 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
 
   // Inventario de material, herramientas e insumos (compartido entre apiarios)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
+  // Alcance de datos ya hidratado (uid:apiary). Hasta que no se carga el apiario
+  // actual NO se persiste nada: evita que un useEffect de montaje sobrescriba
+  // el almacenamiento con arrays vacíos y borre los datos del usuario.
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
+  const scopeKey =
+    user && apiaryId ? `${user.uid}:${apiaryId}` : null;
 
   const { settings } = useSettings();
   const notificationCfg = settings.notifications;
@@ -367,7 +468,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [showAddNucleusModal, setShowAddNucleusModal] = useState(false);
   const [editingNucleus, setEditingNucleus] = useState<Hive | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeSection, setActiveSection] = useState<"panel" | "colmenas" | "cria" | "estadisticas" | "calendario" | "produccion" | "registro" | "tareas" | "inventario">("panel");
+  const [activeSection, setActiveSection] = useState<"panel" | "colmenas" | "cria" | "estadisticas" | "calendario" | "produccion" | "registro" | "tareas" | "inventario" | "transferencias">("panel");
   const [showSettingsPage, setShowSettingsPage] = useState(false);
 
   // Estados para reinas
@@ -383,29 +484,66 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [temp, setTemp] = useState<number | null>(null);
   const [wind, setWind] = useState<number | null>(null);
 
+  // Gestión de apiarios desde el dropdown del dashboard
+  const [showCreateApiaryModal, setShowCreateApiaryModal] = useState(false);
+  const [showManageApiariesModal, setShowManageApiariesModal] = useState(false);
+
   // Cargar datos del apiario
   useEffect(() => {
     if (user && apiaryId) {
       // Guardar el apiario actual como último activo
-      localStorage.setItem('lastActiveApiarioId', apiaryId);
-      
-      const apiariesKey = `apiarios_${user.uid}`;
-      const apiariesJson = localStorage.getItem(apiariesKey);
-      if (apiariesJson) {
-        const apiariesList = JSON.parse(apiariesJson);
-        setApiaries(apiariesList);
-        const apiary = apiariesList.find((a: any) => a.id === apiaryId);
-        if (apiary) {
-          setApiaryName(apiary.name || '');
-          setApiaryLocation(apiary.location || '');
-        }
+      saveLastActiveApiaryId(apiaryId);
+
+      const apiariesList = loadApiaries(user.uid);
+      setApiaries(apiariesList);
+      const apiary = apiariesList.find((a: any) => a.id === apiaryId);
+      if (apiary) {
+        setApiaryName(apiary.name || '');
+        setApiaryLocation(apiary.location || '');
       }
     }
   }, [user, apiaryId]);
   
-  // Función para cambiar de apiario
+  // Función para gestionar los apiarios (editar/eliminar) desde el dropdown
   const handleChangeApiary = () => {
-    navigate('/apiarios');
+    setShowManageApiariesModal(true);
+  };
+
+  // Crear un apiario desde el dropdown: al crearlo se activa automáticamente
+  // y se guarda como lastActiveApiaryId (lo hace CreateApiaryModal).
+  const handleApiaryCreated = (newId: string) => {
+    setShowCreateApiaryModal(false);
+    navigate(`/dashboard/${newId}`);
+  };
+
+  const handleUpdateApiary = async (apiaryIdToUpdate: string, updates: Partial<Apiary>) => {
+    if (!user) return;
+    try {
+      await updateApiary(user.uid, apiaryIdToUpdate, updates);
+      setApiaries(loadApiaries(user.uid));
+      pushToast('Apiario actualizado');
+    } catch (error) {
+      console.error('[APIARY] Error al actualizar:', error);
+      pushToast('Error al actualizar el apiario', 'error');
+    }
+  };
+
+  const handleDeleteApiary = async (apiaryIdToDelete: string) => {
+    if (!user) return;
+    try {
+      await deleteApiary(user.uid, apiaryIdToDelete);
+      if (apiaryIdToDelete === apiaryId) {
+        // Se eliminó el apiario activo: entrar al siguiente disponible.
+        saveLastActiveApiaryId(null, user.uid);
+        navigate('/dashboard');
+      } else {
+        setApiaries(loadApiaries(user.uid));
+        pushToast('Apiario eliminado');
+      }
+    } catch (error) {
+      console.error('[APIARY] Error al eliminar:', error);
+      pushToast('Error al eliminar el apiario', 'error');
+    }
   };
 
   // Cargar datos al montar o cuando cambia el usuario o apiario
@@ -455,8 +593,9 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       setRecurringTasks(loadedRecurringTasks);
       setFloweringEntries(loadedFloweringEntries);
       setInventory(loadedInventory);
+      setLoadedScope(scopeKey);
     } else {
-      // Si no hay apiario activo, limpiar datos
+      // Si no hay apiario activo, limpiar estados (sin tocar storage)
       setHives([]);
       setNuclei([]);
       setInspections([]);
@@ -470,92 +609,109 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       setRecurringTasks([]);
       setFloweringEntries([]);
       setInventory([]);
+      setLoadedScope(null);
     }
   }, [user, apiaryId]);
 
-  // Guardar datos cuando cambian
+  // Guardar datos cuando cambian (solo tras hidratar el apiario actual)
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       const storageKeySuffix = `_${user.uid}_${apiaryId}`;
       saveHives(hives, storageKeySuffix);
     }
-  }, [hives, user, apiaryId]);
+  }, [hives, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       const storageKeySuffix = `_${user.uid}_${apiaryId}`;
       saveNuclei(nuclei, storageKeySuffix);
     }
-  }, [nuclei, user, apiaryId]);
+  }, [nuclei, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       const storageKeySuffix = `_${user.uid}_${apiaryId}`;
       saveInspections(inspections, storageKeySuffix);
     }
-  }, [inspections, user, apiaryId]);
+  }, [inspections, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       const storageKeySuffix = `_${user.uid}_${apiaryId}`;
       saveTasks(tasks, storageKeySuffix);
     }
-  }, [tasks, user, apiaryId]);
+  }, [tasks, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       const storageKeySuffix = `_${user.uid}_${apiaryId}`;
       saveHarvests(harvests, storageKeySuffix);
     }
-  }, [harvests, user, apiaryId]);
+  }, [harvests, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       saveBreedingLots(breedingLots, user.uid, apiaryId);
     }
-  }, [breedingLots, user, apiaryId]);
+  }, [breedingLots, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       saveCuadernoEntries(cuadernoEntries, user.uid, apiaryId);
     }
-  }, [cuadernoEntries, user, apiaryId]);
+  }, [cuadernoEntries, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       saveQueens(queens, user.uid, apiaryId);
     }
-  }, [queens, user, apiaryId]);
+  }, [queens, user, apiaryId, scopeKey, loadedScope]);
 
   useEffect(() => {
-    if (user && apiaryId) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       saveQueenHistory(queenHistory, user.uid, apiaryId);
     }
-  }, [queenHistory, user, apiaryId]);
+  }, [queenHistory, user, apiaryId, scopeKey, loadedScope]);
 
   // Guardar inventario (solo por usuario, compartido entre apiarios)
   useEffect(() => {
-    if (user) {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
       saveInventory(inventory, user.uid);
     }
-  }, [inventory, user]);
+  }, [inventory, user, scopeKey, loadedScope]);
 
   // Guardar calendario (eventos, tareas recurrentes, floración, notificaciones)
   useEffect(() => {
-    saveEvents(events);
-  }, [events]);
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
+      saveEvents(events);
+    }
+  }, [events, scopeKey, loadedScope]);
 
   useEffect(() => {
-    saveRecurringTasks(recurringTasks);
-  }, [recurringTasks]);
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
+      saveRecurringTasks(recurringTasks);
+    }
+  }, [recurringTasks, scopeKey, loadedScope]);
 
   useEffect(() => {
-    saveFloweringEntries(floweringEntries);
-  }, [floweringEntries]);
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
+      saveFloweringEntries(floweringEntries);
+    }
+  }, [floweringEntries, scopeKey, loadedScope]);
 
   useEffect(() => {
-    saveNotifications(notifications);
-  }, [notifications]);
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
+      saveNotifications(notifications);
+    }
+  }, [notifications, scopeKey, loadedScope]);
+
+  // Aviso con toast cuando se restauran datos desde un backup
+  useEffect(() => {
+    return onDataRestored((info) => {
+      pushToast(`Datos restaurados desde backup del ${info.date}`, info.entity);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sincronizar recordatorios calculados con la lista persistente de notificaciones
   useEffect(() => {
@@ -653,6 +809,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
 
   const activity = Math.min(98, Math.max(5, Math.round(20 + ((temp ?? 15) - 15) * 8 - (wind ?? 8) * 1.4)));
   const selectedHive = hives.find((h) => h.id === selectedId);
+  const nextHiveCode = getNextHiveCode(hives);
   const pending = tasks.filter((t) => !t.completed).length;
 
   const pushToast = (title: string, desc?: string) => {
@@ -728,6 +885,99 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     pushToast("Núcleo eliminado");
   };
 
+  // FUNCIONALIDAD 1: Convertir núcleo en colmena
+  const handleConvertNucleus = (nucleus: Hive) => {
+    if (!user || !apiaryId) return;
+    try {
+      const res = convertNucleoToColmena({
+        userId: user.uid,
+        apiaryId,
+        apiaryName,
+        nucleusId: nucleus.id,
+      });
+
+      setNuclei(prev => prev.filter(n => n.id !== nucleus.id));
+      setHives(prev => [...prev, res.newHive]);
+      setInspections(prev => prev.map(i => (i.hiveId === nucleus.id ? { ...i, hiveId: res.newHive.id } : i)));
+      setQueens(prev => prev.map(q => (q.hiveId === nucleus.id ? { ...q, hiveId: res.newHive.id } : q)));
+      setQueenHistory(prev => prev.map(h => (h.hiveId === nucleus.id ? { ...h, hiveId: res.newHive.id } : h)));
+      setCuadernoEntries(prev => [res.cuadernoEntry, ...prev]);
+
+      if (selectedNucleusId === nucleus.id) {
+        const remainingNuclei = nuclei.filter(n => n.id !== nucleus.id);
+        setSelectedNucleusId(remainingNuclei.length > 0 ? remainingNuclei[0].id : null);
+      }
+
+      pushToast('Núcleo convertido en colmena', `${res.nucleusCode} → ${res.newHiveCode}`);
+      if (!res.hasQueen) {
+        pushToast('La nueva colmena no tiene reina registrada', '⚠️ Regístrala pronto');
+      }
+    } catch (error) {
+      console.error('[TRANSFERS] Error al convertir núcleo:', error);
+      pushToast('Error al convertir el núcleo', 'error');
+    }
+  };
+
+  // FUNCIONALIDAD 2 y 3: Transferir núcleo/colmena a otro apiario
+  const handleTransfer = (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => {
+    if (!user || !apiaryId) return;
+    const dest = apiaries.find((a: any) => a.id === destApiaryId);
+    if (!dest) {
+      pushToast('Apiario de destino no encontrado', 'error');
+      return;
+    }
+    const src = apiaries.find((a: any) => a.id === apiaryId);
+    const kind = hive.entityType === 'nucleo' ? 'nucleus' : 'hive';
+
+    try {
+      const res = kind === 'hive'
+        ? transferHiveToApiary({
+          userId: user.uid,
+          sourceApiaryId: apiaryId,
+          sourceApiaryName: src?.name || apiaryName,
+          destApiaryId,
+          destApiaryName: dest.name || 'Apiario',
+          entityId: hive.id,
+          motivo: (motivo || '').trim() || undefined,
+          fecha,
+        })
+        : transferNucleoToApiary({
+          userId: user.uid,
+          sourceApiaryId: apiaryId,
+          sourceApiaryName: src?.name || apiaryName,
+          destApiaryId,
+          destApiaryName: dest.name || 'Apiario',
+          entityId: hive.id,
+          motivo: (motivo || '').trim() || undefined,
+          fecha,
+        });
+
+      if (kind === 'hive') {
+        setHives(prev => prev.filter(h => h.id !== hive.id));
+        if (selectedId === hive.id) {
+          const remaining = hives.filter(h => h.id !== hive.id);
+          setSelectedId(remaining.length > 0 ? remaining[0].id : "");
+        }
+      } else {
+        setNuclei(prev => prev.filter(n => n.id !== hive.id));
+        if (selectedNucleusId === hive.id) {
+          const remaining = nuclei.filter(n => n.id !== hive.id);
+          setSelectedNucleusId(remaining.length > 0 ? remaining[0].id : null);
+        }
+      }
+
+      setInspections(prev => prev.filter(i => i.hiveId !== hive.id));
+      setQueens(prev => prev.filter(q => q.hiveId !== hive.id));
+      setQueenHistory(prev => prev.filter(h => h.hiveId !== hive.id));
+      setCuadernoEntries(prev => [res.cuadernoEntry, ...prev]);
+
+      pushToast('Transferencia completada', `${res.code} → ${dest.name || 'Apiario'}`);
+    } catch (error) {
+      console.error('[TRANSFERS] Error al transferir:', error);
+      pushToast('Error al transferir', 'error');
+    }
+  };
+
   const handleInspection = (d: InspectionDraft) => {
     const inspection: Inspection = {
       id: uid(),
@@ -780,6 +1030,53 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     setTasks(prev => prev.filter(t => t.id !== id));
     console.log('🗑️ [APP] Tarea eliminada del estado, total tareas:', tasks.length - 1);
     pushToast("Tarea eliminada");
+  };
+
+  const handleSaveTask = (data: TaskFormData) => {
+    console.log('[TASK] handleSaveTask: entrada con datos:', data);
+    try {
+      const title = data.title.trim();
+      if (!title) {
+        console.log('[TASK] Validación fallida: el título está vacío');
+        pushToast("Error al crear la tarea", "El título es obligatorio");
+        return false;
+      }
+      console.log('[TASK] Validación correcta, creando tarea:', title);
+
+      const newTask: Task = {
+        id: uid(),
+        title,
+        description: data.description?.trim() || undefined,
+        dueDate: data.dueDate,
+        priority: data.priority,
+        tipo: data.tipo,
+        recurrencia: data.tipo === 'recurrente' ? data.recurrencia : undefined,
+        colmenaId: data.colmenaId || undefined,
+        hiveId: data.colmenaId || undefined,
+        asignado: data.asignado?.trim() || undefined,
+        estado: 'pendiente',
+        completed: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      setTasks(prev => {
+        const next = [newTask, ...prev];
+        console.log('[TASK] Tarea guardada en estado, total:', next.length);
+        return next;
+      });
+
+      if (newTask.colmenaId) {
+        const colony = allColonies.find(c => c.id === newTask.colmenaId);
+        addCuadernoEntry(`📋 Nueva tarea creada para ${colony ? `colmena ${colony.code}` : 'una colmena'}: ${title}`);
+      }
+
+      pushToast("Tarea creada", title);
+      return true;
+    } catch (error) {
+      console.error('[TASK] Error al crear la tarea:', error);
+      pushToast("Error al crear la tarea", String(error));
+      return false;
+    }
   };
 
   // Integración con Calendario: crear/eliminar eventos de cría
@@ -1023,13 +1320,17 @@ queenAlerts={{
                 apiaryName={apiaryName}
                   apiaryLocation={apiaryLocation}
                   onChangeApiary={handleChangeApiary}
+                  onCreateApiary={() => setShowCreateApiaryModal(true)}
+                  onManageApiaries={() => setShowManageApiariesModal(true)}
                   apiaries={apiaries}
                   currentApiaryId={apiaryId}
                   onSelectApiary={(id) => {
                     if (id) {
+                      // Recordar el apiario elegido (clave documentada en FLUJO-COMPLEMENTO.md)
+                      saveLastActiveApiaryId(id, user?.uid);
                       navigate(`/dashboard/${id}`);
                     } else {
-                      navigate('/apiarios');
+                      navigate('/dashboard');
                     }
                   }}
                   reminders={reminders}
@@ -1074,6 +1375,8 @@ queenAlerts={{
                   onShowToast={pushToast}
                   onUpdateHivePhotos={(id, fotos) => updateHive(id, { fotos })}
                   onUpdateNucleusPhotos={(id, fotos) => updateNucleus(id, { fotos })}
+                  inspections={inspections}
+                  nextHiveCode={nextHiveCode}
                   queens={queens}
                   queenHistory={queenHistory}
                   onRegisterQueen={handleOpenRegisterQueen}
@@ -1085,6 +1388,10 @@ queenAlerts={{
                     setCriaFocusLotId(loteId);
                     setActiveSection('cria');
                   }}
+                  apiaries={apiaries}
+                  currentApiaryId={apiaryId}
+                  onConvertNucleus={handleConvertNucleus}
+                  onTransfer={handleTransfer}
                 />
               </motion.section>
             )}
@@ -1105,6 +1412,7 @@ queenAlerts={{
                   onAddCalendarEvent={addCalendarEvent}
                   onDeleteCalendarEvent={deleteCalendarEvent}
                   onAddCuadernoEntry={addCuadernoEntry}
+                  onShowToast={pushToast}
                   queens={queens}
                   focusLotId={criaFocusLotId}
                   onConsumeFocusLot={() => setCriaFocusLotId(null)}
@@ -1213,7 +1521,7 @@ queenAlerts={{
                   title="Tareas"
                   right={<p className="font-mono text-xs text-husk">{pending} pendientes</p>}
                 />
-                <TasksSection tasks={tasks} onToggle={toggleTask} onAdd={handleAddTask} onDelete={handleDeleteTask} />
+                <TasksSection tasks={tasks} hives={allColonies} onToggle={toggleTask} onAdd={handleAddTask} onSaveTask={handleSaveTask} onDelete={handleDeleteTask} />
               </motion.section>
             )}
 
@@ -1226,6 +1534,23 @@ queenAlerts={{
                 transition={{ duration: 0.3 }}
               >
                 <InventorySection items={inventory} onChange={setInventory} onShowToast={pushToast} />
+              </motion.section>
+            )}
+
+            {activeSection === 'transferencias' && (
+              <motion.section
+                key="transferencias"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <SectionHead
+                  kicker="Movimientos entre apiarios y promociones"
+                  title="Historial de Transferencias"
+                  right={<p className="font-mono text-xs text-husk">registros automáticos</p>}
+                />
+                <TransferHistorySection userId={user?.uid || ''} apiaries={apiaries} onShowToast={pushToast} />
               </motion.section>
             )}
           </AnimatePresence>
@@ -1345,6 +1670,23 @@ queenAlerts={{
           />
         )}
       </AnimatePresence>
+
+      {/* Modal: crear nuevo apiario desde el dropdown */}
+      <CreateApiaryModal
+        open={showCreateApiaryModal}
+        onClose={() => setShowCreateApiaryModal(false)}
+        onCreated={handleApiaryCreated}
+      />
+
+      {/* Modal: gestionar apiarios (editar / eliminar) */}
+      <ManageApiariesModal
+        open={showManageApiariesModal}
+        apiaries={apiaries}
+        currentApiaryId={apiaryId}
+        onClose={() => setShowManageApiariesModal(false)}
+        onUpdate={handleUpdateApiary}
+        onDelete={handleDeleteApiary}
+      />
 
       {/* toasts */}
       <div className="fixed bottom-24 lg:bottom-5 right-5 z-[60] flex w-72 flex-col gap-2">

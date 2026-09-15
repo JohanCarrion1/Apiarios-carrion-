@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWeatherData, type WeatherData } from "./services/weather";
+import { loadWeatherCache, saveWeatherCache } from "./utils/storage";
 
 /** Revela el elemento cuando entra en el viewport (una sola vez). */
 export function useReveal<T extends HTMLElement = HTMLDivElement>(threshold = 0.15) {
@@ -159,21 +160,16 @@ export function useWeather(
     setLoading(true);
     setError(null);
 
-    const cacheKey = userId ? `user_${userId}_weatherCache` : 'user_last_weatherCache';
-
     // 1. Cache de respuesta (30 minutos)
     try {
-      const cachedRaw = localStorage.getItem(cacheKey);
-      if (cachedRaw) {
-        const cached = JSON.parse(cachedRaw);
-        if (cached && cached.data && typeof cached.timestamp === 'number') {
-          if (Date.now() - cached.timestamp < WEATHER_REFRESH_MS) {
-            setWeather(cached.data);
-            setUsingCache(true);
-            setLastUpdated(cached.timestamp);
-            setLoading(false);
-            return;
-          }
+      const cached = loadWeatherCache(userId || undefined);
+      if (cached && cached.data && typeof cached.timestamp === 'number') {
+        if (Date.now() - cached.timestamp < WEATHER_REFRESH_MS) {
+          setWeather(cached.data);
+          setUsingCache(true);
+          setLastUpdated(cached.timestamp);
+          setLoading(false);
+          return;
         }
       }
     } catch {
@@ -260,7 +256,7 @@ export function useWeather(
       setUsingCache(false);
       setLastUpdated(timestamp);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp }));
+        saveWeatherCache({ data, timestamp }, userId || undefined);
       } catch {
         /* almacenamiento lleno o no disponible */
       }
@@ -269,14 +265,11 @@ export function useWeather(
       // 4. Si falla la API: mostrar último dato cacheado con indicador de antigüedad
       setError('error');
       try {
-        const cachedRaw = localStorage.getItem(cacheKey);
-        if (cachedRaw) {
-          const cached = JSON.parse(cachedRaw);
-          if (cached && cached.data) {
-            setWeather(cached.data);
-            setUsingCache(true);
-            setLastUpdated(cached.timestamp || Date.now());
-          }
+        const cached = loadWeatherCache(userId || undefined);
+        if (cached && cached.data) {
+          setWeather(cached.data);
+          setUsingCache(true);
+          setLastUpdated(cached.timestamp || Date.now());
         }
       } catch {
         /* ignore */

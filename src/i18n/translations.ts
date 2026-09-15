@@ -153,6 +153,7 @@ export const translations = {
     'settings.data.storageUsed': 'Almacenamiento usado',
     'settings.data.confirmDelete': '¿Estás seguro? Esta acción no se puede deshacer.',
     'settings.data.typeToConfirm': 'Escribe BORRAR para confirmar',
+    'settings.data.confirmImport': 'Esto reemplazará los datos actuales. ¿Continuar?',
     
     // Acerca de
     'settings.about.version': 'Versión',
@@ -316,6 +317,7 @@ export const translations = {
     'settings.data.storageUsed': 'Storage used',
     'settings.data.confirmDelete': 'Are you sure? This action cannot be undone.',
     'settings.data.typeToConfirm': 'Type DELETE to confirm',
+    'settings.data.confirmImport': 'This will replace the current data. Continue?',
     
     // About
     'settings.about.version': 'Version',

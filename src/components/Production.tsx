@@ -430,7 +430,7 @@ export default function Production({ hives, suffix = '' }: Props) {
             </svg>
             Exportar
           </button>
-          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-line bg-pane p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-line bg-pane p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-w-[calc(100vw-1.5rem)]">
             <button
               onClick={() => handleExportReport('csv')}
               className="w-full text-left px-3 py-2 rounded-lg text-sm text-cream hover:bg-pane2"

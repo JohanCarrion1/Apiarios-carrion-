@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useTranslation } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
-import { loadHives, saveHives, loadInspections, saveInspections, loadTasks, saveTasks, loadEvents, saveEvents, clearUserData } from '../utils/storage';
+import { clearUserData, exportUserData, importUserData, loadHives } from '../utils/storage';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -40,18 +40,13 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
   ];
 
   const handleExportData = () => {
-    const data = {
-      hives: loadHives(),
-      inspections: loadInspections(),
-      tasks: loadTasks(),
-      events: loadEvents(),
-      settings: JSON.parse(localStorage.getItem('settings') || '{}'),
-    };
+    // Exportar TODOS los datos del usuario (todas las claves versionadas)
+    const data = exportUserData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `apiarios-carrion-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `panal-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -64,14 +59,15 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.hives) saveHives(data.hives);
-        if (data.inspections) saveInspections(data.inspections);
-        if (data.tasks) saveTasks(data.tasks);
-        if (data.events) saveEvents(data.events);
-        if (data.settings) localStorage.setItem('settings', JSON.stringify(data.settings));
+        // Confirmación: esto reemplazará los datos actuales
+        if (!window.confirm(t('settings.data.confirmImport'))) {
+          return;
+        }
+        const result = importUserData(data);
         alert(t('message.saved'));
         window.location.reload();
       } catch (error) {
+        console.error('[STORAGE] Error al importar backup:', error);
         alert(t('message.error'));
       }
     };
@@ -95,8 +91,10 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
   };
 
   const handleDeleteAllData = () => {
+    // Doble confirmación antes de borrar TODOS los datos
+    if (!window.confirm(t('settings.data.confirmDelete'))) return;
     const confirmation = prompt(t('settings.data.typeToConfirm'));
-    if (confirmation === 'BORRAR') {
+    if (confirmation === 'BORRAR' || confirmation === 'DELETE') {
       clearUserData();
       alert(t('message.deleted'));
       window.location.reload();

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { saveLastSelection, loadApiaries, saveLastActiveApiaryId, loadLastActiveApiaryId } from '../utils/storage';
 import Logo from './Logo';
 
 export default function SelectionScreen() {
@@ -9,23 +10,21 @@ export default function SelectionScreen() {
 
   const handleSelectStore = () => {
     // Guardar elección en localStorage
-    localStorage.setItem('lastSelection', 'store');
+    saveLastSelection('store');
     navigate('/tienda');
   };
 
   const handleSelectHives = () => {
     // Obtener lista de apiarios del usuario
-    const apiariosKey = `apiarios_${user?.uid}`;
-    const apiariosJson = localStorage.getItem(apiariosKey);
-    const apiarios = apiariosJson ? JSON.parse(apiariosJson) : [];
+    const apiarios = loadApiaries(user?.uid || 'anonymous');
     
     if (apiarios.length === 0) {
-      // No hay apiarios, ir a /apiarios para crear uno
-      localStorage.setItem('lastSelection', 'hives');
-      navigate('/apiarios');
+      // No hay apiarios, entrar al dashboard que muestra el onboarding de creación
+      saveLastSelection('hives');
+      navigate('/dashboard');
     } else {
       // Hay apiarios, verificar si hay último usado
-      const lastActiveId = localStorage.getItem('lastActiveApiarioId');
+      const lastActiveId = loadLastActiveApiaryId(user?.uid || 'anonymous');
       
       if (lastActiveId) {
         // Verificar que el último apiario aún existe
@@ -36,13 +35,13 @@ export default function SelectionScreen() {
         } else {
           // El último apiario ya no existe, usar el primero
           const firstApiario = apiarios[0];
-          localStorage.setItem('lastActiveApiarioId', firstApiario.id);
+          saveLastActiveApiaryId(firstApiario.id);
           navigate(`/dashboard/${firstApiario.id}`);
         }
       } else {
         // No hay último apiario guardado, usar el primero
         const firstApiario = apiarios[0];
-        localStorage.setItem('lastActiveApiarioId', firstApiario.id);
+        saveLastActiveApiaryId(firstApiario.id);
         navigate(`/dashboard/${firstApiario.id}`);
       }
     }

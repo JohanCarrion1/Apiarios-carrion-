@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { STATUS_COLORS, type Hive, type Inspection, isNucleus } from "../types/hive";
+import { STATUS_COLORS, HIVE_STATUS_LABELS, type Hive, type Inspection, isNucleus } from "../types/hive";
 import type { Queen, QueenChange } from '../types/queen';
 import type { BreedingLot } from '../types/breeding';
 import {
@@ -16,7 +15,7 @@ import {
   QUEEN_YEAR_COLOR_LABELS,
   getQueenAlert,
 } from '../types/queen';
-import { IconCrown, IconPlus, IconNote, IconX } from "../ui";
+import { IconCrown, IconPlus, IconNote, IconX, IconRefresh, IconLayers } from "../ui";
 import PhotoUploader from './PhotoUploader';
 import type { PhotoData } from '../services/photos';
 
@@ -41,6 +40,11 @@ interface Props {
   onMarkQueenLost?: (queen: Queen) => void;
   breedingLots?: BreedingLot[];
   onShowQueenLot?: (loteId: string) => void;
+  apiaries?: { id: string; name?: string }[];
+  currentApiaryId?: string;
+  nextHiveCode?: string;
+  onConvertNucleus?: (hive: Hive) => void;
+  onTransfer?: (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => void;
 }
 
 function daysAgo(date: string): string {
@@ -71,9 +75,21 @@ export default function HiveDetail({
   onMarkQueenLost,
   breedingLots = [],
   onShowQueenLot,
+  apiaries = [],
+  currentApiaryId,
+  nextHiveCode,
+  onConvertNucleus,
+  onTransfer,
 }: Props) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveDestApiaryId, setMoveDestApiaryId] = useState('');
+  const [moveMotivo, setMoveMotivo] = useState('');
+  const [moveFecha, setMoveFecha] = useState(() => new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     if (!showDeleteModal) return;
@@ -83,6 +99,18 @@ export default function HiveDetail({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [showDeleteModal, isDeleting]);
+
+  useEffect(() => {
+    if (!showConvertModal && !showMoveModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (isConverting || isMoving) return;
+      setShowConvertModal(false);
+      setShowMoveModal(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showConvertModal, showMoveModal, isConverting, isMoving]);
   
   const color = STATUS_COLORS[hive.status];
   const history = inspections.slice(0, 3);
@@ -130,6 +158,44 @@ export default function HiveDetail({
     }
   };
 
+  const availableApiaries = apiaries.filter(a => a.id !== currentApiaryId);
+  const currentApiaryName = apiaries.find(a => a.id === currentApiaryId)?.name || 'este apiario';
+
+  const handleOpenMoveModal = () => {
+    if (availableApiaries.length === 0) {
+      onShowToast('No hay otro apiario disponible para mover esta colmena', 'error');
+      return;
+    }
+    setMoveDestApiaryId(availableApiaries[0].id);
+    setMoveMotivo('');
+    setMoveFecha(new Date().toISOString().slice(0, 10));
+    setShowMoveModal(true);
+  };
+
+  const handleConfirmConvert = async () => {
+    if (isConverting || !onConvertNucleus) return;
+    setIsConverting(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      onConvertNucleus(hive);
+      setShowConvertModal(false);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  const handleConfirmMove = async () => {
+    if (isMoving || !onTransfer || !moveDestApiaryId) return;
+    setIsMoving(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      onTransfer(hive, moveDestApiaryId, moveMotivo, moveFecha);
+      setShowMoveModal(false);
+    } finally {
+      setIsMoving(false);
+    }
+  };
+
   return (
     <motion.aside 
       className="lg:sticky lg:top-28"
@@ -153,7 +219,7 @@ export default function HiveDetail({
           style={{ transformOrigin: 'left', background: `linear-gradient(90deg, ${color}, ${color}aa)` }}
         />
 
-        <div className="p-6">
+        <div className="p-6" style={{ paddingTop: 'calc(4rem + env(safe-area-inset-top))' }}>
           {/* Header con código y estado */}
           <motion.div 
             className="flex items-start justify-between gap-3 mb-4"
@@ -520,6 +586,40 @@ export default function HiveDetail({
             </motion.button>
           </motion.div>
 
+          {/* Botones de transferencia: convertir núcleo en colmena y mover a otro apiario */}
+          {((nucleus && onConvertNucleus) || onTransfer) && (
+            <motion.div
+              className="flex gap-2 mb-3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.86 }}
+            >
+              {nucleus && onConvertNucleus && (
+                <motion.button
+                  onClick={() => setShowConvertModal(true)}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-honey/40 bg-honey/10 px-3 py-2 text-xs font-semibold text-honey hover:bg-honey/20 transition-colors flex-1"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <IconRefresh className="h-3.5 w-3.5" />
+                  Convertir en colmena
+                </motion.button>
+              )}
+              {onTransfer && (
+                <motion.button
+                  onClick={handleOpenMoveModal}
+                  disabled={availableApiaries.length === 0}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs font-medium text-husk hover:text-cream hover:border-honey/50 transition-colors flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  whileHover={availableApiaries.length > 0 ? { scale: 1.02 } : {}}
+                  whileTap={availableApiaries.length > 0 ? { scale: 0.98 } : {}}
+                >
+                  <IconLayers className="h-3.5 w-3.5" />
+                  Mover a otro apiario
+                </motion.button>
+              )}
+            </motion.div>
+          )}
+
           {/* Botones adicionales: Duplicar y Exportar */}
           {(onDuplicate || onExport) && (
             <motion.div
@@ -575,116 +675,365 @@ export default function HiveDetail({
 
       {/* Modal de Confirmación de Eliminación */}
       <AnimatePresence>
-        {showDeleteModal &&
-          createPortal(
-            <>
-              {/* Overlay / Backdrop */}
-              <motion.div
-                className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => !isDeleting && setShowDeleteModal(false)}
-              />
+        {showDeleteModal && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            aria-modal="true"
+            role="dialog"
+          >
+            {/* Backdrop - tapa TODA la pantalla */}
+            <motion.div
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => !isDeleting && setShowDeleteModal(false)}
+            />
 
-              {/* Modal */}
+            {/* Modal - centrado encima del backdrop */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card relative max-w-md w-full p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Icono de advertencia */}
               <motion.div
-                className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-                aria-modal="true"
-                role="dialog"
-                onClick={() => !isDeleting && setShowDeleteModal(false)}
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20"
               >
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  className="card relative max-w-md w-full p-6 shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                {/* Icono de advertencia */}
-                <motion.div
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                  className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20"
-                >
-                  <span className="text-4xl">⚠️</span>
-                </motion.div>
-
-                {/* Título */}
-                <motion.h3
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-center font-display text-2xl font-bold text-cream mb-2"
-                >
-                  Eliminar {entityLabel}
-                </motion.h3>
-
-                {/* Mensaje */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="text-center mb-6"
-                >
-                  <p className="text-husk mb-3">
-                    ¿Estás seguro de eliminar <strong className="text-cream">{hive.code}</strong>?
-                  </p>
-                  <div className="rounded-lg border border-coral/30 bg-coral/10 p-3">
-                    <p className="text-xs text-coral">
-                      <strong>⚠️ Advertencia:</strong> Se eliminarán también todas las inspecciones, cosechas y tareas asociadas a {entityArticleAcc} {entityLower}. Esta acción no se puede deshacer.
-                    </p>
-                  </div>
-                </motion.div>
-
-                {/* Botones */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="flex gap-3"
-                >
-                  <motion.button
-                    onClick={() => setShowDeleteModal(false)}
-                    disabled={isDeleting}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    whileHover={!isDeleting ? { scale: 1.02 } : {}}
-                    whileTap={!isDeleting ? { scale: 0.98 } : {}}
-                  >
-                    Cancelar
-                  </motion.button>
-                  <motion.button
-                    onClick={handleConfirmDelete}
-                    disabled={isDeleting}
-                    className="flex-1 px-4 py-3 text-sm font-semibold text-cream bg-coral rounded-lg hover:bg-coral/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    whileHover={!isDeleting ? { scale: 1.02 } : {}}
-                    whileTap={!isDeleting ? { scale: 0.98 } : {}}
-                  >
-                    {isDeleting ? (
-                      <>
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                          className="w-4 h-4 border-2 border-cream border-t-transparent rounded-full"
-                        />
-                        Eliminando...
-                      </>
-                    ) : (
-                      <>
-                        <IconX className="h-4 w-4" />
-                        Eliminar
-                      </>
-                    )}
-                  </motion.button>
-                </motion.div>
-                </motion.div>
+                <span className="text-4xl">⚠️</span>
               </motion.div>
-            </>,
-            document.body,
-          )}
+
+              {/* Título */}
+              <motion.h3
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-center font-display text-2xl font-bold text-cream mb-2"
+              >
+                Eliminar {entityLabel}
+              </motion.h3>
+
+              {/* Mensaje */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="text-center mb-6"
+              >
+                <p className="text-husk mb-3">
+                  ¿Estás seguro de eliminar <strong className="text-cream">{hive.code}</strong>?
+                </p>
+                <div className="rounded-lg border border-coral/30 bg-coral/10 p-3">
+                  <p className="text-xs text-coral">
+                    <strong>⚠️ Advertencia:</strong> Se eliminarán también todas las inspecciones, cosechas y tareas asociadas a {entityArticleAcc} {entityLower}. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Botones */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="flex gap-3"
+              >
+                <motion.button
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={!isDeleting ? { scale: 1.02 } : {}}
+                  whileTap={!isDeleting ? { scale: 0.98 } : {}}
+                >
+                  Cancelar
+                </motion.button>
+                <motion.button
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-3 text-sm font-semibold text-cream bg-coral rounded-lg hover:bg-coral/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  whileHover={!isDeleting ? { scale: 1.02 } : {}}
+                  whileTap={!isDeleting ? { scale: 0.98 } : {}}
+                >
+                  {isDeleting ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        className="w-4 h-4 border-2 border-cream border-t-transparent rounded-full"
+                      />
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <IconX className="h-4 w-4" />
+                      Eliminar
+                    </>
+                  )}
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmación de Conversión de Núcleo a Colmena */}
+      <AnimatePresence>
+        {showConvertModal && (
+          <motion.div
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            aria-modal="true"
+            role="dialog"
+          >
+            <motion.div
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowConvertModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card relative max-w-md w-full p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-honey/20"
+              >
+                <IconRefresh className="h-8 w-8 text-honey" />
+              </motion.div>
+
+              <motion.h3
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-center font-display text-2xl font-bold text-cream mb-2"
+              >
+                Convertir núcleo en colmena
+              </motion.h3>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="text-center mb-6"
+              >
+                <p className="text-husk mb-3">
+                  ¿Convertir <strong className="text-cream">{hive.code}</strong> en una colmena completa?
+                </p>
+
+                {/* Información de lo que se transferirá */}
+                <div className="mb-3 rounded-lg border border-honey/25 bg-honey/5 p-3 text-left">
+                  <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-husk">
+                    Se transferirá a la nueva colmena
+                  </p>
+                  <ul className="space-y-1.5 text-xs text-cream">
+                    <li>
+                      Se creará la colmena <strong className="text-honey">{nextHiveCode || '—'}</strong>
+                    </li>
+                    <li>Se transferirán {inspections.length} inspeccione{inspections.length !== 1 ? 's' : ''}</li>
+                    <li>Se transferirán {hive.fotos?.length || 0} foto{hive.fotos?.length === 1 ? '' : 's'}</li>
+                    {queen ? (
+                      <li>Se transferirá la reina registrada</li>
+                    ) : (
+                      <li className="text-husk">No hay reina registrada. La nueva colmena quedará sin reina.</li>
+                    )}
+                    <li>
+                      Se transferirá el estado: <strong className="text-cream">{HIVE_STATUS_LABELS[hive.status]}</strong>
+                    </li>
+                  </ul>
+                  {inspections.length < 2 && (
+                    <p className="mt-2 text-xs text-husk">
+                      ⚠️ El núcleo tiene pocas inspecciones registradas ({inspections.length}).
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-coral/30 bg-coral/10 p-3">
+                  <p className="text-xs text-coral">
+                    <strong>⚠️ Advertencia:</strong> El núcleo {hive.code} dejará de existir. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="flex gap-3"
+              >
+                <motion.button
+                  onClick={() => setShowConvertModal(false)}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancelar
+                </motion.button>
+                <motion.button
+                  onClick={handleConfirmConvert}
+                  disabled={isConverting}
+                  className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-lg hover:bg-honeysoft transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-none disabled:pointer-events-none"
+                  whileHover={!isConverting ? { scale: 1.02 } : {}}
+                  whileTap={!isConverting ? { scale: 0.98 } : {}}
+                >
+                  {isConverting ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full"
+                      />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <IconRefresh className="h-4 w-4" />
+                      Convertir
+                    </>
+                  )}
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Transferencia a Otro Apiario */}
+      <AnimatePresence>
+        {showMoveModal && (
+          <motion.div
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            aria-modal="true"
+            role="dialog"
+          >
+            <motion.div
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowMoveModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card relative max-w-md w-full p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-honey/20"
+              >
+                <IconLayers className="h-8 w-8 text-honey" />
+              </motion.div>
+
+              <motion.h3
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-center font-display text-2xl font-bold text-cream mb-2"
+              >
+                Mover {nucleus ? 'núcleo' : 'colmena'} a otro apiario
+              </motion.h3>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="mb-6"
+              >
+                <p className="text-center text-sm text-husk mb-4">
+                  {entityLabel} <strong className="text-cream">{hive.code}</strong> se moverá de{' '}
+                  {currentApiaryName} a otro apiario manteniendo su código.
+                </p>
+
+                <label className="mb-1 block text-xs font-mono uppercase tracking-wider text-husk">Apiario de destino</label>
+                <select
+                  value={moveDestApiaryId}
+                  onChange={(e) => setMoveDestApiaryId(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-ink/50 px-3 py-2.5 text-sm text-cream focus:border-honey/70 mb-4"
+                >
+                  {availableApiaries.map(a => (
+                    <option key={a.id} value={a.id}>{a.name || 'Sin nombre'}</option>
+                  ))}
+                </select>
+
+                <label className="mb-1 block text-xs font-mono uppercase tracking-wider text-husk">Motivo del traslado (opcional)</label>
+                <input
+                  type="text"
+                  value={moveMotivo}
+                  onChange={(e) => setMoveMotivo(e.target.value)}
+                  placeholder="Floración, espacio, manejo, etc."
+                  className="w-full rounded-lg border border-line bg-ink/50 px-3 py-2.5 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 mb-4"
+                />
+
+                <label className="mb-1 block text-xs font-mono uppercase tracking-wider text-husk">Fecha del traslado</label>
+                <input
+                  type="date"
+                  value={moveFecha}
+                  onChange={(e) => setMoveFecha(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-ink/50 px-3 py-2.5 text-sm text-cream focus:border-honey/70"
+                />
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="flex gap-3"
+              >
+                <motion.button
+                  onClick={() => setShowMoveModal(false)}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancelar
+                </motion.button>
+                <motion.button
+                  onClick={handleConfirmMove}
+                  disabled={!moveDestApiaryId || isMoving}
+                  className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-lg hover:bg-honeysoft transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-none disabled:pointer-events-none"
+                  whileHover={moveDestApiaryId && !isMoving ? { scale: 1.02 } : {}}
+                  whileTap={moveDestApiaryId && !isMoving ? { scale: 0.98 } : {}}
+                >
+                  {isMoving ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full"
+                      />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <IconLayers className="h-4 w-4" />
+                      Transferir
+                    </>
+                  )}
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </motion.aside>
   );

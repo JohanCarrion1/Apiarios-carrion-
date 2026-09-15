@@ -1,12 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import { motion } from "framer-motion";
-import type { Task } from "../types/hive";
+import type { Task, Hive } from "../types/hive";
 import { IconCheck, IconPlus, IconCalendar } from "../ui";
+import TaskForm, { type TaskFormData } from "./TaskForm";
 
 interface Props {
   tasks: Task[];
+  hives: Hive[];
   onToggle: (id: string) => void;
   onAdd: (title: string) => void;
+  onSaveTask: (data: TaskFormData) => boolean | void;
   onDelete: (id: string) => void;
 }
 
@@ -22,10 +25,41 @@ const PRIORITY_LABEL: Record<Task['priority'], string> = {
   baja: "Baja",
 };
 
-export default function TasksSection({ tasks, onToggle, onAdd, onDelete }: Props) {
+export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask, onDelete }: Props) {
   const [draft, setDraft] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "priority">("priority");
+  const [showTaskForm, setShowTaskForm] = useState(false);
+
+  const openTaskForm = () => {
+    console.log('[TASK] Abriendo formulario de nueva tarea');
+    setShowTaskForm(true);
+  };
+
+  const closeTaskForm = () => {
+    console.log('[TASK] Cerrando formulario de nueva tarea');
+    setShowTaskForm(false);
+  };
+
+  const handleSaveTask = useCallback((data: TaskFormData) => {
+    console.log('[TASK] Guardando tarea con datos:', data);
+    const ok = onSaveTask(data);
+    if (ok !== false) {
+      setShowTaskForm(false);
+    }
+  }, [onSaveTask]);
+
+  useEffect(() => {
+    if (!showTaskForm) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        console.log('[TASK] Escape: cerrando formulario');
+        setShowTaskForm(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showTaskForm]);
 
   const done = tasks.filter((t) => t.completed).length;
   const pending = tasks.filter((t) => !t.completed);
@@ -315,6 +349,32 @@ export default function TasksSection({ tasks, onToggle, onAdd, onDelete }: Props
           </motion.button>
         </div>
       </motion.form>
+
+      {/* Botón flotante + */}
+      <motion.button
+        onClick={openTaskForm}
+        aria-label="Crear nueva tarea"
+        aria-expanded={showTaskForm}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-amber-500 rounded-full shadow-lg flex items-center justify-center text-2xl text-gray-900 z-30 hover:bg-amber-400 active:scale-95 transition-all"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+      >
+        +
+      </motion.button>
+
+      {/* Modal de nueva tarea */}
+      {showTaskForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80" onClick={closeTaskForm} />
+          <div className="relative bg-gray-900 border border-amber-500/30 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <TaskForm
+              hives={hives}
+              onClose={closeTaskForm}
+              onSave={handleSaveTask}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,29 +1,55 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconBee, IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconHome } from '../ui';
+import { IconBee, IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconHome, IconQueen, IconPackage } from '../ui';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
+import NotificationBell from './NotificationBell';
+import type { Notification } from '../types/calendar';
 
 interface ResponsiveHeaderProps {
   onNavigate: (sectionId: string) => void;
   onSettings?: () => void;
   onHome?: () => void;
   activeSection?: string;
+  notifications?: Notification[];
+  onMarkAsRead?: (id: string) => void;
+  onMarkAllAsRead?: () => void;
+  onNotificationClick?: (notification: Notification) => void;
+  inventoryAlertsCount?: number;
 }
 
-export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection = 'panel' }: ResponsiveHeaderProps) {
+export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection = 'panel', notifications = [], onMarkAsRead, onMarkAllAsRead, onNotificationClick, inventoryAlertsCount = 0 }: ResponsiveHeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { user, logout } = useAuth();
 
+  // En modo standalone la app ya es una aplicación nativa: se oculta el
+  // botón "Regresar a inicio" y se respetan las safe-areas de iOS.
+  const [isStandalone, setIsStandalone] = useState(() =>
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as any).standalone === true
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia('(display-mode: standalone)');
+    const onChange = () => {
+      setIsStandalone(mql.matches || (navigator as any).standalone === true);
+    };
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
   const menuItems = [
     { id: 'panel', label: 'Panel', icon: IconPanel },
     { id: 'colmenas', label: 'Colmenas', icon: IconHex },
+    { id: 'cria', label: 'Cría', icon: IconQueen },
     { id: 'estadisticas', label: 'Estadísticas', icon: IconChart },
     { id: 'calendario', label: 'Calendario', icon: IconCalendar },
     { id: 'produccion', label: 'Cosecha', icon: IconDrop },
     { id: 'registro', label: 'Cuaderno', icon: IconClipboard },
     { id: 'tareas', label: 'Tareas', icon: IconCheck },
+    { id: 'inventario', label: 'Inventario', icon: IconPackage },
   ];
 
   const handleLogout = () => {
@@ -43,10 +69,22 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
     return () => window.removeEventListener('keydown', handleEscape);
   }, []);
 
+  // Cerrar el modal de confirmación con la tecla Escape
+  useEffect(() => {
+    if (!showLogoutConfirm) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowLogoutConfirm(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [showLogoutConfirm]);
+
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-pane/95 backdrop-blur-md border-b border-line">
+      <header className={`sticky top-0 z-30 bg-pane/95 backdrop-blur-md border-b border-line ${isStandalone ? 'pwa-standalone-header' : ''}`}>
         <div className="flex items-center justify-between px-4 py-3 sm:px-6">
           {/* Logo */}
           <motion.div
@@ -77,35 +115,53 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  {item.label}
+                  <span className="flex items-center gap-1.5">
+                    {item.label}
+                    {item.id === 'inventario' && inventoryAlertsCount > 0 && (
+                      <span className="rounded-full bg-coral px-1.5 py-0.5 text-[10px] font-bold text-ink">
+                        {inventoryAlertsCount}
+                      </span>
+                    )}
+                  </span>
                 </motion.button>
               );
             })}
           </nav>
 
-          {/* Botón de retroceso a selección */}
-          {onHome && (
-            <motion.button
-              onClick={onHome}
-              className="p-2 rounded-lg hover:bg-pane2 transition-colors"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              aria-label="Volver a selección"
-              title="Volver a selección"
-            >
-              <svg className="h-5 w-5 text-honey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-              </svg>
-            </motion.button>
-          )}
+          {/* Botón de retroceso a selección + Campana + Hamburger */}
+          <div className="flex items-center gap-2">
+            {onHome && !isStandalone && (
+              <motion.button
+                onClick={onHome}
+                className="flex items-center gap-1.5 rounded-full bg-honey px-3 py-1.5 text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(240,164,28,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-95"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.92 }}
+                aria-label="Regresar a inicio"
+                title="Regresar a inicio"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                </svg>
+                <span>Regresar a inicio</span>
+              </motion.button>
+            )}
 
-          {/* Hamburger Button */}
-          <motion.button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="flex flex-col gap-1.5 p-2 rounded-lg hover:bg-pane2 transition-colors"
-            whileTap={{ scale: 0.9 }}
-            aria-label="Abrir menú"
-          >
+            {/* Campana de notificaciones */}
+            {notifications.length > 0 && onMarkAsRead && onMarkAllAsRead && onNotificationClick && (
+              <NotificationBell
+                notifications={notifications}
+                onMarkAsRead={onMarkAsRead}
+                onMarkAllAsRead={onMarkAllAsRead}
+                onNotificationClick={onNotificationClick}
+              />
+            )}
+
+            <motion.button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="flex flex-col gap-1.5 p-2 rounded-lg hover:bg-pane2 transition-colors"
+              whileTap={{ scale: 0.9 }}
+              aria-label="Abrir menú"
+            >
             <motion.span
               className="w-6 h-0.5 bg-cream block"
               animate={isMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
@@ -122,6 +178,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
               transition={{ duration: 0.3 }}
             />
           </motion.button>
+          </div>
         </div>
       </header>
 
@@ -227,7 +284,13 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                         {/* Icono */}
                         <IconComponent className="w-5 h-5 flex-shrink-0" />
                         {/* Label */}
-                        <span className="relative z-10">{item.label}</span>
+                        <span className="relative z-10 flex-1">{item.label}</span>
+                        {/* Badge de inventario */}
+                        {item.id === 'inventario' && inventoryAlertsCount > 0 && (
+                          <span className="relative z-10 rounded-full bg-coral px-2 py-0.5 text-[10px] font-bold text-ink">
+                            {inventoryAlertsCount}
+                          </span>
+                        )}
                       </motion.button>
                     );
                   })}
@@ -281,46 +344,49 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
 
       {/* Logout Confirmation Modal */}
       <AnimatePresence>
-        {showLogoutConfirm && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowLogoutConfirm(false)}
-              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            >
-              <div className="card p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-                <h3 className="font-display text-xl font-bold text-cream mb-2">¿Deseas cerrar sesión?</h3>
-                <p className="text-sm text-husk mb-6">Tu sesión actual se cerrará y deberás iniciar sesión nuevamente.</p>
-                <div className="flex gap-3">
-                  <motion.button
-                    onClick={() => setShowLogoutConfirm(false)}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Cancelar
-                  </motion.button>
-                  <motion.button
-                    onClick={handleLogout}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-ink bg-coral rounded-lg hover:bg-coral/90 transition-colors"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Cerrar sesión
-                  </motion.button>
+        {showLogoutConfirm &&
+          createPortal(
+            <>
+              <motion.div
+                className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setShowLogoutConfirm(false)}
+              />
+              <motion.div
+                className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                aria-modal="true"
+                role="dialog"
+                onClick={() => setShowLogoutConfirm(false)}
+              >
+                <div className="card p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-display text-xl font-bold text-cream mb-2">¿Deseas cerrar sesión?</h3>
+                  <p className="text-sm text-husk mb-6">Tu sesión actual se cerrará y deberás iniciar sesión nuevamente.</p>
+                  <div className="flex gap-3">
+                    <motion.button
+                      onClick={() => setShowLogoutConfirm(false)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Cancelar
+                    </motion.button>
+                    <motion.button
+                      onClick={handleLogout}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-ink bg-coral rounded-lg hover:bg-coral/90 transition-colors"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Cerrar sesión
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          </>
-        )}
+              </motion.div>
+            </>,
+            document.body,
+          )}
       </AnimatePresence>
     </>
   );

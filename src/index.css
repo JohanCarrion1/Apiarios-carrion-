@@ -322,3 +322,24 @@ html {
   border-radius: 4px !important;
   padding: 2px 6px !important;
 }
+
+/* ---------- PWA: modo standalone ---------- */
+@media (display-mode: standalone) {
+  /* Safe-areas de iOS (muesca, barra inferior) */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pwa-standalone-header {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Al estar instalada la app ya es una aplicación: se oculta el
+     botón "Regresar a inicio" por si se deshablita en algún momento. */
+  .pwa-hide-standalone {
+    display: none !important;
+  }
+}

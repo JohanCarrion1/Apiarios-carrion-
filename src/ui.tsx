@@ -94,6 +94,16 @@ export const IconScale = ({ className }: IconProps) => (
   </svg>
 );
 
+export const IconQueen = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M4 18.6L2.8 11 8 14l4-7 4 7 5.2-3L20 18.6z" />
+    <path d="M4.6 21.2h14.8" />
+    <circle cx="12" cy="4" r="2.4" />
+    <path d="M10.4 2.4l-.8-1.2M13.6 2.4l.8-1.2" />
+    <path d="M9.2 4c0-1.6 1.2-2.8 2.8-2.8s2.8 1.2 2.8 2.8" />
+  </svg>
+);
+
 export const IconCrown = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...base}>
     <path d="m4.2 17 1.2-9 4.2 3.6L12 5.4l2.4 6.2 4.2-3.6 1.2 9Z" />
@@ -111,6 +121,20 @@ export const IconSearch = ({ className }: IconProps) => (
 export const IconX = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...base}>
     <path d="m6 6 12 12M18 6 6 18" />
+  </svg>
+);
+
+export const IconDownload = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M12 3v11m0 0 4-4m-4 4-4-4" />
+    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+  </svg>
+);
+
+export const IconRefresh = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M20 11.5a8 8 0 1 0-1.9 5.4" />
+    <path d="M20 5v6h-6" />
   </svg>
 );
 
@@ -158,6 +182,13 @@ export const IconTrash = ({ className }: IconProps) => (
 export const IconChart = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...base}>
     <path d="M18 20V10M12 20V4M6 20v-6" />
+  </svg>
+);
+
+export const IconPackage = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M21 8.2 12 3.6 3 8.2v7.6l9 4.6 9-4.6Z" />
+    <path d="M3 8.2 12 12.8 21 8.2M12 12.8v8.1" />
   </svg>
 );
 

@@ -1,4 +1,5 @@
 // Tipos de datos para la aplicación
+import type { PhotoData } from '../services/photos';
 
 export type HiveStatus = 'saludable' | 'revision' | 'alerta' | 'sin_reina';
 
@@ -16,6 +17,7 @@ export interface Hive {
   status: HiveStatus;
   notes?: string;
   entityType?: EntityType; // 'colmena' por defecto si no existe
+  fotos?: PhotoData[];
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +43,7 @@ export interface Inspection {
   varroa: number;
   calm: 1 | 2 | 3;
   note: string;
+  fotos?: PhotoData[];
 }
 
 export interface Task {

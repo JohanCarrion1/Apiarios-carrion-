@@ -33,10 +33,11 @@ interface Harvest {
 
 interface Props {
   hives: Hive[];
+  suffix?: string;
 }
 
-export default function Production({ hives }: Props) {
-  const [harvests, setHarvests] = useState<Harvest[]>(() => loadHarvests());
+export default function Production({ hives, suffix = '' }: Props) {
+  const [harvests, setHarvests] = useState<Harvest[]>(() => loadHarvests(suffix));
   const [showForm, setShowForm] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<Harvest | null>(null);
   const [unit, setUnit] = useState<'kg' | 'lb'>(() => loadHarvestUnit() as 'kg' | 'lb');
@@ -73,7 +74,7 @@ export default function Production({ hives }: Props) {
   // Guardar cosechas
   const handleSaveHarvests = (newHarvests: Harvest[]) => {
     setHarvests(newHarvests);
-    saveHarvests(newHarvests);
+    saveHarvests(newHarvests, suffix);
   };
 
   // Filtros
@@ -203,19 +204,19 @@ export default function Production({ hives }: Props) {
 
   const handleDeleteHarvest = (id: string) => {
     if (confirm('¿Estás seguro de eliminar esta cosecha?')) {
-      saveHarvests(harvests.filter(h => h.id !== id));
+      saveHarvests(harvests.filter(h => h.id !== id), suffix);
     }
   };
 
   const handleSaveHarvest = (harvestData: Omit<Harvest, 'id'>) => {
     if (editingHarvest) {
-      saveHarvests(harvests.map(h => h.id === editingHarvest.id ? { ...h, ...harvestData } : h));
+      saveHarvests(harvests.map(h => h.id === editingHarvest.id ? { ...h, ...harvestData } : h), suffix);
     } else {
       const newHarvest: Harvest = {
         ...harvestData,
         id: Date.now().toString(),
       };
-      saveHarvests([newHarvest, ...harvests]);
+      saveHarvests([newHarvest, ...harvests], suffix);
     }
     setShowForm(false);
     setEditingHarvest(null);

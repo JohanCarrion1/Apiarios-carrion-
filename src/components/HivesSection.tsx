@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { STATUS_COLORS, type Hive, type HiveStatus } from "../types/hive";
+import type { Queen, QueenChange } from '../types/queen';
+import type { BreedingLot } from '../types/breeding';
 import HiveComb from './HiveComb';
 import HiveDetail from './HiveDetail';
+import type { PhotoData } from '../services/photos';
 
 interface HivesSectionProps {
   hives: Hive[];
@@ -20,6 +23,16 @@ interface HivesSectionProps {
   onInspectHive: (id: string) => void;
   onInspectNucleus: (id: string) => void;
   onShowToast: (message: string, type: 'success' | 'error') => void;
+  onUpdateHivePhotos?: (id: string, fotos: PhotoData[]) => void;
+  onUpdateNucleusPhotos?: (id: string, fotos: PhotoData[]) => void;
+  queens?: Queen[];
+  queenHistory?: QueenChange[];
+  onRegisterQueen?: (hive: Hive) => void;
+  onEditQueen?: (queen: Queen) => void;
+  onChangeQueen?: (queen: Queen, hive: Hive) => void;
+  onMarkQueenLost?: (queen: Queen) => void;
+  breedingLots?: BreedingLot[];
+  onShowQueenLot?: (loteId: string) => void;
 }
 
 type SortOption = 'code' | 'lastInspection' | 'status' | 'health';
@@ -40,6 +53,16 @@ export default function HivesSection({
   onInspectHive,
   onInspectNucleus,
   onShowToast,
+  onUpdateHivePhotos,
+  onUpdateNucleusPhotos,
+  queens = [],
+  queenHistory = [],
+  onRegisterQueen,
+  onEditQueen,
+  onChangeQueen,
+  onMarkQueenLost,
+  breedingLots = [],
+  onShowQueenLot,
 }: HivesSectionProps) {
   // Estados para colmenas
   const [searchQueryHives, setSearchQueryHives] = useState('');
@@ -140,6 +163,15 @@ export default function HivesSection({
 
   const selectedHive = hives.find(h => h.id === selectedHiveId);
   const selectedNucleus = nuclei.find(h => h.id === selectedNucleusId);
+
+  const getQueenForHive = (hive?: Hive): Queen | null => {
+    if (!hive) return null;
+    const hiveQueens = queens
+      .filter(q => q.hiveId === hive.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const active = hiveQueens.find(q => q.estado === 'activa');
+    return active ?? hiveQueens[0] ?? null;
+  };
 
   return (
     <div className="space-y-12">
@@ -242,6 +274,15 @@ export default function HivesSection({
             onEdit={onEditHive}
             onDelete={onDeleteHive}
             onShowToast={onShowToast}
+            onUpdateFotos={onUpdateHivePhotos}
+            queen={getQueenForHive(selectedHive)}
+            queenHistory={queenHistory}
+            onRegisterQueen={onRegisterQueen}
+            onEditQueen={onEditQueen}
+            onChangeQueen={onChangeQueen}
+            onMarkQueenLost={onMarkQueenLost}
+            breedingLots={breedingLots}
+            onShowQueenLot={onShowQueenLot}
           />
         )}
       </div>
@@ -316,6 +357,13 @@ export default function HivesSection({
           query=""
           onAdd={onAddNucleus}
           entityType="nucleo"
+          title="Núcleos"
+          countLabel="núcleos"
+          allChipLabel="TODOS"
+          emptyStateText="No hay núcleos registrados"
+          emptyStateInvitation="Agrega tu primer núcleo para empezar"
+          helpText="Toca una celda para ver detalles del núcleo"
+          entitySingular="núcleo"
         />
 
         {/* Detalle de núcleo seleccionado */}
@@ -328,6 +376,15 @@ export default function HivesSection({
             onEdit={onEditNucleus}
             onDelete={onDeleteNucleus}
             onShowToast={onShowToast}
+            onUpdateFotos={onUpdateNucleusPhotos}
+            queen={getQueenForHive(selectedNucleus)}
+            queenHistory={queenHistory}
+            onRegisterQueen={onRegisterQueen}
+            onEditQueen={onEditQueen}
+            onChangeQueen={onChangeQueen}
+            onMarkQueenLost={onMarkQueenLost}
+            breedingLots={breedingLots}
+            onShowQueenLot={onShowQueenLot}
           />
         )}
       </div>

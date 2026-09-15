@@ -1,16 +1,18 @@
 import { motion } from 'framer-motion';
-import { IconPanel, IconHex, IconDrop, IconClipboard, IconCheck, IconChart } from '../ui';
+import { IconPanel, IconHex, IconDrop, IconClipboard, IconCheck, IconChart, IconQueen, IconPackage } from '../ui';
 
 import { IconCalendar } from '../ui';
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { id: 'panel', label: 'Panel', icon: IconPanel },
   { id: 'colmenas', label: 'Colmenas', icon: IconHex },
+  { id: 'cria', label: 'Cría', icon: IconQueen },
   { id: 'estadisticas', label: 'Estadísticas', icon: IconChart },
   { id: 'calendario', label: 'Calendario', icon: IconCalendar },
   { id: 'produccion', label: 'Cosecha', icon: IconDrop },
   { id: 'registro', label: 'Cuaderno', icon: IconClipboard },
   { id: 'tareas', label: 'Tareas', icon: IconCheck },
+  { id: 'inventario', label: 'Inventario', icon: IconPackage },
 ];
 
 interface BottomNavProps {

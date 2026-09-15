@@ -23,19 +23,47 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { CalendarEvent, CalendarViewType, EventTemplate, RecurrenceType } from '../types/calendar';
-import { EVENT_COLORS, EVENT_LABELS } from '../types/calendar';
+import { EVENT_COLORS, EVENT_LABELS, RECURRING_EVENT_COLOR } from '../types/calendar';
 import type { Hive } from '../types/hive';
+import type { BreedingLot } from '../types/breeding';
+import type { RecurringTask, RecurringTaskDraft, FloweringEntry, FloweringEntryDraft } from '../types/reminders';
+import { FLOWERING_COLORS, REMINDER_ICONS, REMINDER_COLORS } from '../types/reminders';
+import { computeReminders, generateRecurringTaskInstances, floweringEventsForPeriod } from '../utils/reminders';
 import EventForm from './EventForm';
-import { loadEvents, saveEvents, loadEventTemplates, saveEventTemplates } from '../utils/storage';
+import RecurringTaskForm from './RecurringTaskForm';
+import FloweringForm from './FloweringForm';
+import { loadEventTemplates, saveEventTemplates } from '../utils/storage';
+import { useSettings } from '../context/SettingsContext';
+import { formatHour, formatHourFromTime } from '../utils/formatTime';
 
 const uid = () => Math.random().toString(36).slice(2, 11);
 
 interface CalendarSectionProps {
   hives: Hive[];
+  events: CalendarEvent[];
+  onEventsChange: (events: CalendarEvent[]) => void;
+  recurringTasks: RecurringTask[];
+  onRecurringTasksChange: (tasks: RecurringTask[]) => void;
+  floweringEntries: FloweringEntry[];
+  onFloweringEntriesChange: (entries: FloweringEntry[]) => void;
+  breedingLots?: BreedingLot[];
+  apiaries?: { id: string; name: string }[];
+  apiaryName?: string;
 }
 
-export default function CalendarSection({ hives }: CalendarSectionProps) {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+export default function CalendarSection({
+  hives,
+  events,
+  onEventsChange,
+  recurringTasks,
+  onRecurringTasksChange,
+  floweringEntries,
+  onFloweringEntriesChange,
+  breedingLots = [],
+  apiaries = [],
+  apiaryName = '',
+}: CalendarSectionProps) {
+  const { settings } = useSettings();
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -47,15 +75,25 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
   const [filterHive, setFilterHive] = useState<string>('all');
   const [showOverdue, setShowOverdue] = useState(false);
   const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('detailed');
+  const [showRecurringForm, setShowRecurringForm] = useState(false);
+  const [showFloweringForm, setShowFloweringForm] = useState(false);
 
-  // Cargar eventos y plantillas desde localStorage
+  const notificationCfg = settings.notifications;
+  const alertDaysBefore =
+    typeof notificationCfg.daysBefore === 'number' && notificationCfg.daysBefore > 0
+      ? notificationCfg.daysBefore
+      : 3;
+  const enabledKinds = {
+    inspections: notificationCfg.kinds?.inspections ?? true,
+    harvests: notificationCfg.kinds?.harvests ?? true,
+    breeding: notificationCfg.kinds?.breeding ?? true,
+    flowering: notificationCfg.kinds?.flowering ?? true,
+    tasks: notificationCfg.kinds?.tasks ?? true,
+  };
+
+  // Cargar plantillas desde localStorage
   useEffect(() => {
-    const savedEvents = loadEvents();
     const savedTemplates = loadEventTemplates();
-    
-    if (savedEvents.length > 0) {
-      setEvents(savedEvents);
-    }
     
     if (savedTemplates.length > 0) {
       setTemplates(savedTemplates);
@@ -91,11 +129,6 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
       saveEventTemplates(defaultTemplates);
     }
   }, []);
-
-  // Guardar eventos en localStorage
-  useEffect(() => {
-    saveEvents(events);
-  }, [events]);
 
   // Atajos de teclado
   useEffect(() => {
@@ -193,8 +226,44 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
     return allEvents;
   };
 
-  // Eventos con recurrencia generada
-  const allEvents = useMemo(() => generateRecurrentEvents(events), [events]);
+  // Eventos con recurrencia generada + instancias de tareas recurrentes + floración
+  const allEvents = useMemo(() => {
+    const base = generateRecurrentEvents(events);
+    const now = new Date();
+    const recurringInstances = recurringTasks.flatMap((task) =>
+      generateRecurringTaskInstances(task, now, 28)
+    );
+    const flowering = floweringEventsForPeriod(
+      floweringEntries,
+      new Date(currentDate.getFullYear(), 0, 1),
+      new Date(currentDate.getFullYear(), 11, 31)
+    );
+    return [...base, ...recurringInstances, ...flowering];
+  }, [events, recurringTasks, floweringEntries, currentDate]);
+
+  // Recordatorios calculados (panel del día + campanita)
+  const dayReminders = useMemo(
+    () =>
+      computeReminders({
+        events: allEvents,
+        breedingLots,
+        recurringTasks,
+        floweringEntries,
+        hives,
+        daysBefore: alertDaysBefore,
+        enabledKinds,
+      }),
+    [allEvents, breedingLots, recurringTasks, floweringEntries, hives, alertDaysBefore, enabledKinds]
+  );
+
+  // Día dentro de la ventana de floración de una entrada
+  const isDayInFloweringWindow = (day: Date, entry: FloweringEntry) => {
+    const m = day.getMonth() + 1;
+    if (entry.startMonth <= entry.endMonth) {
+      return m >= entry.startMonth && m <= entry.endMonth;
+    }
+    return m >= entry.startMonth || m <= entry.endMonth;
+  };
 
   // Filtrar eventos
   const filteredEvents = useMemo(() => {
@@ -291,7 +360,7 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
 
   const handleSaveEvent = (eventData: Omit<CalendarEvent, 'id' | 'createdAt'>) => {
     if (editingEvent) {
-      setEvents(events.map(e => 
+      onEventsChange(events.map(e => 
         e.id === editingEvent.id ? { ...e, ...eventData } : e
       ));
     } else {
@@ -300,7 +369,7 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
         id: uid(),
         createdAt: new Date().toISOString(),
       };
-      setEvents(prev => [...prev, newEvent]);
+      onEventsChange([...events, newEvent]);
       
       // Seleccionar automáticamente la fecha del nuevo evento
       setSelectedDate(new Date(newEvent.date));
@@ -310,11 +379,11 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    setEvents(events.filter(e => e.id !== eventId));
+    onEventsChange(events.filter(e => e.id !== eventId));
   };
 
   const handleToggleComplete = (eventId: string) => {
-    setEvents(events.map(e => 
+    onEventsChange(events.map(e => 
       e.id === eventId ? { ...e, completed: !e.completed } : e
     ));
   };
@@ -323,17 +392,61 @@ export default function CalendarSection({ hives }: CalendarSectionProps) {
     const event = events.find(e => e.id === eventId);
     if (event) {
       const tomorrow = addDays(new Date(), 1);
-      setEvents(events.map(e => 
+      onEventsChange(events.map(e => 
         e.id === eventId ? { ...e, date: tomorrow.toISOString() } : e
       ));
     }
+  };
+
+  // Handlers de tareas recurrentes
+  const handleCreateRecurringTask = (draft: RecurringTaskDraft) => {
+    const task: RecurringTask = {
+      id: uid(),
+      ...draft,
+      active: true,
+      createdAt: new Date().toISOString(),
+    };
+    onRecurringTasksChange([...recurringTasks, task]);
+    setShowRecurringForm(false);
+  };
+
+  const handleDeleteRecurringTask = (taskId: string) => {
+    onRecurringTasksChange(recurringTasks.filter(t => t.id !== taskId));
+  };
+
+  const handleToggleRecurringTask = (taskId: string) => {
+    onRecurringTasksChange(recurringTasks.map(t =>
+      t.id === taskId ? { ...t, active: !t.active } : t
+    ));
+  };
+
+  // Handlers de floración
+  const handleSaveFlowering = (draft: FloweringEntryDraft) => {
+    const entry: FloweringEntry = {
+      id: uid(),
+      ...draft,
+      active: true,
+      createdAt: new Date().toISOString(),
+    };
+    onFloweringEntriesChange([...floweringEntries, entry]);
+    setShowFloweringForm(false);
+  };
+
+  const handleDeleteFlowering = (entryId: string) => {
+    onFloweringEntriesChange(floweringEntries.filter(e => e.id !== entryId));
+  };
+
+  const handleToggleFlowering = (entryId: string) => {
+    onFloweringEntriesChange(floweringEntries.map(e =>
+      e.id === entryId ? { ...e, active: !e.active } : e
+    ));
   };
 
   // Compartir evento
   const handleShareEvent = (event: CalendarEvent) => {
     const hive = hives.find(h => h.id === event.hiveId);
     const text = `📅 ${EVENT_LABELS[event.type]}${hive ? ` - Colmena ${hive.code}` : ''}
-📆 Fecha: ${format(new Date(event.date), 'dd/MM/yyyy', { locale: es })}${event.time ? ` ${event.time}` : ''}
+📆 Fecha: ${format(new Date(event.date), 'dd/MM/yyyy', { locale: es })}${event.time ? ` ${formatHourFromTime(event.time)}` : ''}
 📝 ${event.title}
 ${event.description ? `📋 ${event.description}` : ''}`;
     
@@ -381,7 +494,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
           const hive = hives.find(h => h.id === event.hiveId);
           return [
             format(new Date(event.date), 'yyyy-MM-dd'),
-            event.time || '',
+            event.time ? formatHourFromTime(event.time) : '',
             EVENT_LABELS[event.type],
             `"${event.title}"`,
             `"${event.description || ''}"`,
@@ -494,6 +607,11 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                   {format(day, 'd')}
                 </span>
 
+                {/* Indicador de floración */}
+                {floweringEntries.filter(e => e.active && isDayInFloweringWindow(day, e)).length > 0 && (
+                  <span className="absolute top-0.5 right-0.5 text-[10px] leading-none">🌸</span>
+                )}
+
                 {/* Indicadores de eventos */}
                 {dayEvents.length > 0 && (
                   <div className="absolute bottom-1 left-1 right-1 flex justify-center gap-0.5">
@@ -583,7 +701,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                         />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-cream">{event.title}</p>
-                          {event.time && <p className="text-xs text-husk">{event.time}</p>}
+                          {event.time && <p className="text-xs text-husk">{formatHourFromTime(event.time)}</p>}
                         </div>
                         {event.completed && (
                           <span className="text-xs text-sage">✓</span>
@@ -638,7 +756,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
             return (
               <div key={hour} className="flex gap-4 min-h-[60px]">
                 <div className="w-16 text-right text-sm text-husk font-mono">
-                  {hour.toString().padStart(2, '0')}:00
+                  {formatHour(new Date(0, 0, 1, hour))}
                 </div>
                 <div className="flex-1 border-l border-line pl-4">
                   {hourEvents.map(event => (
@@ -883,6 +1001,155 @@ ${event.description ? `📋 ${event.description}` : ''}`;
       {viewType === 'week' && renderWeekView()}
       {viewType === 'day' && renderDayView()}
 
+      {/* Recordatorios del día */}
+      {dayReminders.length > 0 && (
+        <motion.div
+          className="card p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-xl font-bold text-cream">🔔 Recordatorios próximos</h3>
+            <span className="text-xs font-mono text-husk">
+              configuración: {alertDaysBefore} {alertDaysBefore === 1 ? 'día' : 'días'} antes
+            </span>
+          </div>
+          <div className="space-y-2">
+            {dayReminders.slice(0, 8).map(reminder => (
+              <div
+                key={reminder.id}
+                className="flex items-center gap-3 p-3 rounded-lg bg-ink/50 hover:bg-ink/70 transition-colors"
+              >
+                <span className="text-xl">{REMINDER_ICONS[reminder.kind]}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-cream text-sm">{reminder.title}</p>
+                  {reminder.description && (
+                    <p className="text-xs text-husk truncate">{reminder.description}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: REMINDER_COLORS[reminder.kind] }}
+                  />
+                  <span className={`text-xs font-semibold ${
+                    reminder.daysLeft === 0 ? 'text-coral' : reminder.daysLeft === 1 ? 'text-honey' : 'text-husk'
+                  }`}>
+                    {reminder.label}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Gestión de tareas recurrentes y floración */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Tareas recurrentes */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-lg font-bold text-cream">🔄 Tareas recurrentes</h3>
+            <button
+              onClick={() => setShowRecurringForm(true)}
+              className="rounded-lg bg-honey px-3 py-1.5 text-xs font-semibold text-ink hover:bg-honeysoft transition-colors"
+            >
+              + Nueva
+            </button>
+          </div>
+          {recurringTasks.length === 0 ? (
+            <p className="text-sm text-husk py-4 text-center">
+              Ej: revisar colmenas cada 7 días, control de varroa cada 21 días...
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recurringTasks.map(task => (
+                <div key={task.id} className="flex items-center gap-3 p-3 rounded-lg bg-ink/50">
+                  <button
+                    onClick={() => handleToggleRecurringTask(task.id)}
+                    className={`w-5 h-5 rounded border flex items-center justify-center text-[10px] transition-colors ${
+                      task.active ? 'bg-sage/20 border-sage/50 text-sage' : 'border-line text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${task.active ? 'text-cream' : 'text-husk line-through'}`}>
+                      {task.title}
+                    </p>
+                    <p className="text-xs text-husk">
+                      cada {task.intervalDays} {task.intervalDays === 1 ? 'día' : 'días'}
+                      {task.season === 'winter' ? ' · invierno' : ''}
+                      {task.materializeAll ? '' : ' · solo próxima'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteRecurringTask(task.id)}
+                    className="text-husk hover:text-coral p-1 transition-colors"
+                    title="Eliminar"
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Calendario de floración */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-lg font-bold text-cream">🌸 Calendario de floración</h3>
+            <button
+              onClick={() => setShowFloweringForm(true)}
+              className="rounded-lg bg-honey px-3 py-1.5 text-xs font-semibold text-ink hover:bg-honeysoft transition-colors"
+            >
+              + Registrar
+            </button>
+          </div>
+          {floweringEntries.length === 0 ? (
+            <p className="text-sm text-husk py-4 text-center">
+              Registra flora melífera por apiario para recibir alertas.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {floweringEntries.map(entry => (
+                <div key={entry.id} className="flex items-center gap-3 p-3 rounded-lg bg-ink/50">
+                  <button
+                    onClick={() => handleToggleFlowering(entry.id)}
+                    className={`w-5 h-5 rounded border flex items-center justify-center text-[10px] transition-colors ${
+                      entry.active ? 'bg-sage/20 border-sage/50 text-sage' : 'border-line text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </button>
+                  <span
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${entry.active ? 'text-cream' : 'text-husk line-through'}`}>
+                      {entry.species} · {entry.apiaryName}
+                    </p>
+                    <p className="text-xs text-husk">
+                      {format(new Date(2026, entry.startMonth - 1, 1), 'MMM', { locale: es })} –{' '}
+                      {format(new Date(2026, entry.endMonth - 1, 1), 'MMM', { locale: es })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteFlowering(entry.id)}
+                    className="text-husk hover:text-coral p-1 transition-colors"
+                    title="Eliminar"
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Panel de eventos del día seleccionado */}
       {selectedDate && viewType === 'month' && (
         <motion.div
@@ -916,7 +1183,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                   />
                   <div className="flex-1 cursor-pointer" onClick={() => handleEditEvent(event)}>
                     <p className="font-medium text-cream">{event.title}</p>
-                    {event.time && <p className="text-xs text-husk">{event.time}</p>}
+                    {event.time && <p className="text-xs text-husk">{formatHourFromTime(event.time)}</p>}
                   </div>
                   <button
                     onClick={(e) => {
@@ -963,6 +1230,28 @@ ${event.description ? `📋 ${event.description}` : ''}`;
           onSave={handleSaveEvent}
         />
       )}
+
+      {/* Formulario de tarea recurrente */}
+      <AnimatePresence>
+        {showRecurringForm && (
+          <RecurringTaskForm
+            onClose={() => setShowRecurringForm(false)}
+            onCreate={handleCreateRecurringTask}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Formulario de floración */}
+      <AnimatePresence>
+        {showFloweringForm && (
+          <FloweringForm
+            apiaries={apiaries}
+            defaultApiaryName={apiaryName}
+            onClose={() => setShowFloweringForm(false)}
+            onSave={handleSaveFlowering}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

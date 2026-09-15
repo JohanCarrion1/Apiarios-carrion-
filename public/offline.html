@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f59e0b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Apiarios Carrión" />
+    <title>Sin conexión · Apiarios Carrión</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        background: #131009;
+        color: #f3e9d4;
+        font-family: "Fraunces", "Georgia", serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .wrap {
+        text-align: center;
+        max-width: 420px;
+        width: 100%;
+      }
+      .logo {
+        margin: 0 auto 28px;
+        width: 96px;
+        height: 96px;
+        border-radius: 22px;
+        background: radial-gradient(120% 120% at 30% 20%, #2a1f12 0%, #1a1410 70%);
+        border: 1px solid #392c19;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .logo svg { width: 64px; height: 64px; }
+      h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        margin-bottom: 12px;
+      }
+      h1 span { color: #f0a41c; }
+      p {
+        font-family: "Instrument Sans", "Trebuchet MS", sans-serif;
+        font-size: 1rem;
+        line-height: 1.6;
+        color: #a3906a;
+        margin-bottom: 32px;
+      }
+      button {
+        background: #f0a41c;
+        color: #131009;
+        font-family: "Instrument Sans", "Trebuchet MS", sans-serif;
+        font-weight: 700;
+        font-size: 1rem;
+        padding: 14px 34px;
+        border: none;
+        border-radius: 999px;
+        cursor: pointer;
+        box-shadow: 0 8px 24px rgba(240, 164, 28, 0.35);
+        transition: background 0.2s ease, transform 0.1s ease;
+      }
+      button:hover { background: #ffc961; }
+      button:active { transform: scale(0.97); }
+      .hex {
+        display: inline-block;
+        width: 14px;
+        height: 16px;
+        background: rgba(240, 164, 28, 0.5);
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        margin-right: 8px;
+        vertical-align: -2px;
+      }
+      small {
+        font-family: "Instrument Sans", "Trebuchet MS", sans-serif;
+        color: #6d5b3e;
+        font-size: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="logo" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="oro-offline" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#F3D78C"/>
+              <stop offset=".5" stopColor="#D9A94F"/>
+              <stop offset="1" stopColor="#A97A25"/>
+            </linearGradient>
+          </defs>
+          <g fill="none" stroke="url(#oro-offline)" strokeLinecap="round" strokeLinejoin="round">
+            <path strokeWidth="4" d="M42 28 L18 8 L25 31 Z"/>
+            <path strokeWidth="4" d="M39 37 L10 24 L23 43 Z"/>
+            <path strokeWidth="3.5" d="M40 45 L18 48 L31 57 Z"/>
+            <path strokeWidth="4" d="M42 26 L56 21 L64 34 L56 46 L42 46 L36 36 Z"/>
+            <path strokeWidth="4" d="M62 18 Q74 15 76 27 Q77 36 67 38 Q60 39 59 30 Q58 22 62 18 Z"/>
+            <path strokeWidth="3.5" d="M66 15 L72 5"/>
+            <path strokeWidth="3.5" d="M73 17 L81 9"/>
+            <path strokeWidth="4" d="M38 48 Q27 58 29 74 L31 85 Q44 75 46 59 L46 50"/>
+            <path strokeWidth="3" d="M32 60 L45 58"/>
+            <path strokeWidth="3" d="M31 68 L43 66"/>
+            <path strokeWidth="3" d="M33 76 L40 74"/>
+            <path strokeWidth="5" d="M86 58 A16 16 0 1 0 86 80"/>
+            <path strokeWidth="4" d="M60 86 L53 100"/>
+            <path strokeWidth="4" d="M67 91 L73 100"/>
+          </g>
+        </svg>
+      </div>
+      <h1>Estás <span>sin conexión</span></h1>
+      <p>Tus datos están guardados localmente.<br />Puedes seguir usando la aplicación normalmente.</p>
+      <button type="button" onclick="window.location.reload()">Reintentar</button>
+      <div style="margin-top: 28px;">
+        <small><span class="hex"></span>Apiarios Carrión · PANAL</small>
+      </div>
+    </div>
+  </body>
+</html>

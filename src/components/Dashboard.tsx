@@ -2,7 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { STATUS_COLORS, STATUS_ORDER, type Hive, type Task, type Inspection } from "../types/hive";
+import type { InventoryItem } from "../types/inventory";
+import { inventoryDisponible } from "../types/inventory";
 import { useCountUp, useReveal } from "../hooks";
+import { getWeatherEmoji } from "../services/weather";
+import RemindersWidget from "./RemindersWidget";
+import type { Reminder } from "../types/reminders";
 
 interface DashboardProps {
   hives: Hive[];
@@ -14,15 +19,33 @@ interface DashboardProps {
   onAddTask: () => void;
   weather?: {
     temperature: number;
+    wind: number;
     condition: string;
     rainProbability: number;
+    weatherCode?: number;
+    isDay?: boolean;
   };
+  weatherLoading?: boolean;
+  weatherError?: 'denied' | 'error' | null;
+  weatherLastUpdated?: number | null;
+  weatherUsingCache?: boolean;
+  onRetryWeather?: () => void;
+  breedingAlerts?: {
+    lotesProximosEnjaulado: number;
+    onNavigate?: () => void;
+  };
+  queenAlerts?: {
+    reinasViejas: number;
+    onNavigate?: () => void;
+  };
+  inventoryAlerts?: InventoryItem[];
   apiaryName?: string;
   apiaryLocation?: string;
   onChangeApiary?: () => void;
   apiaries?: any[];
   currentApiaryId?: string;
   onSelectApiary?: (id: string) => void;
+  reminders?: Reminder[];
 }
 
 function Card({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -50,12 +73,21 @@ export default function Dashboard({
   onAddInspection, 
   onAddTask,
   weather,
+  weatherLoading = false,
+  weatherError = null,
+  weatherLastUpdated = null,
+  weatherUsingCache = false,
+  onRetryWeather,
+  breedingAlerts,
+  queenAlerts,
+  inventoryAlerts = [],
   apiaryName,
   apiaryLocation,
   onChangeApiary,
   apiaries = [],
   currentApiaryId = '',
-  onSelectApiary = () => {}
+  onSelectApiary = () => {},
+  reminders = []
 }: DashboardProps) {
   const { ref, inView } = useReveal();
   const [showSummary, setShowSummary] = useState(false);
@@ -223,6 +255,16 @@ export default function Dashboard({
     if (days === 0) return 'Hoy';
     if (days === 1) return 'Mañana';
     return `En ${days} días`;
+  };
+
+  const formatWeatherUpdated = (timestamp: number | null): string => {
+    if (!timestamp) return 'actualizado recién';
+    const diff = Math.floor((Date.now() - timestamp) / (1000 * 60));
+    if (diff < 1) return 'actualizado recién';
+    if (diff < 60) return `actualizado hace ${diff} min`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `actualizado hace ${hours} h`;
+    return `actualizado hace ${Math.floor(hours / 24)} d`;
   };
   
   return (
@@ -511,12 +553,54 @@ export default function Dashboard({
       <Card delay={0.4}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-xl font-bold text-cream">Alertas Importantes</h3>
-          {alerts.length > 0 && (
+          {(alerts.length > 0 || (breedingAlerts?.lotesProximosEnjaulado ?? 0) > 0 || (queenAlerts?.reinasViejas ?? 0) > 0) && (
             <span className="px-3 py-1 rounded-full bg-coral/20 text-coral text-xs font-semibold">
-              {alerts.length} {alerts.length === 1 ? 'alerta' : 'alertas'}
+              {(breedingAlerts?.lotesProximosEnjaulado ?? 0) + alerts.length + (queenAlerts?.reinasViejas ?? 0)} {(alerts.length + (breedingAlerts?.lotesProximosEnjaulado ?? 0) + (queenAlerts?.reinasViejas ?? 0)) === 1 ? 'alerta' : 'alertas'}
             </span>
           )}
         </div>
+
+        {queenAlerts && queenAlerts.reinasViejas > 0 && (
+          <motion.button
+            onClick={() => queenAlerts.onNavigate && queenAlerts.onNavigate()}
+            className="w-full text-left p-4 rounded-lg border border-coral/40 bg-coral/10 hover:bg-coral/20 transition-all mb-3"
+            whileHover={{ x: 4 }}
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">👑</span>
+              <div className="flex-1">
+                <p className="font-semibold text-cream mb-1">
+                  {queenAlerts.reinasViejas} {queenAlerts.reinasViejas === 1 ? 'colmena con reina vieja' : 'colmenas con reinas viejas'}
+                </p>
+                <p className="text-sm text-husk">Considera programar un recambio de reina</p>
+              </div>
+              <svg className="w-5 h-5 text-husk" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </motion.button>
+        )}
+
+        {breedingAlerts && breedingAlerts.lotesProximosEnjaulado > 0 && (
+          <motion.button
+            onClick={() => breedingAlerts.onNavigate && breedingAlerts.onNavigate()}
+            className="w-full text-left p-4 rounded-lg border border-honey/40 bg-honey/10 hover:bg-honey/20 transition-all mb-3"
+            whileHover={{ x: 4 }}
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">👑</span>
+              <div className="flex-1">
+                <p className="font-semibold text-cream mb-1">
+                  {breedingAlerts.lotesProximosEnjaulado} {breedingAlerts.lotesProximosEnjaulado === 1 ? 'lote próximo' : 'lotes próximos'} a enjaulado
+                </p>
+                <p className="text-sm text-husk">Revisa la pestaña Cría para más detalles</p>
+              </div>
+              <svg className="w-5 h-5 text-husk" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </motion.button>
+        )}
         
         {alerts.length === 0 ? (
           <div className="text-center py-8">
@@ -563,6 +647,49 @@ export default function Dashboard({
           </div>
         )}
       </Card>
+
+      {/* 2b. INVENTARIO - ALERTAS */}
+      {inventoryAlerts.length > 0 && (
+        <Card delay={0.45}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-xl font-bold text-cream">Inventario - Alertas</h3>
+            <button
+              onClick={() => onNavigate('inventario')}
+              className="text-xs text-honey hover:text-honeysoft transition-colors"
+            >
+              Ver inventario →
+            </button>
+          </div>
+          <div className="space-y-3">
+            {inventoryAlerts.map((item, index) => {
+              const disp = inventoryDisponible(item);
+              const ratio = item.cantidadTotal > 0 ? Math.min(1, Math.max(0, disp / item.cantidadTotal)) : 0;
+              return (
+                <motion.button
+                  key={item.id}
+                  onClick={() => onNavigate('inventario')}
+                  className="w-full text-left p-4 rounded-lg border border-coral/30 bg-coral/5 hover:bg-coral/10 transition-all"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + index * 0.08 }}
+                  whileHover={{ x: 4 }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-lg">📦</span>
+                      <p className="text-sm font-semibold text-cream truncate">{item.nombre}</p>
+                    </div>
+                    <p className="font-display text-lg font-black text-coral">{disp} <span className="text-[10px] font-mono text-husk">{item.unidad}</span></p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink">
+                    <div className="h-full rounded-full bg-coral" style={{ width: `${ratio * 100}%` }} />
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
       
       {/* Grid de 2 columnas para las siguientes secciones */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -639,6 +766,15 @@ export default function Dashboard({
         </Card>
       </div>
       
+      {/* 4b. PRÓXIMOS RECORDATORIOS */}
+      <Card delay={0.85}>
+        <RemindersWidget
+          reminders={reminders}
+          limit={5}
+          onNavigate={() => onNavigate('calendario')}
+        />
+      </Card>
+      
       {/* 5. ACCESOS RÁPIDOS */}
       <Card delay={0.9}>
         <h3 className="font-display text-xl font-bold text-cream mb-4">Accesos Rápidos</h3>
@@ -711,18 +847,70 @@ export default function Dashboard({
         
         {/* 7. CLIMA DEL APIARIO */}
         <Card delay={1.1}>
-          <h3 className="font-display text-xl font-bold text-cream mb-4">Clima del Apiario</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-xl font-bold text-cream">Clima del Apiario</h3>
+            {weatherLastUpdated && !weatherLoading && (
+              <span className="text-[10px] font-mono text-husk">{formatWeatherUpdated(weatherLastUpdated)}</span>
+            )}
+            {weatherLoading && (
+              <span className="flex items-center gap-1.5 text-[10px] font-mono text-husk">
+                <svg className="w-3 h-3 animate-spin text-honey" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                </svg>
+                actualizando...
+              </span>
+            )}
+          </div>
           
-          {weather ? (
+          {weatherLoading && !weather ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <div className="w-8 h-8 border-4 border-honey/20 border-t-honey rounded-full animate-spin" />
+              <p className="text-xs text-husk">Obteniendo clima para tu ubicación...</p>
+            </div>
+          ) : weatherError === 'denied' && !weather ? (
+            <div className="text-center py-8">
+              <div className="text-5xl mb-3">📍</div>
+              <p className="text-husk mb-3">Activa la ubicación para ver el clima real</p>
+              <motion.button
+                onClick={onRetryWeather}
+                className="px-4 py-2 rounded-xl bg-honey/10 hover:bg-honey/20 text-honey text-sm font-semibold transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Reintentar
+              </motion.button>
+            </div>
+          ) : weatherError === 'error' && !weather ? (
+            <div className="text-center py-8">
+              <div className="text-5xl mb-3">⚠️</div>
+              <p className="text-husk mb-3">No se pudo cargar el clima</p>
+              <motion.button
+                onClick={onRetryWeather}
+                className="px-4 py-2 rounded-xl bg-honey/10 hover:bg-honey/20 text-honey text-sm font-semibold transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Reintentar
+              </motion.button>
+            </div>
+          ) : weather ? (
             <div className="space-y-4">
+              {weatherError && (
+                <div className="flex items-center gap-2 text-coral/90 text-xs">
+                  <span>⚠️</span>
+                  <span>Mostrando último dato guardado</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-display text-5xl font-black text-cream">{weather.temperature}°C</p>
                   <p className="text-sm text-husk mt-1">{weather.condition}</p>
                 </div>
                 <div className="text-6xl">
-                  {weather.condition.toLowerCase().includes('sol') ? '☀️' : 
-                   weather.condition.toLowerCase().includes('nublado') ? '☁️' : 
+                  {weather.weatherCode !== undefined ? getWeatherEmoji(weather.weatherCode) :
+                   weather.condition.toLowerCase().includes('sol') ? '☀️' :
+                   weather.condition.toLowerCase().includes('nublado') ? '☁️' :
                    weather.condition.toLowerCase().includes('lluvia') ? '🌧️' : '⛅'}
                 </div>
               </div>
@@ -736,12 +924,26 @@ export default function Dashboard({
                   </div>
                 </div>
               </div>
+              
+              {weather.wind !== undefined && (
+                <div className="pt-4 border-t border-line">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">💨</span>
+                    <div>
+                      <p className="text-xs text-husk">Viento</p>
+                      <p className="text-lg font-semibold text-cream">
+                        {weather.wind} <span className="text-sm font-normal text-husk">km/h</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">
               <div className="text-5xl mb-3">🌤️</div>
               <p className="text-husk">Datos climáticos no disponibles</p>
-              <p className="text-xs text-husk mt-2">Configura la ubicación en Ajustes</p>
+              <p className="text-xs text-husk mt-2">Activa la ubicación para ver el clima real</p>
             </div>
           )}
         </Card>

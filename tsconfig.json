@@ -12,5 +12,6 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/services/firestoreApi.ts"]
 }

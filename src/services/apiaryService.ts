@@ -1,6 +1,7 @@
 // ============================================
 // SERVICIOS DE APIARIOS Y COLMENAS EN LOCALSTORAGE
 // ============================================
+import type { PhotoData } from './photos';
 
 // Interfaz para Apiario
 export interface Apiary {
@@ -12,6 +13,7 @@ export interface Apiary {
     lat: number;
     lng: number;
   };
+  fotos?: PhotoData[];
   createdAt: string;
   updatedAt: string;
 }
@@ -71,10 +73,11 @@ export async function createApiary(
   userId: string, 
   name: string, 
   location: string,
-  coordinates?: { lat: number; lng: number }
+  coordinates?: { lat: number; lng: number },
+  fotos?: PhotoData[]
 ): Promise<string> {
   console.log('🔍 [LOCALSTORAGE] === INICIO createApiary ===');
-  console.log('🔍 [LOCALSTORAGE] Parámetros recibidos:', { userId, name, location, coordinates });
+  console.log('🔍 [LOCALSTORAGE] Parámetros recibidos:', { userId, name, location, coordinates, fotosCount: fotos?.length });
   
   try {
     // Validar parámetros
@@ -101,6 +104,11 @@ export async function createApiary(
         lat: Number(coordinates.lat),
         lng: Number(coordinates.lng)
       };
+    }
+
+    // Guardar fotos del apiario
+    if (fotos && fotos.length > 0) {
+      apiaryData.fotos = fotos;
     }
 
     console.log('📝 [LOCALSTORAGE] Datos a guardar:', JSON.stringify(apiaryData, null, 2));

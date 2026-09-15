@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getUserApiaries, createApiary, type Apiary } from '../services/apiaryService';
+import PhotoUploader from './PhotoUploader';
+import type { PhotoData } from '../services/photos';
 
 export default function ApiarySelector() {
   const { user } = useAuth();
@@ -12,6 +14,7 @@ export default function ApiarySelector() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newApiaryName, setNewApiaryName] = useState('');
   const [newApiaryLocation, setNewApiaryLocation] = useState('');
+  const [newApiaryPhotos, setNewApiaryPhotos] = useState<PhotoData[]>([]);
   const [creating, setCreating] = useState(false);
 
   // Cargar apiarios del usuario
@@ -58,7 +61,9 @@ export default function ApiarySelector() {
       const apiaryId = await createApiary(
         user.uid, 
         newApiaryName, 
-        newApiaryLocation
+        newApiaryLocation,
+        undefined,
+        newApiaryPhotos
       );
       
       console.log('✅ [APIARY] Apiario creado exitosamente:', apiaryId);
@@ -70,6 +75,7 @@ export default function ApiarySelector() {
       // Limpiar formulario
       setNewApiaryName('');
       setNewApiaryLocation('');
+      setNewApiaryPhotos([]);
       setShowCreateForm(false);
       
       // Navegar al apiario recién creado usando Link nativo
@@ -161,6 +167,9 @@ export default function ApiarySelector() {
                     placeholder="Ej: Cochac, Independencia, Áncash"
                     className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-cream placeholder:text-husk/50 focus:border-honey focus:outline-none"
                   />
+                </div>
+                <div className="border-t border-line pt-4">
+                  <PhotoUploader photos={newApiaryPhotos} onPhotosChange={setNewApiaryPhotos} />
                 </div>
                 <div className="flex gap-3">
                   <motion.button

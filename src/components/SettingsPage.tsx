@@ -495,6 +495,98 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
                 ))}
               </div>
             </div>
+
+            {/* Configuración de alertas del calendario */}
+            <div className="p-4 bg-ink/50 rounded-lg space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-cream/80 mb-2">
+                  Avisar con cuántos días de antelación
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[1, 3, 7].map((days) => (
+                    <motion.button
+                      key={days}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() =>
+                        updateSettings({ notifications: { ...settings.notifications, daysBefore: days } })
+                      }
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        settings.notifications.daysBefore === days
+                          ? 'border-honey bg-honey/10'
+                          : 'border-line bg-ink'
+                      }`}
+                    >
+                      <div className="text-sm font-medium text-cream">
+                        {days} {days === 1 ? 'día' : 'días'}
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-cream/80 mb-2">
+                  Tipos de recordatorios a activar
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['inspections', 'Revisiones'],
+                    ['harvests', 'Cosechas'],
+                    ['breeding', 'Cría de reinas'],
+                    ['flowering', 'Floración'],
+                    ['tasks', 'Tareas'],
+                  ] as [keyof typeof settings.notifications.kinds, string][]).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() =>
+                        updateSettings({
+                          notifications: {
+                            ...settings.notifications,
+                            kinds: { ...settings.notifications.kinds, [key]: !settings.notifications.kinds[key] },
+                          },
+                        })
+                      }
+                      className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                        settings.notifications.kinds[key]
+                          ? 'border-honey bg-honey/10 text-cream'
+                          : 'border-line text-husk hover:border-honey/40'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-cream/80 mb-2">
+                  Cómo deseas recibir las notificaciones
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    ['visual', 'Solo visual'],
+                    ['push', 'Push (PWA)'],
+                  ] as ['visual' | 'push', string][]).map(([value, label]) => (
+                    <motion.button
+                      key={value}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() =>
+                        updateSettings({ notifications: { ...settings.notifications, delivery: value } })
+                      }
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        settings.notifications.delivery === value
+                          ? 'border-honey bg-honey/10'
+                          : 'border-line bg-ink/50'
+                      }`}
+                    >
+                      <div className="text-sm font-medium text-cream">{label}</div>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         );
 

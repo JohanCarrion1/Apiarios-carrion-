@@ -30,6 +30,7 @@ export interface CalendarEvent {
   reminders?: ReminderType[];
   isRecurrentInstance?: boolean; // Si es una instancia de un evento recurrente
   parentEventId?: string; // ID del evento padre si es recurrente
+  recurringTaskId?: string; // Si proviene de una tarea recurrente
 }
 
 export interface EventTemplate {
@@ -42,7 +43,7 @@ export interface EventTemplate {
 }
 
 // Tipos para notificaciones
-export type NotificationType = 'inspection_reminder' | 'treatment' | 'alert' | 'harvest' | 'queen_alert';
+export type NotificationType = 'inspection_reminder' | 'treatment' | 'alert' | 'harvest' | 'queen_alert' | 'stock_alert';
 
 export interface Notification {
   id: string;
@@ -74,6 +75,9 @@ export const EVENT_COLORS: Record<EventType, string> = {
   reminder: '#6fa8dc', // azul
   custom: '#f0a41c', // ámbar por defecto
 };
+
+// Color naranja para eventos de recordatorio/tarea recurrente
+export const RECURRING_EVENT_COLOR = '#f97316';
 
 // Etiquetas para tipos de eventos
 export const EVENT_LABELS: Record<EventType, string> = {

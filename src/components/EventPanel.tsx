@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import type { CalendarEvent, EventType } from '../types/calendar';
 import { EVENT_COLORS, EVENT_LABELS, PRIORITY_COLORS, PRIORITY_LABELS } from '../types/calendar';
 import type { Hive } from '../types/hive';
+import { formatHourFromTime } from '../utils/formatTime';
 
 interface EventPanelProps {
   selectedDate: Date | null;
@@ -208,7 +209,7 @@ export default function EventPanel({
 
                         <p className="text-xs text-husk mb-2">
                           {EVENT_LABELS[event.type]}
-                          {event.time && ` • ${event.time}`}
+                          {event.time && ` • ${formatHourFromTime(event.time)}`}
                           {hive && ` • ${hive.code}`}
                         </p>
 

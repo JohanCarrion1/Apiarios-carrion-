@@ -7,6 +7,22 @@ export interface PhotoData {
   size: number; // en bytes
 }
 
+// Límite típico de localStorage (~5MB por origen)
+export const LOCAL_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024;
+
+// Mensaje claro cuando se satura el almacenamiento
+export const STORAGE_FULL_MESSAGE = 'Almacenamiento lleno, elimina fotos antiguas';
+
+// Tamaño aproximado (en bytes) que ocuparían las fotos serializadas
+export function getPhotosSerializedSize(photos: PhotoData[]): number {
+  return photos.reduce((total, photo) => total + photo.data.length, 0);
+}
+
+// Verifica si las fotos (más margen de overhead del resto de datos) cabrían en localStorage
+export function wouldExceedStorageLimit(photos: PhotoData[], limitBytes: number = LOCAL_STORAGE_LIMIT_BYTES): boolean {
+  return getPhotosSerializedSize(photos) > limitBytes * 0.9;
+}
+
 export async function compressImage(
   file: File,
   maxWidth: number = 800,

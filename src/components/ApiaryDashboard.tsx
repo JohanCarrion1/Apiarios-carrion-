@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiary, getApiaryHives, type Apiary, type HiveWithApiary } from '../services/apiaryService';
 import type { Hive } from '../types/hive';
+import PhotoGallery from './PhotoGallery';
 
 interface ApiaryDashboardProps {
   apiaryId: string;
@@ -99,6 +100,17 @@ export default function ApiaryDashboard({ apiaryId }: ApiaryDashboardProps) {
             <p className="text-husk text-lg">{apiary.location}</p>
           )}
         </motion.div>
+
+        {/* Fotos del apiario */}
+        {apiary.fotos && apiary.fotos.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <PhotoGallery photos={apiary.fotos} />
+          </motion.div>
+        )}
 
         {/* Estadísticas del apiario */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

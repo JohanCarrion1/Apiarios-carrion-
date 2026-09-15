@@ -3,8 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format, subDays, isAfter, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import type { Hive } from "../types/hive";
+import type { CuadernoEntry } from "../types/breeding";
 import { IconClipboard, IconSearch, IconPlus, IconX } from "../ui";
 import { loadInspections, saveInspections } from '../utils/storage';
+import { formatHour } from '../utils/formatTime';
+import PhotoUploader from './PhotoUploader';
+import PhotoGallery from './PhotoGallery';
+import type { PhotoData } from '../services/photos';
 
 // Estructura REAL de inspección
 interface Inspection {
@@ -22,6 +27,7 @@ interface Inspection {
   weather: string;
   notes: string;
   observations: string;
+  photos?: PhotoData[];
   createdAt: string;
   updatedAt: string;
 }
@@ -120,9 +126,10 @@ const validateInspection = (data: Partial<Inspection>) => {
 
 interface Props {
   hives: Hive[];
+  cuadernoEntries?: CuadernoEntry[];
 }
 
-export default function NotebookSection({ hives }: Props) {
+export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -225,9 +232,28 @@ export default function NotebookSection({ hives }: Props) {
     );
   }, [filteredInspections]);
 
+  // Línea de tiempo combinada: inspecciones + entradas de cuaderno (cría)
+  const timeline = useMemo(() => {
+    const inspectionsItems = sortedInspections.map(i => ({
+      kind: 'inspection' as const,
+      date: i.date,
+      id: i.id,
+      data: i,
+    }));
+    const cuadernoItems = cuadernoEntries.map(e => ({
+      kind: 'cuaderno' as const,
+      date: e.date,
+      id: e.id,
+      data: e,
+    }));
+    return [...inspectionsItems, ...cuadernoItems].sort((a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [sortedInspections, cuadernoEntries]);
+
   // Paginación REAL
-  const paginatedInspections = sortedInspections.slice(0, page * itemsPerPage);
-  const hasMore = sortedInspections.length > page * itemsPerPage;
+  const paginatedTimeline = timeline.slice(0, page * itemsPerPage);
+  const hasMore = timeline.length > page * itemsPerPage;
 
   // Handlers REALES
   const handleCreate = (newInspection: Partial<Inspection>) => {
@@ -415,9 +441,9 @@ export default function NotebookSection({ hives }: Props) {
               <IconClipboard className="h-5 w-5" />
             </span>
             <div>
-              <h3 className="font-display text-xl font-bold text-cream">Historial de Inspecciones</h3>
+              <h3 className="font-display text-xl font-bold text-cream">Historial del Cuaderno</h3>
               <p className="font-mono text-[10px] uppercase tracking-widest text-husk">
-                Mostrando {paginatedInspections.length} de {sortedInspections.length}
+                Mostrando {paginatedTimeline.length} de {timeline.length}
               </p>
             </div>
           </div>
@@ -432,18 +458,47 @@ export default function NotebookSection({ hives }: Props) {
           </motion.button>
         </div>
 
-        {sortedInspections.length === 0 ? (
+        {timeline.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-5xl mb-3">📝</div>
-            <p className="text-husk">No hay inspecciones registradas</p>
+            <p className="text-husk">No hay registros en el cuaderno</p>
             <p className="text-xs text-husk mt-2">
-              {searchQuery || filters.hive !== 'all' ? "Intenta con otra búsqueda" : "Registra tu primera inspección"}
+              {searchQuery || filters.hive !== 'all' ? "Intenta con otra búsqueda" : "Registra tu primera inspección o crea un lote de cría"}
             </p>
           </div>
         ) : (
           <>
             <div className="divide-y divide-line">
-              {paginatedInspections.map((inspection, index) => {
+              {paginatedTimeline.map((item, index) => {
+                if (item.kind === 'cuaderno') {
+                  const entry = item.data;
+                  return (
+                    <motion.div
+                      key={entry.id}
+                      className="py-4 first:pt-0"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="w-1 shrink-0 self-stretch rounded-full bg-honey" />
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="rounded-md border border-honey/40 bg-honey/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-honey">
+                              👑 Cría
+                            </span>
+                            <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
+                              {format(new Date(entry.date), 'dd/MM/yyyy')} {formatHour(new Date(entry.date))}
+                            </span>
+                          </div>
+                          <p className="text-sm text-cream">{entry.text}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                const inspection = item.data;
                 const hive = hives.find(h => h.id === inspection.hiveId);
                 return (
                   <motion.div
@@ -462,7 +517,7 @@ export default function NotebookSection({ hives }: Props) {
                             {hive?.code || '—'}
                           </span>
                           <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
-                            {format(new Date(inspection.date), 'dd/MM/yyyy HH:mm')}
+                            {format(new Date(inspection.date), 'dd/MM/yyyy')} {formatHour(new Date(`${inspection.date}T${inspection.time || '00:00'}`))}
                           </span>
                           {inspection.queenSeen && (
                             <span className="text-[10px] text-sage">👑 Reina vista</span>
@@ -503,7 +558,7 @@ export default function NotebookSection({ hives }: Props) {
                   onClick={() => setPage(page + 1)}
                   className="rounded-xl border border-line px-6 py-2 text-sm font-medium text-husk hover:text-cream hover:border-honey/50"
                 >
-                  Cargar más ({sortedInspections.length - paginatedInspections.length} restantes)
+                  Cargar más ({timeline.length - paginatedTimeline.length} restantes)
                 </button>
               </div>
             )}
@@ -605,7 +660,7 @@ function InspectionDetailModal({
               Inspección de {hive?.code || 'Colmena'}
             </h3>
             <p className="text-sm text-husk">
-              {format(new Date(inspection.date), 'EEEE, d MMMM yyyy HH:mm', { locale: es })}
+              {format(new Date(inspection.date), 'EEEE, d MMMM yyyy', { locale: es })} {formatHour(new Date(`${inspection.date}T${inspection.time || '00:00'}`))}
             </p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-ink/50 hover:bg-ink/70 flex items-center justify-center">
@@ -643,6 +698,15 @@ function InspectionDetailModal({
           <div className="card p-4 mb-6">
             <p className="text-xs font-mono uppercase tracking-wider text-husk mb-2">Notas</p>
             <p className="text-sm italic text-husk">"{inspection.notes}"</p>
+          </div>
+        )}
+
+        {inspection.photos && inspection.photos.length > 0 && (
+          <div className="card p-4 mb-6">
+            <p className="text-xs font-mono uppercase tracking-wider text-husk mb-2">
+              Fotos ({inspection.photos.length})
+            </p>
+            <PhotoGallery photos={inspection.photos} />
           </div>
         )}
 
@@ -703,6 +767,7 @@ function InspectionForm({
     }
   );
   const [errors, setErrors] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<PhotoData[]>(inspection?.photos || []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -711,7 +776,7 @@ function InspectionForm({
       setErrors(validation.errors);
       return;
     }
-    onSave(formData);
+    onSave({ ...formData, photos });
   };
 
   const loadTemplate = (templateId: string) => {
@@ -961,6 +1026,10 @@ function InspectionForm({
               className="w-full rounded-xl border border-line bg-ink px-4 py-2 text-sm text-cream"
               rows={2}
             />
+          </div>
+
+          <div className="border-t border-line pt-4">
+            <PhotoUploader photos={photos} onPhotosChange={setPhotos} />
           </div>
 
           <div className="flex gap-2">

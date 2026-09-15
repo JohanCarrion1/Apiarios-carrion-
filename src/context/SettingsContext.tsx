@@ -18,6 +18,15 @@ interface Settings {
     harvests: boolean;
     sound: boolean;
     frequency: 'immediate' | '1day' | '3days';
+    daysBefore: number;
+    kinds: {
+      inspections: boolean;
+      harvests: boolean;
+      breeding: boolean;
+      flowering: boolean;
+      tasks: boolean;
+    };
+    delivery: 'visual' | 'push';
   };
   photos: {
     enabled: boolean;
@@ -52,6 +61,15 @@ const defaultSettings: Settings = {
     harvests: true,
     sound: true,
     frequency: 'immediate',
+    daysBefore: 3,
+    kinds: {
+      inspections: true,
+      harvests: true,
+      breeding: true,
+      flowering: true,
+      tasks: true,
+    },
+    delivery: 'visual',
   },
   photos: {
     enabled: true,
@@ -68,7 +86,24 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => {
     const saved = localStorage.getItem('settings');
-    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+    if (!saved) return defaultSettings;
+    try {
+      const parsed = JSON.parse(saved);
+      return {
+        ...defaultSettings,
+        ...parsed,
+        notifications: {
+          ...defaultSettings.notifications,
+          ...(parsed.notifications || {}),
+          kinds: {
+            ...defaultSettings.notifications.kinds,
+            ...(parsed.notifications?.kinds || {}),
+          },
+        },
+      };
+    } catch {
+      return defaultSettings;
+    }
   });
 
   useEffect(() => {

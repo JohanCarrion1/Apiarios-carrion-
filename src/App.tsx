@@ -1,12 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   uid,
   type Toast,
 } from "./data";
-import { useClock, useReveal } from "./hooks";
-import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests } from './utils/storage';
+import { useClock, useReveal, useWeather } from "./hooks";
+import { getWeatherDescription } from "./services/weather";
+import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests, saveHarvests, loadEvents, saveEvents, loadBreedingLots, saveBreedingLots, loadCuadernoEntries, saveCuadernoEntries, loadQueens, saveQueens, loadQueenHistory, saveQueenHistory, loadInventory, saveInventory } from './utils/storage';
+import { formatHour } from './utils/formatTime';
+import type { Queen, QueenChange, QueenChangeReason } from './types/queen';
+import { getQueenAlert, queenColorForYear } from './types/queen';
+import type { InventoryItem } from './types/inventory';
+import { inventoryDisponible, isStockBajo } from './types/inventory';
+import InventorySection from './components/InventorySection';
+import QueenForm from './components/QueenForm';
+import type { QueenFormData } from './components/QueenForm';
+import QueenLostModal from './components/QueenLostModal';
 import {
   IconBee,
   IconCheck,
@@ -20,6 +30,8 @@ import {
   IconSun,
   IconWind,
   IconChart,
+  IconQueen,
+  IconPackage,
   SectionHead,
   IconCalendar,
 } from "./ui";
@@ -36,26 +48,43 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./components/Login";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
-import { SettingsProvider } from "./context/SettingsContext";
+import { SettingsProvider, useSettings } from "./context/SettingsContext";
 import { ActiveApiaryProvider } from "./context/ActiveApiaryContext";
 
 import { ResponsiveHeader } from "./components/ResponsiveHeader";
 import { FadeInUp } from "./components/Animations";
+import { InstallPrompt, PWAUpdateToast } from "./components/InstallPrompt";
 import type { Hive, Inspection, Task } from "./types/hive";
+import type { CalendarEvent, Notification } from "./types/calendar";
+import type { RecurringTask, FloweringEntry } from "./types/reminders";
+import { computeReminders } from "./utils/reminders";
+import {
+  loadRecurringTasks,
+  saveRecurringTasks,
+  loadFloweringEntries,
+  saveFloweringEntries,
+  loadNotifications,
+  saveNotifications,
+} from "./utils/storage";
 import AddHiveModal from "./components/AddHiveModal";
 import StatsSection from "./components/StatsSection";
 import CalendarSection from "./components/CalendarSection";
 import SettingsPage from "./components/SettingsPage";
 import ApiaryFlow from "./components/ApiaryFlow";
+import BreedingSection from "./components/BreedingSection";
+import type { BreedingLot, CuadernoEntry } from "./types/breeding";
+import { differenceInDays } from "date-fns";
 
 const NAV = [
   { id: "panel", label: "Panel", icon: IconPanel },
   { id: "colmenas", label: "Colmenas", icon: IconHex },
+  { id: "cria", label: "Cría", icon: IconQueen },
   { id: "estadisticas", label: "Estadísticas", icon: IconChart },
   { id: "calendario", label: "Calendario", icon: IconCalendar },
   { id: "produccion", label: "Cosecha", icon: IconDrop },
   { id: "registro", label: "Cuaderno", icon: IconClipboard },
   { id: "tareas", label: "Tareas", icon: IconCheck },
+  { id: "inventario", label: "Inventario", icon: IconPackage },
 ] as const;
 
 /* ---------- ambiente ---------- */
@@ -90,14 +119,14 @@ function Ambient() {
 
 /* ---------- cabecera de página ---------- */
 
-function IntroHead({ temp, wind, activity, apiaryName, apiaryLocation }: { temp: number; wind: number; activity: number; apiaryName: string; apiaryLocation: string }) {
+function IntroHead({ temp, wind, activity, apiaryName, apiaryLocation }: { temp: number | null; wind: number | null; activity: number; apiaryName: string; apiaryLocation: string }) {
   const now = useClock();
   const { ref, inView } = useReveal();
   const dateCap = (() => {
     const s = now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
     return s.charAt(0).toUpperCase() + s.slice(1);
   })();
-  const time = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  const time = formatHour(now);
 
   return (
     <motion.header 
@@ -139,18 +168,17 @@ function IntroHead({ temp, wind, activity, apiaryName, apiaryLocation }: { temp:
           <p className="tick-label">{dateCap}</p>
           <p className="mt-1 font-mono text-xl sm:text-2xl font-bold leading-none text-cream">
             {time}
-            <span className="ml-1 text-xs font-normal text-husk">h</span>
           </p>
         </div>
         <div className="hidden h-11 w-px bg-line sm:block" />
         <div className="flex items-center gap-3 sm:gap-4">
           <span className="flex items-center gap-1.5 font-mono text-xs sm:text-sm font-semibold text-cream">
             <IconSun className="h-4 w-4 text-honey" />
-            {temp.toFixed(1)}°
+            {temp !== null ? temp.toFixed(1) : '--'}°
           </span>
           <span className="flex items-center gap-1.5 font-mono text-xs sm:text-sm font-semibold text-cream">
             <IconWind className="h-4 w-4 text-husk" />
-            {wind}
+            {wind !== null ? wind : '--'}
             <span className="text-[10px] font-normal text-husk">km/h</span>
           </span>
         </div>
@@ -246,6 +274,8 @@ export default function App() {
               <Route path="/" element={<Navigate to="/seleccionar" replace />} />
               <Route path="*" element={<Navigate to="/seleccionar" replace />} />
             </Routes>
+            <InstallPrompt />
+            <PWAUpdateToast />
             </ActiveApiaryProvider>
           </AuthProvider>
         </LanguageProvider>
@@ -279,6 +309,49 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [nuclei, setNuclei] = useState<Hive[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [harvests, setHarvests] = useState<any[]>([]);
+  const [breedingLots, setBreedingLots] = useState<BreedingLot[]>([]);
+  const [cuadernoEntries, setCuadernoEntries] = useState<CuadernoEntry[]>([]);
+  const [queens, setQueens] = useState<Queen[]>([]);
+  const [queenHistory, setQueenHistory] = useState<QueenChange[]>([]);
+
+  // Calendario: eventos, tareas recurrentes y floración (compartidos entre secciones)
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
+  const [floweringEntries, setFloweringEntries] = useState<FloweringEntry[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>(() => loadNotifications());
+
+  // Inventario de material, herramientas e insumos (compartido entre apiarios)
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
+  const { settings } = useSettings();
+  const notificationCfg = settings.notifications;
+  const alertDaysBefore =
+    typeof notificationCfg.daysBefore === 'number' && notificationCfg.daysBefore > 0
+      ? notificationCfg.daysBefore
+      : 3;
+  const enabledKinds = {
+    inspections: notificationCfg.kinds?.inspections ?? true,
+    harvests: notificationCfg.kinds?.harvests ?? true,
+    breeding: notificationCfg.kinds?.breeding ?? true,
+    flowering: notificationCfg.kinds?.flowering ?? true,
+    tasks: notificationCfg.kinds?.tasks ?? true,
+  };
+
+  // Recordatorios calculados (campanita + widget del panel)
+  const reminders = useMemo(
+    () =>
+      computeReminders({
+        events,
+        breedingLots,
+        recurringTasks,
+        floweringEntries,
+        hives,
+        daysBefore: alertDaysBefore,
+        enabledKinds,
+      }),
+    [events, breedingLots, recurringTasks, floweringEntries, hives, alertDaysBefore, enabledKinds]
+  );
 
   // Estados para colmenas
   const [selectedId, setSelectedId] = useState<string>("");
@@ -294,11 +367,21 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [showAddNucleusModal, setShowAddNucleusModal] = useState(false);
   const [editingNucleus, setEditingNucleus] = useState<Hive | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeSection, setActiveSection] = useState<"panel" | "colmenas" | "estadisticas" | "calendario" | "produccion" | "registro" | "tareas">("panel");
+  const [activeSection, setActiveSection] = useState<"panel" | "colmenas" | "cria" | "estadisticas" | "calendario" | "produccion" | "registro" | "tareas" | "inventario">("panel");
   const [showSettingsPage, setShowSettingsPage] = useState(false);
 
-  const [temp, setTemp] = useState(22.4);
-  const [wind, setWind] = useState(11);
+  // Estados para reinas
+  const [queenModal, setQueenModal] = useState<{
+    open: boolean;
+    hive: Hive | null;
+    queen: Queen | null;
+    mode: 'create' | 'edit' | 'change';
+  }>({ open: false, hive: null, queen: null, mode: 'create' });
+  const [lostQueen, setLostQueen] = useState<Queen | null>(null);
+  const [criaFocusLotId, setCriaFocusLotId] = useState<string | null>(null);
+
+  const [temp, setTemp] = useState<number | null>(null);
+  const [wind, setWind] = useState<number | null>(null);
 
   // Cargar datos del apiario
   useEffect(() => {
@@ -339,24 +422,54 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       const loadedNuclei = loadNuclei(storageKeySuffix);
       const loadedInspections = loadInspections(storageKeySuffix);
       const loadedTasks = loadTasks(storageKeySuffix);
+      const loadedHarvestsData = loadHarvests(storageKeySuffix);
+      const loadedBreedingLots = loadBreedingLots(user.uid, apiaryId);
+      const loadedCuadernoEntries = loadCuadernoEntries(user.uid, apiaryId);
+      const loadedQueens = loadQueens(user.uid, apiaryId);
+      const loadedQueenHistory = loadQueenHistory(user.uid, apiaryId);
+      const loadedEvents = loadEvents();
+      const loadedRecurringTasks = loadRecurringTasks();
+      const loadedFloweringEntries = loadFloweringEntries();
+      const loadedInventory = loadInventory(user.uid);
       
       console.log('🟣 [DASHBOARD] Datos cargados:', {
         hives: loadedHives.length,
         nuclei: loadedNuclei.length,
         inspections: loadedInspections.length,
-        tasks: loadedTasks.length
+        tasks: loadedTasks.length,
+        harvests: loadedHarvestsData.length,
+        breedingLots: loadedBreedingLots.length,
+        queens: loadedQueens.length,
       });
       
       setHives(loadedHives);
       setNuclei(loadedNuclei);
       setInspections(loadedInspections);
       setTasks(loadedTasks);
+      setHarvests(loadedHarvestsData);
+      setBreedingLots(loadedBreedingLots);
+      setCuadernoEntries(loadedCuadernoEntries);
+      setQueens(loadedQueens);
+      setQueenHistory(loadedQueenHistory);
+      setEvents(loadedEvents);
+      setRecurringTasks(loadedRecurringTasks);
+      setFloweringEntries(loadedFloweringEntries);
+      setInventory(loadedInventory);
     } else {
       // Si no hay apiario activo, limpiar datos
       setHives([]);
       setNuclei([]);
       setInspections([]);
       setTasks([]);
+      setHarvests([]);
+      setBreedingLots([]);
+      setCuadernoEntries([]);
+      setQueens([]);
+      setQueenHistory([]);
+      setEvents([]);
+      setRecurringTasks([]);
+      setFloweringEntries([]);
+      setInventory([]);
     }
   }, [user, apiaryId]);
 
@@ -389,6 +502,126 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     }
   }, [tasks, user, apiaryId]);
 
+  useEffect(() => {
+    if (user && apiaryId) {
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveHarvests(harvests, storageKeySuffix);
+    }
+  }, [harvests, user, apiaryId]);
+
+  useEffect(() => {
+    if (user && apiaryId) {
+      saveBreedingLots(breedingLots, user.uid, apiaryId);
+    }
+  }, [breedingLots, user, apiaryId]);
+
+  useEffect(() => {
+    if (user && apiaryId) {
+      saveCuadernoEntries(cuadernoEntries, user.uid, apiaryId);
+    }
+  }, [cuadernoEntries, user, apiaryId]);
+
+  useEffect(() => {
+    if (user && apiaryId) {
+      saveQueens(queens, user.uid, apiaryId);
+    }
+  }, [queens, user, apiaryId]);
+
+  useEffect(() => {
+    if (user && apiaryId) {
+      saveQueenHistory(queenHistory, user.uid, apiaryId);
+    }
+  }, [queenHistory, user, apiaryId]);
+
+  // Guardar inventario (solo por usuario, compartido entre apiarios)
+  useEffect(() => {
+    if (user) {
+      saveInventory(inventory, user.uid);
+    }
+  }, [inventory, user]);
+
+  // Guardar calendario (eventos, tareas recurrentes, floración, notificaciones)
+  useEffect(() => {
+    saveEvents(events);
+  }, [events]);
+
+  useEffect(() => {
+    saveRecurringTasks(recurringTasks);
+  }, [recurringTasks]);
+
+  useEffect(() => {
+    saveFloweringEntries(floweringEntries);
+  }, [floweringEntries]);
+
+  useEffect(() => {
+    saveNotifications(notifications);
+  }, [notifications]);
+
+  // Sincronizar recordatorios calculados con la lista persistente de notificaciones
+  useEffect(() => {
+    if (!user) return;
+    setNotifications(prev => {
+      const existing = new Set(prev.map(n => n.id));
+      const newNotifs: Notification[] = reminders.flatMap(r => {
+        const id = `${r.kind}_${r.dateKey}_${r.title}_${r.eventId || ''}`;
+        if (existing.has(id)) return [];
+        const type: Notification['type'] =
+          r.kind === 'inspection'
+            ? 'inspection_reminder'
+            : r.kind === 'treatment'
+            ? 'treatment'
+            : r.kind === 'harvest'
+            ? 'harvest'
+            : 'alert';
+        return [{
+          id,
+          type,
+          title: r.title,
+          description: r.description || '',
+          eventId: r.eventId,
+          read: false,
+          createdAt: new Date().toISOString(),
+        }];
+      });
+      if (newNotifs.length === 0) return prev;
+      return [...newNotifs, ...prev].slice(0, 50);
+    });
+  }, [reminders, user]);
+
+  // Alertas de stock bajo → notificaciones en la campanita
+  useEffect(() => {
+    if (!user) return;
+    const lowItems = inventory.filter(isStockBajo);
+    setNotifications(prev => {
+      const stockIds = new Set(lowItems.map(i => `stock_${i.id}`));
+      // Quitar notificaciones de stock de ítems que ya no están bajos
+      const kept = prev.filter(n => !(n.id.startsWith('stock_') && !stockIds.has(n.id)));
+      const existing = new Set(kept.map(n => n.id));
+      const newNotifs: Notification[] = lowItems.flatMap(i => {
+        const id = `stock_${i.id}`;
+        if (existing.has(id)) return [];
+        const disp = inventoryDisponible(i);
+        return [{
+          id,
+          type: 'stock_alert' as const,
+          title: `Stock bajo: ${i.nombre}`,
+          description: `${disp} ${i.unidad} restantes`,
+          read: false,
+          createdAt: new Date().toISOString(),
+        }];
+      });
+      if (newNotifs.length === 0 && kept.length === prev.length) return prev;
+      return [...newNotifs, ...kept].slice(0, 50);
+    });
+  }, [inventory, user]);
+
+  // Inventario: ítems críticos para el widget del panel
+  const inventoryLowStockCount = useMemo(() => inventory.filter(isStockBajo).length, [inventory]);
+  const inventoryAlerts = useMemo(
+    () => [...inventory].filter(isStockBajo).sort((a, b) => inventoryDisponible(a) - inventoryDisponible(b)).slice(0, 5),
+    [inventory]
+  );
+
   // Seleccionar primera colmena cuando se cargan
   useEffect(() => {
     if (hives.length > 0 && !selectedId) {
@@ -396,15 +629,29 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     }
   }, [hives, selectedId]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setTemp((t) => +Math.min(24.5, Math.max(20.5, t + (Math.random() - 0.5) * 0.6)).toFixed(1));
-      setWind((w) => Math.round(Math.min(16, Math.max(7, w + (Math.random() - 0.5) * 3))));
-    }, 4500);
-    return () => clearInterval(id);
-  }, []);
+  // Clima en tiempo real basado en la ubicación GPS real del dispositivo
+  const apiaryCoords = useMemo(() => {
+    const apiary = apiaries.find((a: any) => a.id === apiaryId);
+    return apiary?.coordinates ? { lat: apiary.coordinates.lat, lng: apiary.coordinates.lng } : null;
+  }, [apiaries, apiaryId]);
 
-  const activity = Math.min(98, Math.max(5, Math.round(20 + (temp - 15) * 8 - wind * 1.4)));
+  const {
+    weather: realWeather,
+    loading: weatherLoading,
+    error: weatherError,
+    lastUpdated: weatherLastUpdated,
+    usingCache: weatherUsingCache,
+    retry: retryWeather,
+  } = useWeather(user?.uid, apiaryId, apiaryCoords);
+
+  useEffect(() => {
+    if (realWeather) {
+      setTemp(realWeather.current.temperature);
+      setWind(realWeather.current.windSpeed);
+    }
+  }, [realWeather]);
+
+  const activity = Math.min(98, Math.max(5, Math.round(20 + ((temp ?? 15) - 15) * 8 - (wind ?? 8) * 1.4)));
   const selectedHive = hives.find((h) => h.id === selectedId);
   const pending = tasks.filter((t) => !t.completed).length;
 
@@ -437,6 +684,8 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     setHives(prev => prev.filter(h => h.id !== id));
     setInspections(prev => prev.filter(i => i.hiveId !== id));
     setTasks(prev => prev.filter(t => t.hiveId !== id));
+    setQueens(prev => prev.filter(q => q.hiveId !== id));
+    setQueenHistory(prev => prev.filter(h => h.hiveId !== id));
     
     if (selectedId === id) {
       const remainingHives = hives.filter(h => h.id !== id);
@@ -469,6 +718,8 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     setNuclei(prev => prev.filter(n => n.id !== id));
     setInspections(prev => prev.filter(i => i.hiveId !== id));
     setTasks(prev => prev.filter(t => t.hiveId !== id));
+    setQueens(prev => prev.filter(q => q.hiveId !== id));
+    setQueenHistory(prev => prev.filter(h => h.hiveId !== id));
     
     if (selectedNucleusId === id) {
       const remainingNuclei = nuclei.filter(n => n.id !== id);
@@ -488,6 +739,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       varroa: d.varroa,
       calm: d.calm,
       note: d.note,
+      fotos: d.photos,
     };
     setInspections(prev => [inspection, ...prev]);
     setModalHive(null);
@@ -530,6 +782,174 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     pushToast("Tarea eliminada");
   };
 
+  // Integración con Calendario: crear/eliminar eventos de cría
+  const addCalendarEvent = (eventData: { title: string; date: string; description: string }) => {
+    const newEvent: CalendarEvent = {
+      id: uid(),
+      type: 'task',
+      title: eventData.title,
+      description: eventData.description,
+      date: eventData.date,
+      priority: 'high',
+      completed: false,
+      createdAt: new Date().toISOString(),
+    };
+    setEvents(prev => (prev.some(e => e.id === newEvent.id) ? prev : [...prev, newEvent]));
+  };
+
+  const deleteCalendarEvent = (pattern: string) => {
+    setEvents(prev => prev.filter(e => e.title !== pattern));
+  };
+
+  // Campanita de notificaciones
+  const markNotificationAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const handleNotificationClick = () => {
+    setActiveSection('calendario');
+  };
+
+  // Integración con Cuaderno: registro automático
+  const addCuadernoEntry = (text: string) => {
+    const entry: CuadernoEntry = {
+      id: uid(),
+      date: new Date().toISOString(),
+      text,
+      type: 'breeding',
+    };
+    setCuadernoEntries(prev => [entry, ...prev]);
+  };
+
+  // ============================================
+  // REINAS: seguimiento por colmena/núcleo
+  // ============================================
+  const allColonies = [...hives, ...nuclei];
+  const getHiveCode = (hiveId: string) => allColonies.find(h => h.id === hiveId)?.code ?? '';
+
+  const getColonyLabel = (id: string) => {
+    const colony = allColonies.find(c => c.id === id);
+    return colony ? `${colony.code}${colony.name ? ` · ${colony.name}` : ''}` : '—';
+  };
+
+  const getLotLabel = (id: string) => {
+    const lot = breedingLots.find(l => l.id === id);
+    return lot
+      ? `Lote ${id.slice(-6).toUpperCase()} · ${lot.tipo}`
+      : `Lote ${id.slice(-6).toUpperCase()}`;
+  };
+
+  const handleOpenRegisterQueen = (hive: Hive) => {
+    setQueenModal({ open: true, hive, queen: null, mode: 'create' });
+  };
+
+  const handleOpenEditQueen = (queen: Queen) => {
+    const hive = allColonies.find(h => h.id === queen.hiveId) ?? null;
+    setQueenModal({ open: true, hive, queen, mode: 'edit' });
+  };
+
+  const handleOpenChangeQueen = (queen: Queen, hive: Hive) => {
+    setQueenModal({ open: true, hive, queen, mode: 'change' });
+  };
+
+  const handleCloseQueenModal = () => {
+    setQueenModal(prev => ({ ...prev, open: false }));
+  };
+
+  const handleQueenSubmit = (data: QueenFormData, reason?: QueenChangeReason) => {
+    const { queen, mode, hive } = queenModal;
+    const now = new Date().toISOString();
+    const hiveId = queen?.hiveId || hive?.id;
+    if (!hiveId) {
+      handleCloseQueenModal();
+      return;
+    }
+
+    if (mode === 'edit' && queen) {
+      setQueens(prev => prev.map(q => q.id === queen.id ? { ...q, ...data } : q));
+      pushToast('Reina actualizada', getHiveCode(hiveId));
+    } else {
+      const newQueen: Queen = {
+        id: uid(),
+        hiveId,
+        ...data,
+        estado: 'activa',
+        createdAt: now,
+      };
+      if (mode === 'change' && queen) {
+        setQueens(prev => [
+          newQueen,
+          ...prev.map(q => q.id === queen.id ? ({ ...q, estado: 'cambiada', fechaCambio: now } as Queen) : q),
+        ]);
+        setQueenHistory(prev => [{
+          id: uid(),
+          hiveId,
+          queenId: newQueen.id,
+          fecha: now,
+          razon: reason ?? 'recambio',
+        }, ...prev]);
+        pushToast('Cambio de reina registrado', getHiveCode(hiveId));
+      } else {
+        setQueens(prev => [newQueen, ...prev]);
+        pushToast(mode === 'change' ? 'Cambio de reina registrado' : 'Reina registrada', getHiveCode(hiveId));
+      }
+    }
+
+    handleCloseQueenModal();
+  };
+
+  const handleMarkQueenLost = (queen: Queen, nota: string) => {
+    const now = new Date().toISOString();
+    setQueens(prev => prev.map(q => q.id === queen.id
+      ? { ...q, estado: 'perdida', fechaCambio: now, notas: nota ? nota : q.notas }
+      : q
+    ));
+    setQueenHistory(prev => [{
+      id: uid(),
+      hiveId: queen.hiveId,
+      queenId: queen.id,
+      fecha: now,
+      razon: 'perdida',
+      nota: nota || undefined,
+    }, ...prev]);
+    pushToast('Reina marcada como perdida', getHiveCode(queen.hiveId));
+    setLostQueen(null);
+  };
+
+  const handleAssignQueenFromLot = (lotId: string, hiveId: string) => {
+    const lot = breedingLots.find(l => l.id === lotId);
+    if (!lot) return;
+    const now = new Date().toISOString();
+    const newQueen: Queen = {
+      id: uid(),
+      hiveId,
+      fechaNacimiento: now.split('T')[0],
+      origen: 'lote',
+      loteId: lotId,
+      colorAño: queenColorForYear(new Date().getFullYear()),
+      caracteristicas: [],
+      notas: 'Reina asignada desde lote de cría',
+      estado: 'activa',
+      createdAt: now,
+    };
+    setQueens(prev => [newQueen, ...prev]);
+    pushToast('Reina asignada a colmena', getHiveCode(hiveId));
+  };
+
+  // Alertas de cría para el panel principal
+  const breedingAlertCount = breedingLots.filter((lot) => {
+    if (lot.estado !== 'enRealeras' && lot.estado !== 'enjauladas') return false;
+    const days = differenceInDays(new Date(lot.fechaEnjauladoEstimada), new Date());
+    return days >= 0 && days <= 1;
+  }).length;
+
+  // Colmenas con reinas viejas (> 12 semanas) para el panel principal
+  const oldQueenCount = queens.filter(q => q.estado === 'activa' && getQueenAlert(q)?.nivel === 'vieja').length;
+
   const jumpTo = (id: string) => {
     setActiveSection(id as typeof activeSection);
   };
@@ -544,6 +964,11 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
         onSettings={() => setShowSettingsPage(true)}
         onHome={() => navigate('/seleccionar')}
         activeSection={activeSection}
+        notifications={notifications}
+        onMarkAsRead={markNotificationAsRead}
+        onMarkAllAsRead={markAllNotificationsAsRead}
+        onNotificationClick={handleNotificationClick}
+        inventoryAlertsCount={inventoryLowStockCount}
       />
 
       {/* contenido */}
@@ -573,12 +998,29 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   onAddTask={() => {
                     setActiveSection('tareas');
                   }}
-                  weather={{
-                    temperature: 22,
-                    condition: 'Parcialmente nublado',
-                    rainProbability: 30
+                  weather={realWeather ? {
+                    temperature: realWeather.current.temperature,
+                    wind: realWeather.current.windSpeed,
+                    condition: getWeatherDescription(realWeather.current.weatherCode),
+                    rainProbability: realWeather.daily[0]?.precipitationProbability ?? 0,
+                    weatherCode: realWeather.current.weatherCode,
+                    isDay: realWeather.current.isDay,
+                  } : undefined}
+                  weatherLoading={weatherLoading}
+                  weatherError={weatherError}
+                  weatherLastUpdated={weatherLastUpdated}
+                  weatherUsingCache={weatherUsingCache}
+                  onRetryWeather={retryWeather}
+                  breedingAlerts={{
+                    lotesProximosEnjaulado: breedingAlertCount,
+                    onNavigate: () => setActiveSection('cria'),
                   }}
-                  apiaryName={apiaryName}
+queenAlerts={{
+                  reinasViejas: oldQueenCount,
+                  onNavigate: () => setActiveSection('colmenas'),
+                }}
+                inventoryAlerts={inventoryAlerts}
+                apiaryName={apiaryName}
                   apiaryLocation={apiaryLocation}
                   onChangeApiary={handleChangeApiary}
                   apiaries={apiaries}
@@ -590,6 +1032,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                       navigate('/apiarios');
                     }
                   }}
+                  reminders={reminders}
                 />
               </motion.section>
             )}
@@ -629,6 +1072,43 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   onInspectHive={(id) => setModalHive(id)}
                   onInspectNucleus={handleInspectNucleus}
                   onShowToast={pushToast}
+                  onUpdateHivePhotos={(id, fotos) => updateHive(id, { fotos })}
+                  onUpdateNucleusPhotos={(id, fotos) => updateNucleus(id, { fotos })}
+                  queens={queens}
+                  queenHistory={queenHistory}
+                  onRegisterQueen={handleOpenRegisterQueen}
+                  onEditQueen={handleOpenEditQueen}
+                  onChangeQueen={handleOpenChangeQueen}
+                  onMarkQueenLost={setLostQueen}
+                  breedingLots={breedingLots}
+                  onShowQueenLot={(loteId) => {
+                    setCriaFocusLotId(loteId);
+                    setActiveSection('cria');
+                  }}
+                />
+              </motion.section>
+            )}
+
+            {activeSection === 'cria' && (
+              <motion.section
+                key="cria"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <BreedingSection
+                  hives={hives}
+                  nuclei={nuclei}
+                  breedingLots={breedingLots}
+                  onUpdateLots={setBreedingLots}
+                  onAddCalendarEvent={addCalendarEvent}
+                  onDeleteCalendarEvent={deleteCalendarEvent}
+                  onAddCuadernoEntry={addCuadernoEntry}
+                  queens={queens}
+                  focusLotId={criaFocusLotId}
+                  onConsumeFocusLot={() => setCriaFocusLotId(null)}
+                  onAssignQueenFromLot={handleAssignQueenFromLot}
                 />
               </motion.section>
             )}
@@ -646,7 +1126,15 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   title="Estadísticas"
                   right={<p className="font-mono text-xs text-husk">datos en tiempo real</p>}
                 />
-                <StatsSection />
+                <StatsSection
+                  hives={hives}
+                  nuclei={nuclei}
+                  inspections={inspections}
+                  tasks={tasks}
+                  harvests={harvests}
+                  breedingLots={breedingLots}
+                  storageSuffix={user && apiaryId ? `_${user.uid}_${apiaryId}` : ''}
+                />
               </motion.section>
             )}
 
@@ -663,7 +1151,18 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   title="Calendario"
                   right={<p className="font-mono text-xs text-husk">gestiona tus actividades</p>}
                 />
-                <CalendarSection hives={hives} />
+                <CalendarSection
+                  hives={hives}
+                  events={events}
+                  onEventsChange={setEvents}
+                  recurringTasks={recurringTasks}
+                  onRecurringTasksChange={setRecurringTasks}
+                  floweringEntries={floweringEntries}
+                  onFloweringEntriesChange={setFloweringEntries}
+                  breedingLots={breedingLots}
+                  apiaries={apiaries}
+                  apiaryName={apiaryName}
+                />
               </motion.section>
             )}
 
@@ -680,7 +1179,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   title="Cosecha de miel"
                   right={<p className="font-mono text-xs text-husk">registro de producción</p>}
                 />
-                <Production hives={hives} />
+                <Production hives={hives} suffix={user && apiaryId ? `_${user.uid}_${apiaryId}` : ''} />
               </motion.section>
             )}
 
@@ -697,7 +1196,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   title="Cuaderno de Campo"
                   right={<p className="font-mono text-xs text-husk">inspecciones registradas</p>}
                 />
-                <NotebookSection hives={hives} />
+                <NotebookSection hives={hives} cuadernoEntries={cuadernoEntries} />
               </motion.section>
             )}
 
@@ -715,6 +1214,18 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   right={<p className="font-mono text-xs text-husk">{pending} pendientes</p>}
                 />
                 <TasksSection tasks={tasks} onToggle={toggleTask} onAdd={handleAddTask} onDelete={handleDeleteTask} />
+              </motion.section>
+            )}
+
+            {activeSection === 'inventario' && (
+              <motion.section
+                key="inventario"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <InventorySection items={inventory} onChange={setInventory} onShowToast={pushToast} />
               </motion.section>
             )}
           </AnimatePresence>
@@ -806,6 +1317,34 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       {showSettingsPage && (
         <SettingsPage onClose={() => setShowSettingsPage(false)} />
       )}
+
+      {/* Modal de reina: registrar / editar / cambiar */}
+      <AnimatePresence>
+        {queenModal.open && (
+          <QueenForm
+            open={queenModal.open}
+            hive={queenModal.hive}
+            queen={queenModal.queen}
+            mode={queenModal.mode}
+            breedingLots={breedingLots}
+            getLotLabel={getLotLabel}
+            onClose={handleCloseQueenModal}
+            onSubmit={handleQueenSubmit}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modal: marcar reina como perdida */}
+      <AnimatePresence>
+        {lostQueen && (
+          <QueenLostModal
+            queen={lostQueen}
+            getColonyLabel={getColonyLabel}
+            onClose={() => setLostQueen(null)}
+            onConfirm={handleMarkQueenLost}
+          />
+        )}
+      </AnimatePresence>
 
       {/* toasts */}
       <div className="fixed bottom-24 lg:bottom-5 right-5 z-[60] flex w-72 flex-col gap-2">

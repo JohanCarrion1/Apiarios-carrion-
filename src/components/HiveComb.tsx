@@ -18,6 +18,15 @@ interface Props {
   selectedForCompare?: string[];
   onToggleCompare?: (hiveId: string) => void;
   calculateHealth?: (hive: Hive) => number;
+  title?: string;
+  countLabel?: string;
+  distributionLabel?: string;
+  allChipLabel?: string;
+  emptyStateText?: string;
+  emptyStateFilteredText?: string;
+  emptyStateInvitation?: string;
+  helpText?: string;
+  entitySingular?: string;
 }
 
 function shortDays(date: string | null): string {
@@ -43,6 +52,15 @@ export default function HiveComb({
   selectedForCompare = [],
   onToggleCompare,
   calculateHealth,
+  title = 'Colmenas',
+  countLabel = 'colonias',
+  distributionLabel = 'distribución por calles',
+  allChipLabel = 'TODAS',
+  emptyStateText = 'No hay colmenas registradas',
+  emptyStateFilteredText = 'No hay colmenas con este filtro',
+  emptyStateInvitation = '',
+  helpText = 'Toca una celda para ver detalles de la colmena',
+  entitySingular = 'colmena',
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -67,7 +85,7 @@ export default function HiveComb({
   const noQueenCount = hives.filter(h => h.status === 'sin_reina').length;
 
   const chips: { key: HiveStatus | "todas"; label: string; n: number; color?: string }[] = [
-    { key: "todas", label: "TODAS", n: hives.length, color: "#f0a41c" },
+    { key: "todas", label: allChipLabel, n: hives.length, color: "#f0a41c" },
     { key: "saludable", label: "SALUDABLE", n: healthyCount, color: STATUS_COLORS.saludable },
     { key: "revision", label: "REVISIÓN", n: revisionCount, color: STATUS_COLORS.revision },
     { key: "alerta", label: "ALERTA", n: alertCount, color: STATUS_COLORS.alerta },
@@ -209,16 +227,16 @@ export default function HiveComb({
           </div>
           <div>
             <p className="text-xs font-mono uppercase tracking-wider text-husk mb-0.5">Mapa del Bancal</p>
-            <h3 className="font-display text-2xl font-bold text-cream">Colmenas</h3>
+            <h3 className="font-display text-2xl font-bold text-cream">{title}</h3>
           </div>
         </div>
         
         <div className="text-right">
           <p className="font-mono text-sm text-cream">
-            <span className="font-bold">{totalColonies}</span> colonias
+            <span className="font-bold">{totalColonies}</span> {countLabel}
             {totalNuclei > 0 && <span className="text-husk"> · <span className="font-bold">{totalNuclei}</span> núcleos</span>}
           </p>
-          <p className="text-xs text-husk mt-0.5">distribución por calles</p>
+          <p className="text-xs text-husk mt-0.5">{distributionLabel}</p>
         </div>
       </motion.div>
 
@@ -303,8 +321,11 @@ export default function HiveComb({
                 </svg>
               </div>
               <p className="text-husk text-sm font-medium">
-                {filter === "todas" ? "No hay colmenas registradas" : "No hay colmenas con este filtro"}
+                {filter === "todas" ? emptyStateText : emptyStateFilteredText}
               </p>
+              {emptyStateInvitation && (
+                <p className="text-husk/70 text-sm mt-2">{emptyStateInvitation}</p>
+              )}
             </motion.div>
           )}
 
@@ -330,6 +351,7 @@ export default function HiveComb({
                   height: `${hexHeight}px`,
                   zIndex: selected ? 100 : 1
                 }}
+                aria-label={`${hive.code} · ${entitySingular}`}
                 onClick={() => {
                   if (compareMode && onToggleCompare) {
                     onToggleCompare(hive.id);
@@ -396,7 +418,7 @@ export default function HiveComb({
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          Toca una celda para ver detalles de la colmena
+          {helpText}
         </motion.p>
       </motion.div>
 

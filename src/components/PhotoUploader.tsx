@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { compressImage, calculateTotalSize, formatBytes, generateId, type PhotoData } from '../services/photos';
+import { compressImage, calculateTotalSize, formatBytes, generateId, getPhotosSerializedSize, wouldExceedStorageLimit, STORAGE_FULL_MESSAGE, type PhotoData } from '../services/photos';
 
 interface PhotoUploaderProps {
   photos: PhotoData[];
@@ -71,7 +71,20 @@ export default function PhotoUploader({
         // Comprimir imagen
         const compressed = await compressImage(file, 800, 0.7);
         console.log('✅ [PHOTO] Imagen comprimida, tamaño:', compressed.length, 'bytes');
-        
+
+        // Verificar que las fotos quepan en localStorage (~5MB)
+        const projectedPhotos = [...photos, ...newPhotos, {
+          id: generateId(),
+          data: compressed,
+          timestamp: Date.now(),
+          size: compressed.length,
+        }];
+        if (wouldExceedStorageLimit(projectedPhotos)) {
+          console.error('❌ [PHOTO] Almacenamiento de fotos al límite');
+          setError(STORAGE_FULL_MESSAGE);
+          break;
+        }
+
         newPhotos.push({
           id: generateId(),
           data: compressed,
@@ -132,7 +145,7 @@ export default function PhotoUploader({
         {totalSizeMB > 5 && (
           <div className="flex items-center gap-1 text-amber-400 text-xs">
             <span>⚠️</span>
-            <span>Tamaño alto</span>
+            <span>{STORAGE_FULL_MESSAGE}</span>
           </div>
         )}
       </div>

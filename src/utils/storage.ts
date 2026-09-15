@@ -78,9 +78,25 @@ export const loadEvents = () => loadFromStorage('panal_events', []);
 export const saveEventTemplates = (templates: any[]) => saveToStorage('panal_event_templates', templates);
 export const loadEventTemplates = () => loadFromStorage('panal_event_templates', []);
 
+// Tareas recurrentes
+export const saveRecurringTasks = (tasks: any[]) => saveToStorage('panal_recurring_tasks', tasks);
+export const loadRecurringTasks = () => loadFromStorage('panal_recurring_tasks', []);
+
+// Calendario de floración
+export const saveFloweringEntries = (entries: any[]) => saveToStorage('panal_flowering', entries);
+export const loadFloweringEntries = () => loadFromStorage('panal_flowering', []);
+
+// Recordatorios calculados
+export const saveReminders = (reminders: any[]) => saveToStorage('panal_reminders', reminders);
+export const loadReminders = () => loadFromStorage('panal_reminders', []);
+
+// Notificaciones
+export const saveNotifications = (notifications: any[]) => saveToStorage('panal_notifications', notifications);
+export const loadNotifications = () => loadFromStorage('panal_notifications', []);
+
 // Cosechas
-export const saveHarvests = (harvests: any[]) => saveToStorage('panal_harvests', harvests);
-export const loadHarvests = () => loadFromStorage('panal_harvests', []);
+export const saveHarvests = (harvests: any[], suffix: string = '') => saveToStorage('panal_harvests', harvests, suffix);
+export const loadHarvests = (suffix: string = '') => loadFromStorage('panal_harvests', [], suffix);
 
 // Favoritos de colmenas
 export const saveFavorites = (favorites: string[]) => saveToStorage('hive_favorites', favorites);
@@ -180,6 +196,121 @@ export const migrateOldData = (): void => {
   localStorage.setItem(migrationKey, 'true');
   
   console.log(`✅ [MIGRATION] Migración completada: ${migratedCount} claves migradas`);
+};
+
+// Lotes de cría de reinas (key independiente: user_${userId}_apiary_${apiaryId}_breedingLots)
+export const getBreedingLotsKey = (userId: string, apiaryId: string): string =>
+  `user_${userId}_apiary_${apiaryId}_breedingLots`;
+
+export const loadBreedingLots = (userId: string, apiaryId: string): any[] => {
+  try {
+    const key = getBreedingLotsKey(userId, apiaryId);
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveBreedingLots = (lots: any[], userId: string, apiaryId: string): void => {
+  try {
+    const key = getBreedingLotsKey(userId, apiaryId);
+    localStorage.setItem(key, JSON.stringify(lots));
+  } catch (error) {
+    console.error('Error saving breeding lots:', error);
+  }
+};
+
+// Reinas (key independiente: user_${userId}_apiary_${apiaryId}_queens)
+export const getQueensKey = (userId: string, apiaryId: string): string =>
+  `user_${userId}_apiary_${apiaryId}_queens`;
+
+export const loadQueens = (userId: string, apiaryId: string): any[] => {
+  try {
+    const key = getQueensKey(userId, apiaryId);
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveQueens = (queens: any[], userId: string, apiaryId: string): void => {
+  try {
+    const key = getQueensKey(userId, apiaryId);
+    localStorage.setItem(key, JSON.stringify(queens));
+  } catch (error) {
+    console.error('Error saving queens:', error);
+  }
+};
+
+// Historial de cambios de reina (key independiente: user_${userId}_apiary_${apiaryId}_queenHistory)
+export const getQueenHistoryKey = (userId: string, apiaryId: string): string =>
+  `user_${userId}_apiary_${apiaryId}_queenHistory`;
+
+export const loadQueenHistory = (userId: string, apiaryId: string): any[] => {
+  try {
+    const key = getQueenHistoryKey(userId, apiaryId);
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveQueenHistory = (entries: any[], userId: string, apiaryId: string): void => {
+  try {
+    const key = getQueenHistoryKey(userId, apiaryId);
+    localStorage.setItem(key, JSON.stringify(entries));
+  } catch (error) {
+    console.error('Error saving queen history:', error);
+  }
+};
+
+// Entradas del cuaderno
+export const getCuadernoEntriesKey = (userId: string, apiaryId: string): string =>
+  `user_${userId}_apiary_${apiaryId}_cuadernoEntries`;
+
+export const loadCuadernoEntries = (userId: string, apiaryId: string): any[] => {
+  try {
+    const key = getCuadernoEntriesKey(userId, apiaryId);
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveCuadernoEntries = (entries: any[], userId: string, apiaryId: string): void => {
+  try {
+    const key = getCuadernoEntriesKey(userId, apiaryId);
+    localStorage.setItem(key, JSON.stringify(entries));
+  } catch (error) {
+    console.error('Error saving cuaderno entries:', error);
+  }
+};
+
+// Inventario de material, herramientas e insumos
+// Key: user_${userId}_inventory (compartido entre apiarios, es material del apicultor)
+export const getInventoryKey = (userId: string): string => `user_${userId}_inventory`;
+
+export const loadInventory = (userId: string): any[] => {
+  try {
+    const key = getInventoryKey(userId);
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveInventory = (items: any[], userId: string): void => {
+  try {
+    const key = getInventoryKey(userId);
+    localStorage.setItem(key, JSON.stringify(items));
+  } catch (error) {
+    console.error('Error saving inventory:', error);
+  }
 };
 
 // Limpiar todos los datos del usuario actual

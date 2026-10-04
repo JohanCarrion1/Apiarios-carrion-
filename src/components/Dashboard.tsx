@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { STATUS_COLORS, STATUS_ORDER, type Hive, type Task, type Inspection } from "../types/hive";
 import type { InventoryItem } from "../types/inventory";
-import { inventoryDisponible } from "../types/inventory";
+import { formatInventoryQuantity, inventoryDisponible } from "../types/inventory";
 import { useCountUp, useReveal } from "../hooks";
+import { useScrollLock } from "../hooks/useScrollLock";
+import { useScrollToTopOnMount } from "../hooks/useScrollToTopOnMount";
 import { getWeatherEmoji } from "../services/weather";
 import RemindersWidget from "./RemindersWidget";
 import type { Reminder } from "../types/reminders";
@@ -13,6 +15,7 @@ interface DashboardProps {
   hives: Hive[];
   tasks: Task[];
   inspections: Inspection[];
+  harvests?: any[];
   onNavigate: (section: string) => void;
   onAddHive: () => void;
   onAddInspection: () => void;
@@ -48,6 +51,10 @@ interface DashboardProps {
   currentApiaryId?: string;
   onSelectApiary?: (id: string) => void;
   reminders?: Reminder[];
+  /** Número de colmenas en contratos de polinización activos. */
+  polinizacionCount?: number;
+  /** Códigos de colmena en contratos de polinización activos. */
+  polinizacionCodes?: string[];
 }
 
 function Card({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -70,6 +77,7 @@ export default function Dashboard({
   hives, 
   tasks, 
   inspections, 
+  harvests = [],
   onNavigate, 
   onAddHive, 
   onAddInspection, 
@@ -91,12 +99,23 @@ export default function Dashboard({
   apiaries = [],
   currentApiaryId = '',
   onSelectApiary = () => {},
-  reminders = []
+  reminders = [],
+  polinizacionCount = 0,
+  polinizacionCodes = []
 }: DashboardProps) {
   const { ref, inView } = useReveal();
   const [showSummary, setShowSummary] = useState(false);
   const [showApiarySelector, setShowApiarySelector] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // En una SPA el scroll no se reinicia solo al cambiar de ruta: se heredaba la
+  // posición de la pantalla anterior, así que se podía entrar al panel a media
+  // altura. Se resetea al MONTAR, no en cada render, porque cambiar de sección o
+  // de apiario no remonta el componente (no lleva `key`) y ahí el usuario sí
+  // espera conservar su posición.
+  useScrollToTopOnMount();
+
+  useScrollLock(showSummary);
 
   const handleSelectApiary = (id: string) => {
     if (id === currentApiaryId) return;
@@ -107,11 +126,6 @@ export default function Dashboard({
     }, 200);
   };
   
-  // Cargar cosechas desde localStorage
-  const [harvests, setHarvests] = useState<any[]>(() => {
-    const saved = localStorage.getItem('panal_harvests');
-    return saved ? JSON.parse(saved) : [];
-  });
   
   // Calcular estadísticas
   const totalHives = hives.length;
@@ -132,7 +146,6 @@ export default function Dashboard({
     });
     
     const total = monthHarvests.reduce((sum, h) => sum + (h.honeyKg || 0), 0);
-    console.log('📊 [DASHBOARD] Producción del mes calculada:', total, 'kg de', monthHarvests.length, 'cosechas');
     return total;
   }, [harvests, currentMonth, currentYear]);
   
@@ -140,18 +153,23 @@ export default function Dashboard({
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const inspectionsThisWeek = inspections.filter(i => new Date(i.date) >= weekAgo).length;
   
-  // Días hasta próxima cosecha (calculado desde harvests reales)
-  const daysUntilHarvest = useMemo(() => {
+  // Próxima cosecha programada (tarea o cosecha futura)
+  const nextHarvestDate = useMemo(() => {
+    const now2 = new Date();
+    // 1. Cosechas con fecha futura
     const futureHarvests = harvests
-      .filter(h => new Date(h.date) > now)
+      .filter(h => new Date(h.date) > now2)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-    if (futureHarvests.length === 0) return null;
-    
-    const nextHarvest = new Date(futureHarvests[0].date);
-    const days = Math.ceil((nextHarvest.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return days;
-  }, [harvests]);
+    if (futureHarvests.length > 0) return new Date(futureHarvests[0].date);
+
+    // 2. Tareas pendientes con fecha futura que sugieran cosecha
+    const harvestTask = tasks
+      .filter(t => !t.completed && t.dueDate && new Date(t.dueDate) >= now2 && /cosecha|recolect|extraer|produccion/i.test(t.title || ''))
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+    if (harvestTask) return new Date(harvestTask.dueDate);
+
+    return null;
+  }, [harvests, tasks]);
   
   // Alertas importantes
   const alerts = hives
@@ -237,15 +255,26 @@ export default function Dashboard({
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 5);
   
-  // Datos para mini gráfico de producción (últimos 6 meses)
-  const productionData = [
-    { mes: 'Jul', kg: 8.2 },
-    { mes: 'Ago', kg: 10.5 },
-    { mes: 'Sep', kg: 12.1 },
-    { mes: 'Oct', kg: 9.8 },
-    { mes: 'Nov', kg: 11.3 },
-    { mes: 'Dic', kg: monthlyProduction }
-  ];
+  // Datos para mini gráfico de producción (últimos 6 meses reales hacia atrás)
+  const MONTH_SHORT_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const nowRef = new Date();
+  const productionData = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(nowRef.getFullYear(), nowRef.getMonth() - (5 - i), 1);
+    const inMonth = harvests.filter(h => {
+      const hd = new Date(h.date);
+      return hd.getFullYear() === d.getFullYear() && hd.getMonth() === d.getMonth();
+    });
+    const kg = inMonth.reduce((sum, h) => sum + (Number(h.honeyKg) || 0), 0);
+    const isCurrent = d.getFullYear() === nowRef.getFullYear() && d.getMonth() === nowRef.getMonth();
+    return {
+      label: `${MONTH_SHORT_ES[d.getMonth()]} ${d.getFullYear()}`,
+      kg: Math.round(kg * 100) / 100,
+      count: inMonth.length,
+      isCurrent,
+      fill: isCurrent ? '#ffb84d' : '#f0a41c',
+    };
+  });
+  const hasHarvestData = harvests.length > 0;
   
   const formatTimeAgo = (date: Date): string => {
     const diff = now.getTime() - date.getTime();
@@ -423,14 +452,14 @@ export default function Dashboard({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm touch-none"
           onClick={() => setShowSummary(false)}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="card max-w-4xl w-full max-h-[90vh] p-6 overflow-hidden flex flex-col"
+            className="card max-w-4xl w-full max-h-[90vh] p-6 overflow-hidden flex flex-col touch-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header del resumen con botón X */}
@@ -478,7 +507,7 @@ export default function Dashboard({
             <div className="flex-1 overflow-y-auto">
 
             {/* Estadísticas del resumen */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="card p-6">
                 <p className="text-husk text-sm mb-1">Total de colmenas</p>
                 <p className="font-display text-3xl font-bold text-cream">{hives.length}</p>
@@ -493,6 +522,12 @@ export default function Dashboard({
                 <p className="text-husk text-sm mb-1">Requieren atención</p>
                 <p className="font-display text-3xl font-bold text-coral">
                   {hives.filter(h => h.status === 'alerta' || h.status === 'sin_reina').length}
+                </p>
+              </div>
+              <div className="card p-6">
+                <p className="text-husk text-sm mb-1">En polinización</p>
+                <p className="font-display text-3xl font-bold" style={{ color: '#7fa572' }}>
+                  {polinizacionCount}
                 </p>
               </div>
             </div>
@@ -530,6 +565,9 @@ export default function Dashboard({
                            hive.status === 'alerta' ? 'Alerta' :
                            'Sin reina'}
                         </span>
+                        {polinizacionCodes.includes(hive.code) && (
+                          <span className="ml-1 flex h-6 items-center rounded-full bg-[#a3bf7f]/15 px-2 text-xs" title="En polinización">🌸</span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -582,8 +620,19 @@ export default function Dashboard({
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-mono uppercase tracking-wider text-husk mb-2">Próxima Cosecha</p>
-              <p className="font-display text-4xl font-black text-cream">{daysUntilHarvest}</p>
-              <p className="text-xs text-husk mt-1">días</p>
+              {nextHarvestDate ? (
+                <>
+                  <p className="font-display text-4xl font-black text-cream">
+                    {nextHarvestDate.getDate()} {MONTH_SHORT_ES[nextHarvestDate.getMonth()]}
+                  </p>
+                  <p className="text-xs text-husk mt-1">{nextHarvestDate.getFullYear()}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-display text-4xl font-black text-cream leading-10">—</p>
+                  <p className="text-xs text-husk mt-1">Sin programar</p>
+                </>
+              )}
             </div>
             <div className="text-4xl">📅</div>
           </div>
@@ -720,7 +769,7 @@ export default function Dashboard({
                       <span className="text-lg">📦</span>
                       <p className="text-sm font-semibold text-cream truncate">{item.nombre}</p>
                     </div>
-                    <p className="font-display text-lg font-black text-coral">{disp} <span className="text-[10px] font-mono text-husk">{item.unidad}</span></p>
+                    <p className="font-display text-lg font-black text-coral">{formatInventoryQuantity(disp, item.unidad)} <span className="text-[10px] font-mono text-husk">{item.unidad}</span></p>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink">
                     <div className="h-full rounded-full bg-coral" style={{ width: `${ratio * 100}%` }} />
@@ -867,23 +916,52 @@ export default function Dashboard({
         {/* 6. MINI GRÁFICO DE PRODUCCIÓN */}
         <Card delay={1.0}>
           <h3 className="font-display text-xl font-bold text-cream mb-4">Producción Últimos 6 Meses</h3>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={productionData}>
-                <XAxis dataKey="mes" stroke="#a3906a" style={{ fontSize: '12px' }} />
-                <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1b140c', 
-                    border: '1px solid #392c19',
-                    borderRadius: '8px',
-                    color: '#f3e9d4'
-                  }}
-                />
-                <Bar dataKey="kg" fill="#f0a41c" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {!hasHarvestData ? (
+            <div className="flex flex-col items-center justify-center h-48">
+              <div className="text-5xl mb-3">🍯</div>
+              <p className="text-husk text-center font-medium">Sin cosechas registradas aún</p>
+              <p className="text-xs text-husk/70 text-center mt-1">Registra tu primera cosecha en la pestaña Cosecha</p>
+            </div>
+          ) : (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={productionData}>
+                  <XAxis 
+                    dataKey="label" 
+                    stroke="#a3906a" 
+                    style={{ fontSize: '11px' }}
+                    interval={0}
+                    angle={-30}
+                    textAnchor="end"
+                    height={50}
+                  />
+                  <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} allowDecimals={false} />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const data = payload[0]?.payload as any;
+                      if (!data) return null;
+                      return (
+                        <div className="rounded-lg border border-line bg-[#1b140c] px-3 py-2 text-xs text-cream shadow-xl">
+                          <p className="font-semibold mb-0.5">{data.label}</p>
+                          {data.count > 0 ? (
+                            <p>{data.kg} kg en {data.count} {data.count === 1 ? 'cosecha' : 'cosechas'}</p>
+                          ) : (
+                            <p className="text-husk">Sin cosechas</p>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="kg" radius={[8, 8, 0, 0]}>
+                    {productionData.map((entry, index) => (
+                      <Cell key={index} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
         
         {/* 7. CLIMA DEL APIARIO */}

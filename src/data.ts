@@ -8,6 +8,7 @@ export interface Toast {
   id: string;
   title: string;
   desc?: string;
+  type?: 'success' | 'error';
 }
 
 // Constante eliminada - los datos del apiario ahora vienen del apiario activo del usuario

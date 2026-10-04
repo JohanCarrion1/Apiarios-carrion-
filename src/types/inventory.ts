@@ -37,10 +37,23 @@ export const INVENTORY_CATEGORY_LABELS: Record<InventoryCategory, string> = {
 
 export const INVENTORY_CATEGORIES: InventoryCategory[] = ['material', 'herramientas', 'insumos', 'envases'];
 
-export const INVENTORY_UNITS = ['unidades', 'kg', 'litros', 'metros'] as const;
+export const INVENTORY_UNITS = ['unidades', 'láminas', 'kg', 'litros', 'metros', 'rollos', 'ml'] as const;
+
+// Unidades que admiten decimales (kg, ml)
+export const INVENTORY_DECIMAL_UNITS = ['kg', 'ml'] as const;
+
+// Unidades que solo admiten enteros (láminas, unidades)
+export const allowsDecimals = (unidad: string): boolean => (INVENTORY_DECIMAL_UNITS as readonly string[]).includes(unidad);
+
+// Formatea una cantidad según la unidad (evita ruido flotante y enteros truncos)
+export const formatInventoryQuantity = (value: number, unidad: string): string => {
+  const n = Number.isFinite(value) ? value : 0;
+  if (allowsDecimals(unidad)) return String(parseFloat(n.toFixed(3)));
+  return String(Math.round(n));
+};
 
 // Presets iniciales por categoría
-export const INVENTORY_PRESETS: Record<InventoryCategory, { nombre: string; unidad?: string }[]> = {
+export const INVENTORY_PRESETS: Record<InventoryCategory, { nombre: string; unidad?: string; label?: string }[]> = {
   material: [
     { nombre: 'Alzas' },
     { nombre: 'Cámaras de cría' },
@@ -51,6 +64,8 @@ export const INVENTORY_PRESETS: Record<InventoryCategory, { nombre: string; unid
     { nombre: 'Entretapas' },
     { nombre: 'Rejillas excluidoras' },
     { nombre: 'Alimentadores' },
+    { label: 'Cera estampada (láminas)', nombre: 'Cera estampada', unidad: 'láminas' },
+    { label: 'Cera estampada (kg)', nombre: 'Cera estampada', unidad: 'kg' },
   ],
   herramientas: [
     { nombre: 'Ahumadores' },
@@ -63,6 +78,7 @@ export const INVENTORY_PRESETS: Record<InventoryCategory, { nombre: string; unid
   ],
   insumos: [
     { nombre: 'Cera laminada', unidad: 'kg' },
+    { label: 'Cera en bloques (kg)', nombre: 'Cera en bloques', unidad: 'kg' },
     { nombre: 'Jarabe', unidad: 'litros' },
     { nombre: 'Medicamentos' },
     { nombre: 'Cúpulas para cría' },

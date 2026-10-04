@@ -1,8 +1,7 @@
 import { ReactNode, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { IconBee } from '../ui';
+import LoadingScreen from './LoadingScreen';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -25,27 +24,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Mostrar loading mientras verifica la sesión
   if (loading) {
     console.log('🟢 [PROTECTED] Mostrando loading...');
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink">
-        <div className="flex flex-col items-center gap-4">
-          <motion.div 
-            className="hexclip flex h-16 w-14 items-center justify-center bg-honey text-ink"
-            animate={{ 
-              scale: [1, 1.1, 1],
-              rotate: [0, 5, -5, 0]
-            }}
-            transition={{ 
-              duration: 2,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          >
-            <IconBee className="h-8 w-8" />
-          </motion.div>
-          <p className="text-husk font-mono text-sm">Cargando...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen size="lg" label="Cargando..." fullScreen />;
   }
 
   // Si no hay usuario autenticado, redirigir a login

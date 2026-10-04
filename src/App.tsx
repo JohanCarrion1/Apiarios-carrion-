@@ -1,18 +1,21 @@
-import { useEffect, useState, useMemo } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { useCallback, useEffect, useState, useMemo, useRef, lazy, startTransition, Suspense, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
+import { toastVariants, sectionVariants } from "./lib/motion";
 import {
   uid,
   type Toast,
 } from "./data";
 import { useClock, useReveal, useWeather } from "./hooks";
 import { getWeatherDescription } from "./services/weather";
-import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests, saveHarvests, loadEvents, saveEvents, loadBreedingLots, saveBreedingLots, loadCuadernoEntries, saveCuadernoEntries, loadQueens, saveQueens, loadQueenHistory, saveQueenHistory, loadInventory, saveInventory, loadApiaries, saveLastActiveApiaryId, loadLastActiveApiaryId, onDataRestored } from './utils/storage';
+import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests, saveHarvests, loadEvents, saveEvents, loadBreedingLots, saveBreedingLots, loadCuadernoEntries, saveCuadernoEntries, loadQueens, saveQueens, loadQueenHistory, saveQueenHistory, loadInventory, saveInventory, loadApiaries, saveLastActiveApiaryId, loadLastActiveApiaryId, onDataRestored, loadFecundadores, saveFecundadores, loadLastView, saveLastView } from './utils/storage';
+import { updateColonyStatus, onFirestoreHydrated } from './services/firestoreSync';
 import { formatHour } from './utils/formatTime';
+import { saveDashboardUltimaVista, loadDashboardUltimaVista, loadUltimaVista, saveUltimaVista } from './utils/lastView';
 import type { Queen, QueenChange, QueenChangeReason } from './types/queen';
 import { getQueenAlert, queenColorForYear } from './types/queen';
 import type { InventoryItem } from './types/inventory';
-import { inventoryDisponible, isStockBajo } from './types/inventory';
+import { formatInventoryQuantity, inventoryDisponible, isStockBajo } from './types/inventory';
 import InventorySection from './components/InventorySection';
 import QueenForm from './components/QueenForm';
 import type { QueenFormData } from './components/QueenForm';
@@ -36,12 +39,9 @@ import { IconBee,
   IconCalendar,
 } from "./ui";
 import Overview from "./components/Overview";
-import DashboardPanel from "./components/Dashboard";
-import HivesSection from "./components/HivesSection";
 import Production from "./components/Production";
 import NotebookSection from "./components/NotebookSection";
 import SelectionScreen from "./components/SelectionScreen";
-import StorePlaceholder from "./components/StorePlaceholder";
 import TasksSection from "./components/TasksSection";
 import type { TaskFormData } from "./components/TaskForm";
 import InspectionModal, { type InspectionDraft } from "./components/InspectionModal";
@@ -55,15 +55,32 @@ import { ActiveApiaryProvider } from "./context/ActiveApiaryContext";
 import { ResponsiveHeader } from "./components/ResponsiveHeader";
 import { FadeInUp } from "./components/Animations";
 import { InstallPrompt, PWAUpdateToast } from "./components/InstallPrompt";
-import type { Hive, Inspection, Task } from "./types/hive";
-import type { CalendarEvent, Notification } from "./types/calendar";
+import GlobalToasts from "./components/GlobalToasts";
+import PedidoNotifier from "./components/PedidoNotifier";
+import CookieBanner from "./components/CookieBanner";
+import Privacidad from "./pages/privacidad";
+import CookiesPage from "./pages/cookies";
+import Terminos from "./pages/terminos";
+import DataHydrationGate from "./components/DataHydrationGate";
+import LoadingHint from "./components/LoadingHint";
+import RouteFade from "./components/RouteFade";
+import AppLogo from "./components/AppLogo";
+import UserWelcomeModal from "./components/UserWelcomeModal";
+import { useAdminList, isEmailAdmin } from "./lib/adminAccess";
+import { useProfile, profileNeedsOnboarding } from "./services/profileService";
+import type { Hive, HiveStatus, Inspection, Task, Equipamiento } from "./types/hive";
+import { HIVE_STATUS_LABELS } from "./types/hive";
+import type { CalendarEvent, EventTemplate, Notification } from "./types/calendar";
 import type { RecurringTask, FloweringEntry } from "./types/reminders";
 import { computeReminders } from "./utils/reminders";
 import {
+  migrateLegacyCalendarScope,
   loadRecurringTasks,
   saveRecurringTasks,
   loadFloweringEntries,
   saveFloweringEntries,
+  loadEventTemplates,
+  saveEventTemplates,
   loadNotifications,
   saveNotifications,
 } from "./utils/storage";
@@ -76,8 +93,13 @@ import ManageApiariesModal from "./components/ManageApiariesModal";
 import { updateApiary, deleteApiary, type Apiary } from "./services/apiaryService";
 import BreedingSection from "./components/BreedingSection";
 import TransferHistorySection from "./components/TransferHistorySection";
-import { convertNucleoToColmena, transferHiveToApiary, transferNucleoToApiary, getNextHiveCode } from "./services/transfers";
+import PolinizacionSection from "./components/PolinizacionSection";
+import { convertNucleoToColmena, transferHiveToApiary, transferNucleoToApiary, transferFecundadorToApiary, getNextHiveCode, getNextNucleoCode, addTransferRecord } from "./services/transfers";
+import { usePolinizacion } from "./lib/polinizacionService";
+import { sortByEntityCode } from "./utils/entityCode";
+import { isStoragePhotoId } from "./services/inspectionPhotos";
 import type { BreedingLot, CuadernoEntry } from "./types/breeding";
+import type { Fecundador } from "./types/fecundador";
 import { differenceInDays } from "date-fns";
 
 const NAV = [
@@ -91,7 +113,13 @@ const NAV = [
   { id: "tareas", label: "Tareas", icon: IconCheck },
   { id: "inventario", label: "Inventario", icon: IconPackage },
   { id: "transferencias", label: "Transferencias", icon: IconLayers },
+  { id: "polinizacion", label: "Polinización", icon: IconFlower },
 ] as const;
+
+type ViewSection = (typeof NAV)[number]['id'];
+const VIEW_SECTIONS: readonly string[] = NAV.map((n) => n.id);
+const isViewSection = (v: string | null | undefined): v is ViewSection =>
+  !!v && VIEW_SECTIONS.includes(v);
 
 /* ---------- ambiente ---------- */
 
@@ -216,6 +244,81 @@ function IntroHead({ temp, wind, activity, apiaryName, apiaryLocation }: { temp:
   );
 }
 
+/* ---------- carga diferida por sección (React.lazy) ----------
+   Antes todos estos módulos entraban en el chunk principal: entrar a la app
+   descargaba el catálogo, el panel de pedidos, el generador de PDF del
+   catálogo y el dashboard entero aunque el usuario solo quisiera ver el menú
+   de selección. Ahora cada sección baja su código cuando se navega a ella y
+   mientras tanto se pinta su skeleton.
+
+   SelectionScreen NO es lazy a propósito: es la pantalla de entrada y meterla
+   detrás de un Suspense añadiría un waterfall justo en la ruta que se quiere
+   hacer inmediata.
+
+   Se usa `lazyWithPreload` y no `lazy` a secas para poder pedir el chunk por
+   adelantado (ver PRELOAD_DE_SECCIONES). Con `lazy` pelado no hay forma de
+   "calentar" el import sin duplicar la ruta del import, que es justo lo que
+   se desincroniza a la primera que alguien edita un path. */
+/* `any` en la restricción, no `unknown`: con `ComponentType<unknown>` la
+   contravariancia de los parámetros de función hace que TS no pueda inferir T
+   desde el default exportado y acaba tipando el componente como sin props. Es
+   el idioma estándar para este patrón; el default sí se conserva. */
+function lazyWithPreload<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+): { Comp: LazyExoticComponent<T>; preload: () => Promise<unknown> } {
+  return { Comp: lazy(factory), preload: factory };
+}
+
+const dashboardPanel = lazyWithPreload(() => import("./components/Dashboard"));
+const hivesSection = lazyWithPreload(() => import("./components/HivesSection"));
+const DashboardPanel = dashboardPanel.Comp;
+const HivesSection = hivesSection.Comp;
+
+const Store = lazy(() => import("./components/Store"));
+const AdminStore = lazy(() => import("./components/AdminStore"));
+const Cotizaciones = lazy(() => import("./components/Cotizaciones"));
+const Catalogo = lazy(() => import("./components/Catalogo"));
+const AdminPedidos = lazy(() => import("./components/AdminPedidos"));
+
+/**
+ * Envoltura de Suspense para los chunks lazy.
+ *
+ * El fallback es `LoadingHint`: un spinner pequeño sobre el mismo `bg-ink` del
+ * loader inicial. Antes era un skeleton de bloques grises a pantalla completa;
+ * la pausa entre capas hacía que la entrada al dashboard pareciera que atravesaba
+ * tres pantallas en lugar de una. El fondo no cambia en todo el recorrido, así
+ * que la secuencia logo -> spinner -> contenido se lee como un solo paso.
+ */
+function Lazy({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<LoadingHint />}>{children}</Suspense>;
+}
+
+/**
+ * Suspense POR SECCIÓN del dashboard.
+ *
+ * Existe por un motivo concreto. `Lazy` de arriba solo envuelve rutas
+ * completas, así que las secciones lazy del dashboard colgaban del único
+ * boundary de la ruta. Al pulsar "Colmenas" desde el menú lateral, ese chunk
+ * aún no estaba descargado, la suspensión se propagaba hasta el boundary de la
+ * ruta y React sustituía el DASHBOARD ENTERO por el skeleton a pantalla
+ * completa: de ahí el error "Component suspended while responding to
+ * synchronous input" y el salto de pantalla completa al cambiar de pestaña.
+ *
+ * Con un boundary por sección solo se suspende la sección que entra; la
+ * cabecera, el menú lateral y el resto del dashboard no se desmontan ni se
+ * vuelven a pintar.
+ *
+ * El fallback NO es `min-h-screen bg-black` a propósito: un takeover a negro
+ * reintroduciría exactamente el parpadeo negro que se eliminó en el cambio de
+ * pestañas. Va acotado a la sección (`fullScreen={false}`) con un spinner
+ * pequeño: lo que se pausa es una zona, no la pantalla entera.
+ */
+function SectionSuspense({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<LoadingHint fullScreen={false} />}>{children}</Suspense>
+  );
+}
+
 /* ---------- app ---------- */
 
 export default function App() {
@@ -227,21 +330,72 @@ export default function App() {
         <LanguageProvider>
           <AuthProvider>
             <ActiveApiaryProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/seleccionar"
-                element={
-                  <ProtectedRoute>
-                    <SelectionScreen />
-                  </ProtectedRoute>
-                }
-              />
+              {/* reducedMotion="user": hasta ahora solo el CSS honraba
+                  `prefers-reduced-motion` (las media queries de index.css).
+                  Framer Motion lo ignora por defecto, así que las transiciones
+                  JS —cambio de sección del dashboard, modales, drawer, toasts—
+                  se seguían reproduciendo con el movimiento reducido activado.
+                  Con esto solo se desactiva el.transform; el fade y el
+                  escalado se conservan. */}
+              <MotionConfig reducedMotion="user">
+              <ColdStartRestore />
+              <Routes>
+                    <Route path="/login" element={<RouteFade><Login /></RouteFade>} />
+                    <Route
+                        path="/seleccionar"
+                        element={
+                          <ProtectedRoute>
+                            {/* SIN DataHydrationGate a propósito: el menú de
+                                selección solo lee localStorage de forma síncrona
+                                (loadApiaries) y el perfil del usuario. Antes
+                                esperaba aquí la hidratación completa —14
+                                entidades x cada apiario, en serie— y por eso
+                                /seleccionar era la pantalla más lenta de la
+                                app. Sus datos se piden dentro de cada sección. */}
+                            <RouteFade><SelectionScreen /></RouteFade>
+                          </ProtectedRoute>
+                        }
+                      />
+              {/* Alias tolerante: la pantalla de selección también responde
+                  como "/selecciona" (si no, el catch-all lo mandaba a "/"). */}
+              <Route path="/selecciona" element={<Navigate to="/seleccionar" replace />} />
               <Route
                 path="/tienda"
                 element={
                   <ProtectedRoute>
-                    <StorePlaceholder />
+                    <RouteFade><Lazy><Store /></Lazy></RouteFade>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/tienda/admin"
+                element={
+                  <ProtectedRoute>
+                    <RouteFade><Lazy><AdminStore /></Lazy></RouteFade>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/cotizaciones"
+                element={
+                  <ProtectedRoute>
+                    <RouteFade><Lazy><Cotizaciones /></Lazy></RouteFade>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/catalogo"
+                element={
+                  <ProtectedRoute>
+                    <RouteFade><Lazy><Catalogo /></Lazy></RouteFade>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/pedidos"
+                element={
+                  <ProtectedRoute>
+                    <RouteFade><Lazy><AdminPedidos /></Lazy></RouteFade>
                   </ProtectedRoute>
                 }
               />
@@ -249,7 +403,9 @@ export default function App() {
                 path="/apiarios"
                 element={
                   <ProtectedRoute>
-                    <ApiariosRedirect />
+                    <DataHydrationGate>
+                      <RouteFade><ApiariosRedirect /></RouteFade>
+                    </DataHydrationGate>
                   </ProtectedRoute>
                 }
               />
@@ -257,15 +413,27 @@ export default function App() {
                 path="/apiarios/:id"
                 element={
                   <ProtectedRoute>
-                    <ApiariosRedirect />
+                    <DataHydrationGate>
+                      <RouteFade><ApiariosRedirect /></RouteFade>
+                    </DataHydrationGate>
                   </ProtectedRoute>
                 }
               />
+              {/* El fundido va DENTRO de DataHydrationGate a propósito: si se
+                  quedara fuera, animaría el skeleton y la pantalla real
+                  aparecería de golpe al terminar la hidratación. Así lo que se
+                  desvanece es el contenido definitivo. */}
               <Route
                 path="/dashboard"
                 element={
                   <ProtectedRoute>
-                    <DashboardWrapper />
+                    <DataHydrationGate>
+                      <RouteFade>
+                        <Lazy>
+                          <DashboardWrapper />
+                        </Lazy>
+                      </RouteFade>
+                    </DataHydrationGate>
                   </ProtectedRoute>
                 }
               />
@@ -273,15 +441,24 @@ export default function App() {
                 path="/dashboard/:id"
                 element={
                   <ProtectedRoute>
-                    <DashboardWrapper />
+                    <DataHydrationGate>
+                      <RouteFade><DashboardWrapper /></RouteFade>
+                    </DataHydrationGate>
                   </ProtectedRoute>
                 }
               />
-              <Route path="/" element={<ProtectedRoute><HomeRedirect /></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRoute><RouteFade><HomeRedirect /></RouteFade></ProtectedRoute>} />
+              <Route path="/privacidad" element={<RouteFade><Privacidad /></RouteFade>} />
+              <Route path="/cookies" element={<RouteFade><CookiesPage /></RouteFade>} />
+              <Route path="/terminos" element={<RouteFade><Terminos /></RouteFade>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             <InstallPrompt />
             <PWAUpdateToast />
+            <CookieBanner />
+            <GlobalToasts />
+            <PedidoNotifier />
+              </MotionConfig>
             </ActiveApiaryProvider>
           </AuthProvider>
         </LanguageProvider>
@@ -290,62 +467,80 @@ export default function App() {
   );
 }
 
+/** Destino al que resuelve /dashboard y /dashboard/:id. */
+type DashboardTarget =
+  | { kind: 'dashboard'; apiaryId: string }
+  | { kind: 'redirect'; to: string }
+  | { kind: 'onboarding' };
+
 function DashboardWrapper() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [resolved, setResolved] = useState<
-    | { kind: 'dashboard'; apiaryId: string }
-    | { kind: 'redirect'; to: string }
-    | { kind: 'onboarding' }
-    | null
-  >(null);
 
-  useEffect(() => {
-    if (!user) return;
+  // Rol vigente (config/admins de Firestore + semilla .env) y perfil users/{uid}.
+  // Un usuario NO admin que aún no configuró su apiario ve el modal de
+  // bienvenida antes de entrar al dashboard.
+  const { status: adminStatus } = useAdminList();
+  const isAdminUser = !!user && isEmailAdmin(user.email);
+  const { profile, status: profileStatus } = useProfile(user?.uid);
+  const needsProfileOnboarding =
+    adminStatus !== 'loading' &&
+    !isAdminUser &&
+    profileStatus === 'ready' &&
+    profileNeedsOnboarding(profile);
 
+  // La resolución se calcula DURANTE el render, no en un useEffect: loadApiaries
+  // es una lectura síncrona de localStorage, así que el destino siempre está
+  // decidido en la primera pintada. Antes vivía en un useEffect sobre un
+  // estado `resolved = null`, y ese primer render caía en
+  // <LoadingScreen label="Cargando apiario..."> durante un frame entero en
+  // CADA entrada al dashboard: era el flash con el logo y el texto que se veía
+  // al pulsar "Control de Colmenas". Sin estado de espera, no hay loader.
+  const target: DashboardTarget | null = useMemo(() => {
+    if (!user) return null;
     const apiaries = loadApiaries(user.uid);
 
     if (id) {
       const exists = apiaries.find((a: any) => a.id === id);
-      if (exists) {
-        setResolved({ kind: 'dashboard', apiaryId: id });
-      } else if (apiaries.length > 0) {
-        setResolved({ kind: 'redirect', to: '/dashboard' });
-      } else {
-        setResolved({ kind: 'onboarding' });
-      }
-      return;
+      if (exists) return { kind: 'dashboard', apiaryId: id };
+      if (apiaries.length > 0) return { kind: 'redirect', to: '/dashboard' };
+      return { kind: 'onboarding' };
     }
 
-    if (apiaries.length === 0) {
-      setResolved({ kind: 'onboarding' });
-      return;
-    }
+    if (apiaries.length === 0) return { kind: 'onboarding' };
 
     // Entrar directo al último apiario usado (o al primero si no existe/borrado)
     const lastActiveId = loadLastActiveApiaryId(user.uid);
     const lastApiary = apiaries.find((a: any) => a.id === lastActiveId);
-    const target = lastApiary ? lastApiary.id : apiaries[0].id;
-    saveLastActiveApiaryId(target, user.uid);
-    setResolved({ kind: 'redirect', to: `/dashboard/${target}` });
+    const apiaryId = lastApiary ? lastApiary.id : apiaries[0].id;
+    return { kind: 'redirect', to: `/dashboard/${apiaryId}` };
   }, [user, id]);
+
+  // Efecto colateral aparte: recordar el último apiario abierto. Vive en un
+  // useEffect para no escribir en localStorage durante el render.
+  useEffect(() => {
+    if (target?.kind !== 'redirect' || !user) return;
+    const apiaryId = target.to.split('/').pop();
+    if (apiaryId) saveLastActiveApiaryId(apiaryId, user.uid);
+  }, [target, user]);
 
   if (!user) return null;
 
-  if (resolved === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink">
-        <p className="text-husk font-mono text-sm">Cargando apiario...</p>
-      </div>
-    );
+  // Sin frame de espera: `target` ya está resuelto en el primer render.
+  if (target === null) return null;
+
+  // Bienvenida de no-admin: configurar el apiario del perfil antes de usar el
+  // dashboard (se guarda en users/{uid} y desaparece al confirmarse).
+  if (needsProfileOnboarding && target.kind !== 'redirect') {
+    return <UserWelcomeModal variant="screen" open />;
   }
 
-  if (resolved.kind === 'redirect') {
-    return <Navigate to={resolved.to} replace />;
+  if (target.kind === 'redirect') {
+    return <Navigate to={target.to} replace />;
   }
 
-  if (resolved.kind === 'onboarding') {
+  if (target.kind === 'onboarding') {
     return (
       <CreateApiaryModal
         open
@@ -358,7 +553,7 @@ function DashboardWrapper() {
     );
   }
 
-  return <Dashboard apiaryId={resolved.apiaryId} />;
+  return <Dashboard apiaryId={target.apiaryId} />;
 }
 
 // La pantalla "Mis Apiarios" deja de ser ruta de entrada: cualquier visita
@@ -370,18 +565,74 @@ function ApiariosRedirect() {
 
 /* ---------- ruteo de inicio ---------- */
 
-// Puerta de entrada tras el login/recarga. Lleva SIEMPRE directo al panel
-// del último apiario usado (o al onboarding si no hay apiarios). La pantalla
-// "Mis Apiarios" (/apiarios) queda eliminada como entrada: si se escribe a
-// mano, /apiarios redirige al dashboard.
+// Puerta de entrada tras el login/recarga. Lleva al último lugar que visitó
+// el usuario (sistema unificado de última ruta con expiración de 7 días):
+// si hay ultima_vista guardada y vigente va directo a ella ('/tienda' o
+// '/dashboard[/<apiario>]'); si no existe o expiró, se muestra la pantalla de
+// selección (/seleccionar) para que el usuario elija de nuevo.
+// Este flujo es IGUAL para admins y no-admins: todos pasan por /seleccionar
+// tras el login; la tarjeta "Cotizaciones" se muestra u oculta según el rol.
 function HomeRedirect() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) return; // aún no autenticado
-    navigate('/dashboard', { replace: true });
+    const last = loadUltimaVista(user.uid);
+    const target = last?.vista || '/seleccionar';
+    console.log(
+      `🧭 [HOMEREDIRECT] user=${user.uid} | ultima_vista=${JSON.stringify(last)} | redirigiendo a → ${target}`
+    );
+    navigate(target, { replace: true });
   }, [user, navigate]);
+
+  return null;
+}
+
+// Sección principal a la que pertenece una ruta ('/' es neutral, '/seleccionar'
+// es una sección restaurable: si la app arrancó en otra, se vuelve a la
+// pantalla de elección).
+const primarySectionOf = (path: string): string | null => {
+  if (path === '/') return null;
+  if (path === '/seleccionar') return 'seleccionar';
+  if (path === '/dashboard' || path.startsWith('/dashboard/')) return 'dashboard';
+  if (path === '/tienda' || path.startsWith('/tienda/')) return 'tienda';
+  if (path === '/admin/cotizaciones') return 'cotizaciones';
+  if (path === '/admin/catalogo') return 'catalogo';
+  if (path === '/admin/pedidos') return 'pedidos';
+  return null;
+};
+
+// Guard GLOBAL de arranque en frío: funciona aunque la app instalada (PWA)
+// conserve un start_url viejo (/dashboard) que no se actualiza con el nuevo
+// manifest. En el primer render de la pestaña compara la ruta inicial con la
+// última vista guardada: si la app abrió en una sección distinta a la que el
+// usuario dejó guardada, la restaura. Corre UNA sola vez por pestaña.
+function ColdStartRestore() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const startPath = useRef(window.location.pathname);
+  const didRestore = useRef(false);
+
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid || didRestore.current) return;
+    didRestore.current = true;
+
+    const startSection = primarySectionOf(startPath.current);
+    if (!startSection) return; // rutas neutrales (/ , /seleccionar) ya las manejan HomeRedirect/SelectionScreen
+
+    const last = loadUltimaVista(uid);
+    if (!last) return;
+    const savedSection = primarySectionOf(last.vista);
+    if (savedSection && savedSection !== startSection) {
+      console.log(
+        `🧭 [COLDSTART] App abrió en "${startPath.current}" (${startSection}), ` +
+          `ultima_vista="${last.vista}" (${savedSection}) → restaurado a ${last.vista}`
+      );
+      navigate(last.vista, { replace: true });
+    }
+  }, [user?.uid, navigate]);
 
   return null;
 }
@@ -392,7 +643,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const navigate = useNavigate();
   console.log('🟣 [DASHBOARD] User en Dashboard:', user ? user.uid : 'null');
   console.log('🟣 [DASHBOARD] Apiario ID:', apiaryId);
-  
+
   // Cargar datos del apiario
   const [apiaryName, setApiaryName] = useState<string>('');
   const [apiaryLocation, setApiaryLocation] = useState<string>('');
@@ -408,9 +659,18 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [cuadernoEntries, setCuadernoEntries] = useState<CuadernoEntry[]>([]);
   const [queens, setQueens] = useState<Queen[]>([]);
   const [queenHistory, setQueenHistory] = useState<QueenChange[]>([]);
+  const [fecundadores, setFecundadores] = useState<Fecundador[]>([]);
+
+  // Contratos de polinización (listener en tiempo real por usuario).
+  const { contratos: polinizacionContratos } = usePolinizacion(user?.uid);
+  const polinizacionCodes = useMemo(
+    () => polinizacionContratos.filter((c) => c.estado === 'activo').flatMap((c) => c.colmenasAsignadas || []),
+    [polinizacionContratos]
+  );
 
   // Calendario: eventos, tareas recurrentes y floración (compartidos entre secciones)
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventTemplates, setEventTemplates] = useState<EventTemplate[]>([]);
   const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
   const [floweringEntries, setFloweringEntries] = useState<FloweringEntry[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>(() => loadNotifications());
@@ -424,6 +684,14 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const scopeKey =
     user && apiaryId ? `${user.uid}:${apiaryId}` : null;
+
+  // Se incrementa cuando la hidratación de Firestore termina. Fuerza al efecto
+  // de carga a releer la caché local, que la hidratación acaba de sobrescribir
+  // con el estado real del backend (si no, el estado en memoria queda viejo y el
+  // siguiente cambio del usuario sube ese array obsoleto a Firestore).
+  const [dataRevision, setDataRevision] = useState(0);
+
+  useEffect(() => onFirestoreHydrated(() => setDataRevision((r) => r + 1)), []);
 
   const { settings } = useSettings();
   const notificationCfg = settings.notifications;
@@ -468,8 +736,12 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [showAddNucleusModal, setShowAddNucleusModal] = useState(false);
   const [editingNucleus, setEditingNucleus] = useState<Hive | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeSection, setActiveSection] = useState<"panel" | "colmenas" | "cria" | "estadisticas" | "calendario" | "produccion" | "registro" | "tareas" | "inventario" | "transferencias">("panel");
+  const [activeSection, setActiveSection] = useState<ViewSection>("panel");
   const [showSettingsPage, setShowSettingsPage] = useState(false);
+
+  // Ancla de colmenas/núcleos/fecundadores/inspecciones pedida desde el menú
+  // hamburguesa: se cambia a la sección 'colmenas' y ahí se hace scroll.
+  const [focusAnchor, setFocusAnchor] = useState<string | null>(null);
 
   // Estados para reinas
   const [queenModal, setQueenModal] = useState<{
@@ -524,7 +796,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       pushToast('Apiario actualizado');
     } catch (error) {
       console.error('[APIARY] Error al actualizar:', error);
-      pushToast('Error al actualizar el apiario', 'error');
+      pushToast('Error al actualizar el apiario', undefined, 'error');
     }
   };
 
@@ -542,7 +814,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       }
     } catch (error) {
       console.error('[APIARY] Error al eliminar:', error);
-      pushToast('Error al eliminar el apiario', 'error');
+      pushToast('Error al eliminar el apiario', undefined, 'error');
     }
   };
 
@@ -565,14 +837,40 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       const loadedCuadernoEntries = loadCuadernoEntries(user.uid, apiaryId);
       const loadedQueens = loadQueens(user.uid, apiaryId);
       const loadedQueenHistory = loadQueenHistory(user.uid, apiaryId);
-      const loadedEvents = loadEvents();
-      const loadedRecurringTasks = loadRecurringTasks();
-      const loadedFloweringEntries = loadFloweringEntries();
+      const loadedFecundadores = loadFecundadores(user.uid, apiaryId);
+      // El calendario antes se guardaba sin ambito de apiario. Se copia al
+      // ambito del apiario activo (no destructivo) antes de leer.
+      migrateLegacyCalendarScope(user.uid, apiaryId);
+      const loadedEvents = loadEvents(storageKeySuffix);
+      const loadedRecurringTasks = loadRecurringTasks(storageKeySuffix);
+      const loadedFloweringEntries = loadFloweringEntries(storageKeySuffix);
+      const loadedEventTemplates = loadEventTemplates(storageKeySuffix) as EventTemplate[];
       const loadedInventory = loadInventory(user.uid);
+
+      // Migración: colmenas/núcleos viejos sin 'hasQueen' se asumen con reina
+      // (salvo las que ya estaban marcadas como SIN REINA). El estado visual se
+      // mapea ESTRICTAMENTE a la propiedad `estado` traída del backend, sin
+      // reiniciar a ningún valor local por defecto.
+      const normalizeHive = (h: Hive): Hive => {
+        if (h.hasQueen !== undefined) return h;
+        return { ...h, hasQueen: h.status !== 'sin_reina' };
+      };
+      const migratedHives = (loadedHives as Hive[]).map(normalizeHive);
+      const migratedNuclei = (loadedNuclei as Hive[]).map(normalizeHive);
+
+      // Fecundadores: el estado visual se mapea directo de la propiedad
+      // `queenState` devuelta por la base de datos. Solo se corrige a un valor
+      // válido cuando el dato viene corrupto o vacío (evita errores de render).
+      const VALID_QUEEN_STATES: string[] = ['celda_real', 'virgen', 'fecundada', 'en_puesta'];
+      const normalizedFecundadores = (loadedFecundadores as Fecundador[]).map(f => ({
+        ...f,
+        queenState: (VALID_QUEEN_STATES.includes(f.queenState) ? f.queenState : 'celda_real') as Fecundador['queenState'],
+        estado: (f.estado === 'activo' || f.estado === 'promovido' ? f.estado : 'activo') as Fecundador['estado'],
+      }));
       
       console.log('🟣 [DASHBOARD] Datos cargados:', {
-        hives: loadedHives.length,
-        nuclei: loadedNuclei.length,
+        hives: migratedHives.length,
+        nuclei: migratedNuclei.length,
         inspections: loadedInspections.length,
         tasks: loadedTasks.length,
         harvests: loadedHarvestsData.length,
@@ -580,8 +878,8 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
         queens: loadedQueens.length,
       });
       
-      setHives(loadedHives);
-      setNuclei(loadedNuclei);
+      setHives(migratedHives);
+      setNuclei(migratedNuclei);
       setInspections(loadedInspections);
       setTasks(loadedTasks);
       setHarvests(loadedHarvestsData);
@@ -589,9 +887,11 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       setCuadernoEntries(loadedCuadernoEntries);
       setQueens(loadedQueens);
       setQueenHistory(loadedQueenHistory);
+      setFecundadores(normalizedFecundadores);
       setEvents(loadedEvents);
       setRecurringTasks(loadedRecurringTasks);
       setFloweringEntries(loadedFloweringEntries);
+      setEventTemplates(loadedEventTemplates);
       setInventory(loadedInventory);
       setLoadedScope(scopeKey);
     } else {
@@ -605,13 +905,15 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       setCuadernoEntries([]);
       setQueens([]);
       setQueenHistory([]);
+      setFecundadores([]);
       setEvents([]);
       setRecurringTasks([]);
       setFloweringEntries([]);
+      setEventTemplates([]);
       setInventory([]);
       setLoadedScope(null);
     }
-  }, [user, apiaryId]);
+  }, [user, apiaryId, dataRevision]);
 
   // Guardar datos cuando cambian (solo tras hidratar el apiario actual)
   useEffect(() => {
@@ -673,6 +975,12 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     }
   }, [queenHistory, user, apiaryId, scopeKey, loadedScope]);
 
+  useEffect(() => {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
+      saveFecundadores(fecundadores, user.uid, apiaryId);
+    }
+  }, [fecundadores, user, apiaryId, scopeKey, loadedScope]);
+
   // Guardar inventario (solo por usuario, compartido entre apiarios)
   useEffect(() => {
     if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
@@ -683,21 +991,31 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   // Guardar calendario (eventos, tareas recurrentes, floración, notificaciones)
   useEffect(() => {
     if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
-      saveEvents(events);
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveEvents(events, storageKeySuffix);
     }
   }, [events, scopeKey, loadedScope]);
 
   useEffect(() => {
     if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
-      saveRecurringTasks(recurringTasks);
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveRecurringTasks(recurringTasks, storageKeySuffix);
     }
   }, [recurringTasks, scopeKey, loadedScope]);
 
   useEffect(() => {
     if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
-      saveFloweringEntries(floweringEntries);
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveFloweringEntries(floweringEntries, storageKeySuffix);
     }
   }, [floweringEntries, scopeKey, loadedScope]);
+
+  useEffect(() => {
+    if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
+      const storageKeySuffix = `_${user.uid}_${apiaryId}`;
+      saveEventTemplates(eventTemplates, storageKeySuffix);
+    }
+  }, [eventTemplates, scopeKey, loadedScope]);
 
   useEffect(() => {
     if (user && apiaryId && scopeKey && loadedScope === scopeKey) {
@@ -761,7 +1079,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
           id,
           type: 'stock_alert' as const,
           title: `Stock bajo: ${i.nombre}`,
-          description: `${disp} ${i.unidad} restantes`,
+          description: `${formatInventoryQuantity(disp, i.unidad)} ${i.unidad} restantes`,
           read: false,
           createdAt: new Date().toISOString(),
         }];
@@ -777,13 +1095,6 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     () => [...inventory].filter(isStockBajo).sort((a, b) => inventoryDisponible(a) - inventoryDisponible(b)).slice(0, 5),
     [inventory]
   );
-
-  // Seleccionar primera colmena cuando se cargan
-  useEffect(() => {
-    if (hives.length > 0 && !selectedId) {
-      setSelectedId(hives[0].id);
-    }
-  }, [hives, selectedId]);
 
   // Clima en tiempo real basado en la ubicación GPS real del dispositivo
   const apiaryCoords = useMemo(() => {
@@ -812,11 +1123,18 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const nextHiveCode = getNextHiveCode(hives);
   const pending = tasks.filter((t) => !t.completed).length;
 
-  const pushToast = (title: string, desc?: string) => {
-    const t: Toast = { id: uid(), title, desc };
-    setToasts((prev) => [...prev, t]);
+  const pushToast = (title: string, desc?: string, type: 'success' | 'error' = 'success') => {
+    const t: Toast = { id: uid(), title, desc, type };
+    setToasts((prev) => [...prev.slice(-3), t]);
     setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== t.id)), 3600);
   };
+
+  // HiveDetail y HivesSection llaman a onShowToast con la firma
+  // (mensaje, 'success' | 'error'). Se les pasa pushToast tal cual, el 'error'
+  // acababa en el campo `desc` y TODOS los errores se pintaban en verde con la
+  // descripción "error". Este adaptador traduce a la firma de pushToast.
+  const pushToastHives = (message: string, type: 'success' | 'error' = 'success') =>
+    pushToast(message, undefined, type);
 
   // Funciones CRUD para colmenas
   const addHive = (hive: Omit<Hive, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -826,7 +1144,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setHives(prev => [...prev, newHive]);
+    setHives(prev => sortByEntityCode([...prev, newHive]));
     pushToast("Colmena agregada", `${newHive.code} - ${newHive.name || 'Sin nombre'}`);
   };
 
@@ -837,6 +1155,13 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     pushToast("Colmena actualizada");
   };
 
+  // Actualización silenciosa de equipamiento desde la ficha rápida (sin toast repetitivo).
+  const updateHiveEquipment = (id: string, equipamiento: Equipamiento) => {
+    setHives(prev => prev.map(h =>
+      h.id === id ? { ...h, equipamiento, updatedAt: new Date().toISOString() } : h
+    ));
+  };
+
   const deleteHive = (id: string) => {
     setHives(prev => prev.filter(h => h.id !== id));
     setInspections(prev => prev.filter(i => i.hiveId !== id));
@@ -845,8 +1170,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     setQueenHistory(prev => prev.filter(h => h.hiveId !== id));
     
     if (selectedId === id) {
-      const remainingHives = hives.filter(h => h.id !== id);
-      setSelectedId(remainingHives.length > 0 ? remainingHives[0].id : "");
+      setSelectedId("");
     }
     pushToast("Colmena eliminada");
   };
@@ -860,7 +1184,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setNuclei(prev => [...prev, newNucleus]);
+    setNuclei(prev => sortByEntityCode([...prev, newNucleus]));
     pushToast("Núcleo agregado", `${newNucleus.code} - ${newNucleus.name || 'Sin nombre'}`);
   };
 
@@ -879,10 +1203,19 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     setQueenHistory(prev => prev.filter(h => h.hiveId !== id));
     
     if (selectedNucleusId === id) {
-      const remainingNuclei = nuclei.filter(n => n.id !== id);
-      setSelectedNucleusId(remainingNuclei.length > 0 ? remainingNuclei[0].id : null);
+      setSelectedNucleusId(null);
     }
     pushToast("Núcleo eliminado");
+  };
+
+  // Sincronizar hasQueen cuando se registra o cambia una reina
+  const syncColonyHasQueen = (id: string) => {
+    setHives(prev => prev.map(h => h.id === id && (!h.hasQueen || h.status === 'sin_reina')
+      ? { ...h, hasQueen: true, status: h.status === 'sin_reina' ? 'saludable' : h.status, updatedAt: new Date().toISOString() }
+      : h));
+    setNuclei(prev => prev.map(n => n.id === id && (!n.hasQueen || n.status === 'sin_reina')
+      ? { ...n, hasQueen: true, status: n.status === 'sin_reina' ? 'saludable' : n.status, updatedAt: new Date().toISOString() }
+      : n));
   };
 
   // FUNCIONALIDAD 1: Convertir núcleo en colmena
@@ -897,15 +1230,14 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       });
 
       setNuclei(prev => prev.filter(n => n.id !== nucleus.id));
-      setHives(prev => [...prev, res.newHive]);
+      setHives(prev => sortByEntityCode([...prev, res.newHive]));
       setInspections(prev => prev.map(i => (i.hiveId === nucleus.id ? { ...i, hiveId: res.newHive.id } : i)));
       setQueens(prev => prev.map(q => (q.hiveId === nucleus.id ? { ...q, hiveId: res.newHive.id } : q)));
       setQueenHistory(prev => prev.map(h => (h.hiveId === nucleus.id ? { ...h, hiveId: res.newHive.id } : h)));
       setCuadernoEntries(prev => [res.cuadernoEntry, ...prev]);
 
       if (selectedNucleusId === nucleus.id) {
-        const remainingNuclei = nuclei.filter(n => n.id !== nucleus.id);
-        setSelectedNucleusId(remainingNuclei.length > 0 ? remainingNuclei[0].id : null);
+        setSelectedNucleusId(null);
       }
 
       pushToast('Núcleo convertido en colmena', `${res.nucleusCode} → ${res.newHiveCode}`);
@@ -914,20 +1246,128 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       }
     } catch (error) {
       console.error('[TRANSFERS] Error al convertir núcleo:', error);
-      pushToast('Error al convertir el núcleo', 'error');
+      pushToast('Error al convertir el núcleo', undefined, 'error');
     }
   };
 
-  // FUNCIONALIDAD 2 y 3: Transferir núcleo/colmena a otro apiario
-  const handleTransfer = (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => {
+  // FECUNDADORES (baby nucs): CRUD
+  const addFecundador = (f: Fecundador) => {
+    setFecundadores(prev => sortByEntityCode([...prev, f]));
+  };
+
+  const updateFecundador = (f: Fecundador) => {
+    setFecundadores(prev => prev.map(x => x.id === f.id ? { ...f, updatedAt: new Date().toISOString() } : x));
+    // Persistencia directa del estado (queenState) en Firestore, igual que en
+    // colmenas/núcleos. Si Firebase rechaza la escritura se muestra el error.
+    const uidFec = user?.uid;
+    if (uidFec && apiaryId) {
+      updateColonyStatus(uidFec, apiaryId, 'fecundadores', f.id, f.queenState, undefined, 'queenState')
+        .catch((error: any) => {
+          console.error('[FIRESTORE] No se pudo persistir queenState:', error);
+          pushToast(
+            'Estado de la reina no guardado en la nube',
+            error?.code === 'permission-denied'
+              ? 'Solo el propietario del fecundador puede guardar su estado.'
+              : 'Se guardó solo en este dispositivo. Revisa tu conexión.',
+            'error'
+          );
+        });
+    }
+  };
+
+  const deleteFecundador = (id: string) => {
+    setFecundadores(prev => prev.filter(f => f.id !== id));
+  };
+
+  // PROMOCIÓN: fecundador → núcleo (con historial y registro en el cuaderno)
+  const handlePromoteFecundador = (fec: Fecundador) => {
     if (!user || !apiaryId) return;
+    if (fec.estado !== 'activo' || fec.queenState !== 'en_puesta') {
+      pushToast('La reina debe estar en puesta', 'No se puede promover este fecundador');
+      return;
+    }
+    const now = new Date().toISOString();
+    const nuevoNucleo: Hive = {
+      id: uid(),
+      code: getNextNucleoCode(nuclei),
+      name: fec.name,
+      location: fec.location,
+      status: 'saludable',
+      hasQueen: true,
+      queenInfo: { origin: 'criada', introducedAt: fec.fechaPuesta || now.slice(0, 10) },
+      notes: [fec.notes, `Promovido desde fecundador ${fec.code}`].filter(Boolean).join('\n') || undefined,
+      entityType: 'nucleo',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setNuclei(prev => sortByEntityCode([...prev, nuevoNucleo]));
+    setFecundadores(prev => prev.map(f => f.id === fec.id
+      ? {
+        ...f,
+        estado: 'promovido',
+        promotion: { nucleoId: nuevoNucleo.id, nucleoCode: nuevoNucleo.code, fecha: now },
+        historial: [...f.historial, { id: uid(), fecha: now, tipo: 'promovido', descripcion: `Promovido a núcleo ${nuevoNucleo.code}` }],
+        updatedAt: now,
+      }
+      : f));
+
+    const entry: CuadernoEntry = {
+      id: uid(),
+      date: now,
+      text: `Fecundador ${fec.code} promovido a núcleo ${nuevoNucleo.code}. Reina en puesta desde ${fec.fechaPuesta || 'desconocido'}.`,
+      type: 'breeding',
+    };
+    setCuadernoEntries(prev => [entry, ...prev]);
+
+    try {
+      addTransferRecord(user.uid, {
+        tipo: 'fecundador_a_nucleo',
+        entidadCodigo: fec.code,
+        desdeApiarioId: apiaryId,
+        hastaApiarioId: apiaryId,
+        desdeApiarioNombre: apiaryName || 'Apiario',
+        hastaApiarioNombre: apiaryName || 'Apiario',
+        fecha: now,
+      });
+    } catch (error) {
+      console.error('[FECUNDADORES] Error al registrar transferencia:', error);
+    }
+
+    pushToast('Fecundador promovido a núcleo', `${fec.code} → ${nuevoNucleo.code}`);
+  };
+
+  const handleShowFecundadorBreedingLot = (lotId: string) => {
+    setCriaFocusLotId(lotId);
+    navigateToSection('cria');
+  };
+
+  // FUNCIONALIDAD 2 y 3: Transferir núcleo/colmena a otro apiario
+  const handleTransfer = (hive: Hive, destApiaryId: string, motivo: string, fecha: string): boolean => {
+    if (!user || !apiaryId) {
+      pushToast('Error al transferir la colmena', undefined, 'error');
+      return false;
+    }
+    if (!destApiaryId) {
+      pushToast('Selecciona un apiario de destino', undefined, 'error');
+      return false;
+    }
+    if (destApiaryId === apiaryId) {
+      pushToast('El apiario destino debe ser diferente al actual', undefined, 'error');
+      return false;
+    }
+    if (!fecha || Number.isNaN(new Date(fecha).getTime())) {
+      pushToast('La fecha del traslado no es válida', undefined, 'error');
+      return false;
+    }
     const dest = apiaries.find((a: any) => a.id === destApiaryId);
     if (!dest) {
-      pushToast('Apiario de destino no encontrado', 'error');
-      return;
+      pushToast('Apiario de destino no encontrado', undefined, 'error');
+      return false;
     }
     const src = apiaries.find((a: any) => a.id === apiaryId);
     const kind = hive.entityType === 'nucleo' ? 'nucleus' : 'hive';
+    const motivoFinal = (motivo || '').trim() || 'Sin motivo especificado';
 
     try {
       const res = kind === 'hive'
@@ -938,7 +1378,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
           destApiaryId,
           destApiaryName: dest.name || 'Apiario',
           entityId: hive.id,
-          motivo: (motivo || '').trim() || undefined,
+          motivo: motivoFinal,
           fecha,
         })
         : transferNucleoToApiary({
@@ -948,21 +1388,19 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
           destApiaryId,
           destApiaryName: dest.name || 'Apiario',
           entityId: hive.id,
-          motivo: (motivo || '').trim() || undefined,
+          motivo: motivoFinal,
           fecha,
         });
 
       if (kind === 'hive') {
         setHives(prev => prev.filter(h => h.id !== hive.id));
         if (selectedId === hive.id) {
-          const remaining = hives.filter(h => h.id !== hive.id);
-          setSelectedId(remaining.length > 0 ? remaining[0].id : "");
+          setSelectedId("");
         }
       } else {
         setNuclei(prev => prev.filter(n => n.id !== hive.id));
         if (selectedNucleusId === hive.id) {
-          const remaining = nuclei.filter(n => n.id !== hive.id);
-          setSelectedNucleusId(remaining.length > 0 ? remaining[0].id : null);
+          setSelectedNucleusId(null);
         }
       }
 
@@ -971,14 +1409,105 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       setQueenHistory(prev => prev.filter(h => h.hiveId !== hive.id));
       setCuadernoEntries(prev => [res.cuadernoEntry, ...prev]);
 
-      pushToast('Transferencia completada', `${res.code} → ${dest.name || 'Apiario'}`);
+      const entityWord = kind === 'hive' ? 'Colmena' : 'Núcleo';
+      const verb = kind === 'hive' ? 'transferida' : 'transferido';
+      pushToast(`${entityWord} ${hive.code} ${verb} a ${dest.name || 'Apiario'}`, undefined, 'success');
+      return true;
     } catch (error) {
       console.error('[TRANSFERS] Error al transferir:', error);
-      pushToast('Error al transferir', 'error');
+      pushToast('Error al transferir la colmena', undefined, 'error');
+      return false;
+    }
+  };
+
+  // FUNCIONALIDAD 4: Transferir fecundador (baby nuc) a otro apiario
+  const handleTransferFecundador = (fecundador: Fecundador, destApiaryId: string, motivo: string, fecha: string): boolean => {
+    if (!user || !apiaryId) {
+      pushToast('Error al transferir el fecundador', undefined, 'error');
+      return false;
+    }
+    if (!destApiaryId) {
+      pushToast('Selecciona un apiario de destino', undefined, 'error');
+      return false;
+    }
+    if (destApiaryId === apiaryId) {
+      pushToast('El apiario destino debe ser diferente al actual', undefined, 'error');
+      return false;
+    }
+    if (!fecha || Number.isNaN(new Date(fecha).getTime())) {
+      pushToast('La fecha del traslado no es válida', undefined, 'error');
+      return false;
+    }
+    const dest = apiaries.find((a: any) => a.id === destApiaryId);
+    if (!dest) {
+      pushToast('Apiario de destino no encontrado', undefined, 'error');
+      return false;
+    }
+    const src = apiaries.find((a: any) => a.id === apiaryId);
+    const motivoFinal = (motivo || '').trim() || 'Sin motivo especificado';
+
+    try {
+      const res = transferFecundadorToApiary({
+        userId: user.uid,
+        sourceApiaryId: apiaryId,
+        sourceApiaryName: src?.name || apiaryName,
+        destApiaryId,
+        destApiaryName: dest.name || 'Apiario',
+        entityId: fecundador.id,
+        motivo: motivoFinal,
+        fecha,
+      });
+
+      setFecundadores(prev => prev.filter(f => f.id !== fecundador.id));
+      setCuadernoEntries(prev => [res.cuadernoEntry, ...prev]);
+
+      pushToast(`Fecundador ${fecundador.code} transferido a ${dest.name || 'Apiario'}`, `${fecundador.code} → ${res.code}`, 'success');
+      return true;
+    } catch (error) {
+      console.error('[TRANSFERS] Error al transferir fecundador:', error);
+      pushToast('Error al transferir el fecundador', undefined, 'error');
+      return false;
     }
   };
 
   const handleInspection = (d: InspectionDraft) => {
+    // Determinar el ESTADO GENERAL de la colmena/núcleo según la inspección,
+    // en orden estricto de prioridad:
+    //   1. sin_reina → colonia huérfana (sin reina) marcada.
+    //   2. alerta    → varroa >= 3.0%  O  reserva de miel <= 1 cuadro.
+    //   3. revisión  → varroa 1.5%–2.9%  O  reina "No vista"  O  temperamento "Nerviosa".
+    //   4. saludable → ninguna de las alertas anteriores.
+    let status: HiveStatus;
+    if (d.orphanColony) {
+      status = 'sin_reina';
+    } else if (d.varroa >= 3.0 || d.honey <= 1) {
+      status = 'alerta';
+    } else if ((d.varroa >= 1.5 && d.varroa <= 2.9) || !d.queenSeen || d.calm === 3) {
+      status = 'revision';
+    } else {
+      status = 'saludable';
+    }
+
+    let note = d.note;
+    if (status === 'sin_reina') {
+      // Marcar como huérfana: estado SIN REINA en la colmena/núcleo
+      setHives(prev => prev.map(h => h.id === d.hiveId
+        ? { ...h, status, hasQueen: false, updatedAt: new Date().toISOString() }
+        : h));
+      setNuclei(prev => prev.map(n => n.id === d.hiveId
+        ? { ...n, status, hasQueen: false, updatedAt: new Date().toISOString() }
+        : n));
+      if (!note.includes('Colonia huérfana detectada')) {
+        note = note.trim() ? `${note}\nColonia huérfana detectada` : 'Colonia huérfana detectada';
+      }
+    } else {
+      setHives(prev => prev.map(h => h.id === d.hiveId
+        ? { ...h, status, updatedAt: new Date().toISOString() }
+        : h));
+      setNuclei(prev => prev.map(n => n.id === d.hiveId
+        ? { ...n, status, updatedAt: new Date().toISOString() }
+        : n));
+    }
     const inspection: Inspection = {
       id: uid(),
       hiveId: d.hiveId,
@@ -988,17 +1517,77 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       honey: d.honey,
       varroa: d.varroa,
       calm: d.calm,
-      note: d.note,
-      fotos: d.photos,
+      note,
+      photos: d.photos,
+      framesMounted: d.framesMounted,
+      framesWorked: d.framesWorked,
+      broodPattern: d.broodPattern,
+      hasSupers: d.hasSupers,
     };
     setInspections(prev => [inspection, ...prev]);
     setModalHive(null);
-    pushToast("Inspección registrada", `${d.hiveId} · ${d.queenSeen ? "reina vista" : "sin ver reina"} · varroa ${d.varroa.toFixed(1)}%`);
+    setModalNucleus(null);
+    pushToast("Inspección registrada", `${d.hiveId} · ${d.queenSeen ? "reina vista" : "sin ver reina"} · varroa ${d.varroa.toFixed(1)}% · Estado: ${HIVE_STATUS_LABELS[status]}`);
+
+    // Persistencia directa del estado calculado en Firestore (patch del ítem
+    // dentro del documento principal de la entidad), para que 'alerta', 'revisión',
+    // 'saludable' ... sobreviva a recargas y sea visible desde el backend.
+    const statusUid = user?.uid;
+    if (statusUid && apiaryId) {
+      // Identificar el TIPO del elemento inspeccionado para apuntar a la
+      // colección correcta: colmena → hives, núcleo → nuclei.
+      const isHive = hives.some(h => h.id === d.hiveId);
+      const isNucleus = nuclei.some(n => n.id === d.hiveId);
+      const entity = isHive ? 'hives' : isNucleus ? 'nuclei' : null;
+      const hasQueen = status === 'sin_reina' ? false : undefined;
+      if (entity) {
+        updateColonyStatus(statusUid, apiaryId, entity, d.hiveId, status, hasQueen)
+          .catch((error: any) => {
+            console.error('[FIRESTORE] No se pudo persistir el estado:', error);
+            pushToast(
+              'Estado no guardado en la nube',
+              error?.code === 'permission-denied'
+                ? 'Solo el propietario de la colonia puede guardar su estado.'
+                : 'Se guardó solo en este dispositivo. Revisa tu conexión.',
+              'error'
+            );
+          });
+      }
+    }
   };
 
   const handleInspectNucleus = (id: string) => {
     setModalNucleus(id);
     pushToast("Inspección de núcleo", `${id}`);
+  };
+
+  // Eliminar una foto de una inspección concreta (desde el detalle).
+  // Con el preset unsigned de Cloudinary no hay forma de destruir el asset desde
+  // el navegador (la API de borrado exige firma de servidor), así que aquí solo
+  // se retira la referencia del registro: la foto deja de verse en la app. El
+  // asset queda huérfano en la carpeta `inspections` del panel de Cloudinary.
+  const handleDeleteInspectionPhoto = (inspectionId: string, photoId: string) => {
+    setInspections(prev => prev.map(i => {
+      if (i.id !== inspectionId) return i;
+      if (isStoragePhotoId(photoId)) {
+        return { ...i, photos: (i.photos || []).filter(u => u !== photoId) };
+      }
+      return { ...i, fotos: (i.fotos || []).filter(p => p.id !== photoId) };
+    }));
+  };
+
+  // Eliminar una inspección completa (registro + fotos que cuelgan de él).
+  // El estado es la fuente de la vista y el useEffect de `saveInspections`
+  // persiste el cambio, así que la lista y el contador se actualizan al instante.
+  const handleDeleteInspection = (inspectionId: string) => {
+    const target = inspections.find((i) => i.id === inspectionId);
+    if (!target) return;
+    setInspections((prev) => prev.filter((i) => i.id !== inspectionId));
+    const detalle = [
+      target.hiveId,
+      new Date(target.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
+    ].join(' · ');
+    pushToast('Inspección eliminada', detalle);
   };
 
   const handleAddNucleus = () => {
@@ -1009,20 +1598,6 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     setTasks(prev => prev.map(t => 
       t.id === id ? { ...t, completed: !t.completed } : t
     ));
-  };
-
-  const handleAddTask = (title: string) => {
-    console.log('✅ [APP] Agregando tarea:', title);
-    const newTask: Task = {
-      id: uid(),
-      title,
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      priority: 'media',
-      completed: false,
-    };
-    setTasks(prev => [newTask, ...prev]);
-    console.log('✅ [APP] Tarea agregada al estado, total tareas:', tasks.length + 1);
-    pushToast("Tarea añadida", title);
   };
 
   const handleDeleteTask = (id: string) => {
@@ -1108,7 +1683,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   };
 
   const handleNotificationClick = () => {
-    setActiveSection('calendario');
+    navigateToSection('calendario');
   };
 
   // Integración con Cuaderno: registro automático
@@ -1196,6 +1771,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       }
     }
 
+    syncColonyHasQueen(hiveId);
     handleCloseQueenModal();
   };
 
@@ -1234,6 +1810,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       createdAt: now,
     };
     setQueens(prev => [newQueen, ...prev]);
+    syncColonyHasQueen(hiveId);
     pushToast('Reina asignada a colmena', getHiveCode(hiveId));
   };
 
@@ -1247,8 +1824,113 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   // Colmenas con reinas viejas (> 12 semanas) para el panel principal
   const oldQueenCount = queens.filter(q => q.estado === 'activa' && getQueenAlert(q)?.nivel === 'vieja').length;
 
+  // Cambio de vista: navega Y persiste la última pestaña activa del usuario
+  // en el mismo handler (sin debounce).
+  const navigateToSection = (section: ViewSection, anchorId: string | null = null) => {
+    // `startTransition` es lo que elimina el error "Component suspended while
+    // responding to synchronous input": sin él, el click del menú lateral es una
+    // actualización discreta y síncrona, y si la sección de destino es un chunk
+    // lazy aún sin descargar React no puede diferir el trabajo: sustituye la
+    // pantalla y avisa. Marcándolo como transición, React mantiene la UI actual
+    // hasta que el chunk llega y solo entonces revela la sección nueva.
+    //
+    // El ancla viaja DENTRO de la transición y no en un setState aparte: si se
+    // fijara después, la actualización síncrona se aplicaría primero y el
+    // setFocusAnchor(null) de la transición se ejecutaría después, borrando el
+    // ancla que se acababa de pedir.
+    startTransition(() => {
+      setActiveSection(section);
+      setFocusAnchor(anchorId);
+    });
+    if (user?.uid) {
+      saveLastView(section, user.uid);
+      saveDashboardUltimaVista({ section }, user.uid);
+    }
+  };
+
+  // Precarga de los chunks de las secciones lazy.
+  //
+  // Suspense y startTransition evitan que la pantalla se congele o se sustituya,
+  // pero no evitan que haya que ESPERAR: si el chunk no está, el usuario ve el
+  // skeleton de la sección. Descargando los chunks en tiempo ocioso, para cuando
+  // llega el click la promesa ya está resuelta, React.lazy devuelve el
+  // componente de forma síncrona y no hay suspensión: el cambio de pestaña es
+  // instantáneo de verdad.
+  //
+  // Se hace con el import real (no con un <link rel=prefetch>) porque es el
+  // mismo módulo que después acaba ejecutando lazy(): así el chunk queda en la
+  // caché del módulo y el import() posterior resuelve al instante.
+  useEffect(() => {
+    let cancelado = false;
+    const precargar = () => {
+      if (cancelado) return;
+      void Promise.all([dashboardPanel.preload(), hivesSection.preload()]).catch(() => {
+        // Si la precarga falla, el flujo normal de React.lazy lo reintenta al
+        // navegar. No merece la pena molestar al usuario con un toast aquí.
+      });
+    };
+    // requestIdleCallback para no competir con el render inicial ni con la
+    // descarga de datos; setTimeout como respaldo donde no existe.
+    const g = globalThis as {
+      requestIdleCallback?: (cb: () => void) => number;
+      cancelIdleCallback?: (h: number) => void;
+    };
+    const usaIdle = typeof g.requestIdleCallback === 'function';
+    const id = usaIdle
+      ? g.requestIdleCallback!(precargar)
+      : (setTimeout(precargar, 1200) as unknown as number);
+    return () => {
+      cancelado = true;
+      if (usaIdle) g.cancelIdleCallback?.(id);
+      else clearTimeout(id);
+    };
+  }, []);
+
+  // Ir a un ancla del dashboard (colmenas, núcleos, fecundadores) desde el menú
+  // hamburguesa. Sección y ancla se fijan en la misma transición para no perder
+  // el destino: si no estamos en colmenas, el cambio de sección y el ancla viajan
+  // juntos; si ya estamos, solo cambia el ancla.
+  const goToHiveAnchor = useCallback(
+    (anchorId: string) => {
+      navigateToSection('colmenas', anchorId);
+    },
+    [navigateToSection]
+  );
+
+  // Restaurar la última vista guardada al resolver la sesión activa (montaje,
+  // recarga o cambio de usuario). Prefiere dashboard_ultima_vista y, si no,
+  // cae al sistema unificado lastView. NO restaura modales, selección ni scroll.
+  //
+  // También dentro de una transición: si la vista guardada es una sección lazy
+  // cuyo chunk no está, sin esto la suspensión se propagaba al boundary de la
+  // ruta y salía el skeleton a pantalla completa al abrir la app.
+  useEffect(() => {
+    if (!user) return;
+    const savedView = loadDashboardUltimaVista(user.uid);
+    const saved =
+      savedView && isViewSection(savedView.section) ? savedView.section : loadLastView(user.uid);
+    startTransition(() => {
+      setActiveSection(isViewSection(saved) ? saved : 'panel');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
   const jumpTo = (id: string) => {
-    setActiveSection(id as typeof activeSection);
+    navigateToSection(id as ViewSection);
+  };
+
+  // Callback estable: el efecto de anclas de HivesSection depende de él y, con
+  // una lambda nueva en cada render, el temporizador de 320 ms se reiniciaba
+  // sin parar y el salto a la subsección nunca llegaba a ejecutarse.
+  const consumeAnchor = useCallback(() => setFocusAnchor(null), []);
+
+  // Volver manualmente a la selección de sección (/seleccionar). Se persiste
+  // la vista '/seleccionar' (en vez de limpiarla) para que, al cerrar la app
+  // estando en la pantalla de elección, ColdStartRestore/HomeRedirect la
+  // restauren y el usuario vuelva a elegir, no a /dashboard.
+  const returnToSelection = () => {
+    saveUltimaVista('/seleccionar', user?.uid);
+    navigate('/seleccionar');
   };
 
   return (
@@ -1259,7 +1941,9 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       <ResponsiveHeader 
         onNavigate={jumpTo} 
         onSettings={() => setShowSettingsPage(true)}
-        onHome={() => navigate('/seleccionar')}
+        onHome={returnToSelection}
+        onChangeSection={returnToSelection}
+        onNavigateSubsection={goToHiveAnchor}
         activeSection={activeSection}
         notifications={notifications}
         onMarkAsRead={markNotificationAsRead}
@@ -1270,30 +1954,49 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
 
       {/* contenido */}
       <div className="relative z-10">
-        <main className="mx-auto max-w-6xl space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 sm:pt-8 md:pt-10">
-          <FadeInUp>
-            <IntroHead temp={temp} wind={wind} activity={activity} apiaryName={apiaryName} apiaryLocation={apiaryLocation} />
-          </FadeInUp>
+        {/* `relative` en <main>: con mode="popLayout" la sección que sale se
+            saca del flujo con position:absolute y necesita este punto de
+            referencia para no quedar descolocada. */}
+        <main className="relative mx-auto max-w-6xl space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 sm:pt-8 md:pt-10">
+          {activeSection === 'panel' && (
+            <FadeInUp>
+              <IntroHead temp={temp} wind={wind} activity={activity} apiaryName={apiaryName} apiaryLocation={apiaryLocation} />
+            </FadeInUp>
+          )}
 
-          {/* Renderizado condicional de secciones */}
-          <AnimatePresence mode="wait">
+          {/* Cambio de sección del dashboard.
+
+              Sin frames muertos: la sección saliente se desmonta de
+              INSTANTÁNEO (sectionVariants.exit, duration 0) y la entrante
+              entra a la vez con fade + 8px y curva Apple. Antes la saliente
+              tardaba 160ms en irse mientras la entrante aún no había
+              montado, y con mode="wait" eso además dejaba <main> sin ninguna
+              sección durante el hueco: de ahí el parpadeo negro.
+
+              mode="popLayout" se mantiene como red de seguridad: hoy el exit
+              dura 0 y no hay solape real, pero si alguna vez se le da
+              duración, popLayout saca la saliente del flujo y evita que la
+              página salte de altura en lugar de encajar el hueco. */}
+          <AnimatePresence mode="popLayout" initial={false}>
             {activeSection === 'panel' && (
               <motion.section
                 key="panel"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
+                <SectionSuspense>
                 <DashboardPanel 
                   hives={hives} 
                   tasks={tasks}
                   inspections={inspections}
-                  onNavigate={(section) => setActiveSection(section as typeof activeSection)}
+                  harvests={harvests}
+                  onNavigate={(section) => navigateToSection(section as ViewSection)}
                   onAddHive={() => setShowAddHiveModal(true)}
                   onAddInspection={() => setModalHive(selectedId || hives[0]?.id || null)}
                   onAddTask={() => {
-                    setActiveSection('tareas');
+                    navigateToSection('tareas');
                   }}
                   weather={realWeather ? {
                     temperature: realWeather.current.temperature,
@@ -1310,11 +2013,11 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
                   onRetryWeather={retryWeather}
                   breedingAlerts={{
                     lotesProximosEnjaulado: breedingAlertCount,
-                    onNavigate: () => setActiveSection('cria'),
+                    onNavigate: () => navigateToSection('cria'),
                   }}
 queenAlerts={{
                   reinasViejas: oldQueenCount,
-                  onNavigate: () => setActiveSection('colmenas'),
+                  onNavigate: () => navigateToSection('colmenas'),
                 }}
                 inventoryAlerts={inventoryAlerts}
                 apiaryName={apiaryName}
@@ -1334,32 +2037,28 @@ queenAlerts={{
                     }
                   }}
                   reminders={reminders}
+                  polinizacionCount={new Set(polinizacionCodes).size}
+                  polinizacionCodes={polinizacionCodes}
                 />
+                </SectionSuspense>
               </motion.section>
             )}
 
             {activeSection === 'colmenas' && (
               <motion.section
                 key="colmenas"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
-                <SectionHead
-                  kicker="Mapa del bancal"
-                  title="Colmenas y Núcleos"
-                  right={
-                    <p className="text-right font-mono text-xs leading-relaxed text-husk">
-                      {hives.length} colmenas · {nuclei.length} núcleos
-                      <br />
-                      ambos visibles
-                    </p>
-                  }
-                />
+                <SectionSuspense>
                 <HivesSection
                   hives={hives}
                   nuclei={nuclei}
+                  focusAnchor={focusAnchor}
+                  polinizacionCodes={polinizacionCodes}
+                  onAnchorConsumed={consumeAnchor}
                   selectedHiveId={selectedId}
                   selectedNucleusId={selectedNucleusId}
                   onSelectHive={setSelectedId}
@@ -1372,9 +2071,12 @@ queenAlerts={{
                   onDeleteNucleus={deleteNucleus}
                   onInspectHive={(id) => setModalHive(id)}
                   onInspectNucleus={handleInspectNucleus}
-                  onShowToast={pushToast}
+                  onShowToast={pushToastHives}
                   onUpdateHivePhotos={(id, fotos) => updateHive(id, { fotos })}
                   onUpdateNucleusPhotos={(id, fotos) => updateNucleus(id, { fotos })}
+                  onUpdateEquipment={updateHiveEquipment}
+                  onDeleteInspection={handleDeleteInspection}
+                  onDeleteInspectionPhoto={handleDeleteInspectionPhoto}
                   inspections={inspections}
                   nextHiveCode={nextHiveCode}
                   queens={queens}
@@ -1386,23 +2088,33 @@ queenAlerts={{
                   breedingLots={breedingLots}
                   onShowQueenLot={(loteId) => {
                     setCriaFocusLotId(loteId);
-                    setActiveSection('cria');
+                    navigateToSection('cria');
                   }}
                   apiaries={apiaries}
                   currentApiaryId={apiaryId}
                   onConvertNucleus={handleConvertNucleus}
                   onTransfer={handleTransfer}
+                  fecundadores={fecundadores}
+                  onFecundadorToast={pushToast}
+                  onAddFecundadorCuaderno={addCuadernoEntry}
+                  onCreateFecundador={addFecundador}
+                  onUpdateFecundador={updateFecundador}
+                  onDeleteFecundador={deleteFecundador}
+                  onPromoteFecundador={handlePromoteFecundador}
+                  onShowFecundadorBreedingLot={handleShowFecundadorBreedingLot}
+                  onTransferFecundador={handleTransferFecundador}
                 />
+                </SectionSuspense>
               </motion.section>
             )}
 
             {activeSection === 'cria' && (
               <motion.section
                 key="cria"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <BreedingSection
                   hives={hives}
@@ -1424,10 +2136,10 @@ queenAlerts={{
             {activeSection === 'estadisticas' && (
               <motion.section
                 key="estadisticas"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <SectionHead
                   kicker="Análisis y métricas"
@@ -1449,10 +2161,10 @@ queenAlerts={{
             {activeSection === 'calendario' && (
               <motion.section
                 key="calendario"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <SectionHead
                   kicker="Planificación y eventos"
@@ -1467,6 +2179,8 @@ queenAlerts={{
                   onRecurringTasksChange={setRecurringTasks}
                   floweringEntries={floweringEntries}
                   onFloweringEntriesChange={setFloweringEntries}
+                  eventTemplates={eventTemplates}
+                  onEventTemplatesChange={setEventTemplates}
                   breedingLots={breedingLots}
                   apiaries={apiaries}
                   apiaryName={apiaryName}
@@ -1477,10 +2191,10 @@ queenAlerts={{
             {activeSection === 'produccion' && (
               <motion.section
                 key="produccion"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <SectionHead
                   kicker="Báscula y alzas"
@@ -1494,10 +2208,10 @@ queenAlerts={{
             {activeSection === 'registro' && (
               <motion.section
                 key="registro"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <SectionHead
                   kicker="Diario del apicultor"
@@ -1511,27 +2225,27 @@ queenAlerts={{
             {activeSection === 'tareas' && (
               <motion.section
                 key="tareas"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <SectionHead
                   kicker="Gestión de pendientes"
                   title="Tareas"
                   right={<p className="font-mono text-xs text-husk">{pending} pendientes</p>}
                 />
-                <TasksSection tasks={tasks} hives={allColonies} onToggle={toggleTask} onAdd={handleAddTask} onSaveTask={handleSaveTask} onDelete={handleDeleteTask} />
+                <TasksSection tasks={tasks} hives={allColonies} onToggle={toggleTask} onSaveTask={handleSaveTask} onDelete={handleDeleteTask} />
               </motion.section>
             )}
 
             {activeSection === 'inventario' && (
               <motion.section
                 key="inventario"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <InventorySection items={inventory} onChange={setInventory} onShowToast={pushToast} />
               </motion.section>
@@ -1540,10 +2254,10 @@ queenAlerts={{
             {activeSection === 'transferencias' && (
               <motion.section
                 key="transferencias"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
               >
                 <SectionHead
                   kicker="Movimientos entre apiarios y promociones"
@@ -1551,6 +2265,18 @@ queenAlerts={{
                   right={<p className="font-mono text-xs text-husk">registros automáticos</p>}
                 />
                 <TransferHistorySection userId={user?.uid || ''} apiaries={apiaries} onShowToast={pushToast} />
+              </motion.section>
+            )}
+
+            {activeSection === 'polinizacion' && (
+              <motion.section
+                key="polinizacion"
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+              >
+                <PolinizacionSection userId={user?.uid || ''} hives={hives} onShowToast={pushToast} />
               </motion.section>
             )}
           </AnimatePresence>
@@ -1563,16 +2289,14 @@ queenAlerts={{
             transition={{ duration: 0.6 }}
           >
             <span className="flex items-center gap-2">
-              <span className="hexclip flex h-6 w-5 items-center justify-center bg-honey/90 text-ink">
-                <IconBee className="h-3.5 w-3.5" />
-              </span>
+              <AppLogo size="sm" />
               <b className="font-display text-sm tracking-wider text-cream">PANAL</b> — cuaderno apícola digital
             </span>
             <span className="font-mono">
               {apiaryLocation || 'Sin ubicación'}
             </span>
             <span>
-              {hives.length} colmenas · {nuclei.length} núcleos
+              {hives.length} colmenas · {nuclei.length} núcleos · {fecundadores.filter(f => f.estado === 'activo').length} fecundadores
             </span>
           </motion.footer>
         </main>
@@ -1690,24 +2414,35 @@ queenAlerts={{
 
       {/* toasts */}
       <div className="fixed bottom-24 lg:bottom-5 right-5 z-[60] flex w-72 flex-col gap-2">
-        {toasts.map((t) => (
-          <motion.div 
-            key={t.id} 
-            className="toast-in card flex items-start gap-3 border-honey/40 p-4 shadow-[0_16px_40px_rgba(0,0,0,.5)]"
-            initial={{ opacity: 0, x: 100, scale: 0.8 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 100, scale: 0.8 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          >
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-honey text-ink">
-              <IconCheck className="h-3.5 w-3.5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-cream">{t.title}</p>
-              {t.desc && <p className="mt-0.5 truncate font-mono text-[11px] text-husk">{t.desc}</p>}
-            </div>
-          </motion.div>
-        ))}
+        <AnimatePresence>
+          {toasts.map((t) => {
+            const isError = t.type === 'error';
+            return (
+              <motion.div
+                key={t.id}
+                className={`card flex items-start gap-3 p-4 shadow-[0_16px_40px_rgba(0,0,0,.5)] ${isError ? 'border-coral/40' : 'border-honey/40'}`}
+                variants={toastVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+              >
+                <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${isError ? 'bg-coral text-cream' : 'bg-honey text-ink'}`}>
+                  {isError ? (
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : (
+                    <IconCheck className="h-3.5 w-3.5" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold ${isError ? 'text-coral' : 'text-cream'}`}>{t.title}</p>
+                  {t.desc && <p className="mt-0.5 truncate font-mono text-[11px] text-husk">{t.desc}</p>}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </div>
   );

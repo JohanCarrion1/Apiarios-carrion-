@@ -1,15 +1,55 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconBee, IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconHome, IconQueen, IconPackage, IconLayers } from '../ui';
+import { useNavigate } from 'react-router-dom';
+import { IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconQueen, IconPackage, IconLayers, IconFlower } from '../ui';
 import { useAuth } from '../context/AuthContext';
+import { BRANDING } from '../lib/branding';
 import Logo from './Logo';
 import NotificationBell from './NotificationBell';
 import type { Notification } from '../types/calendar';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, drawerVariants, SPRING_TAP, TAP_SCALE } from '../lib/motion';
+import { isEmailAdmin } from '../lib/adminAccess';
+import { saveUltimaVista } from '../utils/lastView';
+
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: (props: { className?: string }) => JSX.Element;
+}
+
+// Bloque B — secciones del dashboard (mismo contenido y orden).
+// "Colmenas" es la ÚNICA puerta a esa parte del panel: la página ya muestra,
+// en el mismo scroll, las tres secciones (colmenas → núcleos → fecundadores),
+// así que no hay submenú ni entradas separadas para las subsecciones.
+const menuItems: MenuItem[] = [
+  { id: 'panel', label: 'Panel', icon: IconPanel },
+  { id: 'colmenas', label: 'Colmenas', icon: IconHex },
+  { id: 'cria', label: 'Cría de reinas', icon: IconQueen },
+  { id: 'estadisticas', label: 'Estadísticas', icon: IconChart },
+  { id: 'calendario', label: 'Calendario', icon: IconCalendar },
+  { id: 'produccion', label: 'Cosecha', icon: IconDrop },
+  { id: 'registro', label: 'Cuaderno', icon: IconClipboard },
+  { id: 'tareas', label: 'Tareas', icon: IconCheck },
+  { id: 'inventario', label: 'Inventario', icon: IconPackage },
+  { id: 'transferencias', label: 'Transferencias', icon: IconLayers },
+  { id: 'polinizacion', label: 'Polinización', icon: IconFlower },
+];
 
 interface ResponsiveHeaderProps {
   onNavigate: (sectionId: string) => void;
   onSettings?: () => void;
   onHome?: () => void;
+  onChangeSection?: () => void;
+  /**
+   * Ancla del dashboard (colmenas | núcleos | fecundadores | inspecciones).
+   *
+   * El menú ya NO la usa: "Colmenas" lleva a la sección completa y las tres
+   * subsecciones se ven al hacer scroll dentro de ella. Se mantiene la prop
+   * porque App.tsx la sigue pasando y quitar el cableado de `goToHiveAnchor`
+   * (`focusAnchor` → `HivesSection`) es tocar la lógica de navegación.
+   */
+  onNavigateSubsection?: (anchorId: string) => void;
   activeSection?: string;
   notifications?: Notification[];
   onMarkAsRead?: (id: string) => void;
@@ -18,17 +58,41 @@ interface ResponsiveHeaderProps {
   inventoryAlertsCount?: number;
 }
 
-export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection = 'panel', notifications = [], onMarkAsRead, onMarkAllAsRead, onNotificationClick, inventoryAlertsCount = 0 }: ResponsiveHeaderProps) {
+/* Ícono inline de engranaje (administración / ajustes). */
+const GearIcon = ({ className = '' }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+/**
+ * HEADER UNIFICADO para TODOS los usuarios (admin y no-admin).
+ * - Mismo header, mismas opciones para cualquier rol (un solo menú compartido).
+ * - "← Volver a inicio" se muestra SIEMPRE (redirige a /seleccionar).
+ * - El menú hamburguesa contiene únicamente: tarjeta de perfil (con badge de
+ *   rol), secciones del dashboard (Panel…Transferencias), "Ajustes" y
+ *   "Cerrar sesión". Sin secciones administrativas.
+ */
+export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSection, onNavigateSubsection, activeSection = 'panel', notifications = [], onMarkAsRead, onMarkAllAsRead, onNotificationClick, inventoryAlertsCount = 0 }: ResponsiveHeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  // En modo standalone la app ya es una aplicación nativa: se oculta el
-  // botón "Regresar a inicio" y se respetan las safe-areas de iOS.
+  // En modo standalone la app es una aplicación nativa: se respetan las
+  // safe-areas de iOS. El botón "Volver a inicio" SIEMPRE se muestra.
   const [isStandalone, setIsStandalone] = useState(() =>
     window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as any).standalone === true
   );
+
+  // Rol: isEmailAdmin une la lista viva de Firestore (config/admins) con la
+  // semilla de VITE_ADMIN_EMAILS. Solo cambia la visibilidad de los ítems
+  // "Panel de administración" y "Cotizaciones" y el badge del perfil.
+  const isAdmin = !!user && isEmailAdmin(user.email);
+
+  useScrollLock(isMenuOpen || showLogoutConfirm);
 
   useEffect(() => {
     const mql = window.matchMedia('(display-mode: standalone)');
@@ -39,26 +103,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
-  const menuItems = [
-    { id: 'panel', label: 'Panel', icon: IconPanel },
-    { id: 'colmenas', label: 'Colmenas', icon: IconHex },
-    { id: 'cria', label: 'Cría', icon: IconQueen },
-    { id: 'estadisticas', label: 'Estadísticas', icon: IconChart },
-    { id: 'calendario', label: 'Calendario', icon: IconCalendar },
-    { id: 'produccion', label: 'Cosecha', icon: IconDrop },
-    { id: 'registro', label: 'Cuaderno', icon: IconClipboard },
-    { id: 'tareas', label: 'Tareas', icon: IconCheck },
-    { id: 'inventario', label: 'Inventario', icon: IconPackage },
-    { id: 'transferencias', label: 'Transferencias', icon: IconLayers },
-  ];
-
-  const handleLogout = () => {
-    logout();
-    setShowLogoutConfirm(false);
-    setIsMenuOpen(false);
-  };
-
-  // Soporte para tecla Escape
+  // Cerrar el menú con la tecla Escape
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -81,32 +126,55 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
     return () => window.removeEventListener('keydown', handleEscape);
   }, [showLogoutConfirm]);
 
+  const handleLogout = () => {
+    logout();
+    setShowLogoutConfirm(false);
+    setIsMenuOpen(false);
+  };
+
   return (
     <>
       {/* Header */}
       <header className={`sticky top-0 z-30 bg-pane/95 backdrop-blur-md border-b border-line ${isStandalone ? 'pwa-standalone-header' : ''}`}>
         <div className="flex items-center justify-between px-4 py-3 sm:px-6">
-          {/* Logo */}
-          <motion.div
-            className="flex items-center"
+          {/* Logo — clic lleva al dashboard */}
+          <motion.button
+            onClick={() => {
+              if (user?.uid) saveUltimaVista('/dashboard', user.uid);
+              navigate('/dashboard');
+            }}
+            className="flex shrink-0 items-center"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
+            whileTap={{ scale: 0.97 }}
+            aria-label="Ir al dashboard"
+            title="Ir al dashboard"
           >
-            <Logo variant="compact-inline" />
-          </motion.div>
+            <Logo variant="compact-inline" label={BRANDING.nombreEmpresa} />
+          </motion.button>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-2">
+          {/* Desktop Navigation (secciones del dashboard, todos los roles).
+              min-w-0 + flex-1 + overflow-x-auto: el nav NUNCA invade el
+              cluster de la derecha (logo + Volver a inicio + campana + foto +
+              hamburguesa). Antes, de 1024px a ~1500px las 11 secciones se
+              pintaban por debajo de ese cluster, que se renderiza después, y
+              `body { overflow-x: hidden }` recortaba el resto: era imposible
+              abrir el menú, leer notificaciones, cerrar sesión o volver a
+              inicio en pantallas de portátil habituales. */}
+          <nav
+            className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-hide lg:flex"
+            aria-label="Secciones del dashboard"
+          >
             {menuItems.map((item, index) => {
               const isActive = activeSection === item.id;
               return (
                 <motion.button
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${
-                    isActive 
-                      ? 'bg-honey/20 text-honey border border-honey/30' 
+                  className={`shrink-0 whitespace-nowrap px-2.5 py-2 text-sm font-medium transition-colors rounded-lg xl:px-3 ${
+                    isActive
+                      ? 'bg-honey/20 text-honey border border-honey/30'
                       : 'text-husk hover:text-cream hover:bg-pane2'
                   }`}
                   initial={{ opacity: 0, y: -10 }}
@@ -114,6 +182,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                   transition={{ delay: index * 0.1 }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
+                  aria-current={isActive ? 'page' : undefined}
                 >
                   <span className="flex items-center gap-1.5">
                     {item.label}
@@ -128,24 +197,32 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
             })}
           </nav>
 
-          {/* Botón de retroceso a selección + Campana + Hamburger */}
-          <div className="flex items-center gap-2">
-            {onHome && !isStandalone && (
+          {/* Botón "Volver a inicio" (SIEMPRE visible para todos) + Campana + Foto + Hamburguesa */}
+          <div className="flex shrink-0 items-center gap-2">
+            {onHome && (
               <motion.button
                 onClick={onHome}
-                className="flex items-center justify-center rounded-full bg-honey px-3 py-[3px] min-h-[26px] text-[10px] font-medium leading-none whitespace-nowrap text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(240,164,28,.35)]"
+                className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-honey px-2.5 py-1 min-h-[26px] text-[11px] font-medium leading-none shrink-0 text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(240,164,28,.35)]"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.92 }}
-                aria-label="Regresar a inicio"
-                title="Regresar a inicio"
+                aria-label="Volver a inicio"
+                title="Volver a inicio"
               >
-                <span className="md:hidden">Volver a inicio</span>
-                <span className="hidden md:inline-flex items-center gap-2">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-                  </svg>
-                  Regresar a inicio
-                </span>
+                <svg
+                  className="h-3.5 w-3.5 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2.5}
+                    d="M11 17l-5-5m0 0l5-5m-5 5h12"
+                  />
+                </svg>
+                <span className="inline-flex items-center">Volver a inicio</span>
               </motion.button>
             )}
 
@@ -159,28 +236,43 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
               />
             )}
 
+            {/* Foto de perfil (siempre visible) */}
+            {user?.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt={user.displayName || 'Usuario'}
+                className="h-9 w-9 rounded-full object-cover shadow"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-honey to-honeysoft text-sm font-bold text-ink">
+                {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+              </div>
+            )}
+
             <motion.button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="flex flex-col gap-1.5 p-2 rounded-lg hover:bg-pane2 transition-colors"
               whileTap={{ scale: 0.9 }}
-              aria-label="Abrir menú"
+              aria-label={isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+              aria-expanded={isMenuOpen}
+              aria-haspopup="dialog"
             >
-            <motion.span
-              className="w-6 h-0.5 bg-cream block"
-              animate={isMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
-              transition={{ duration: 0.3 }}
-            />
-            <motion.span
-              className="w-6 h-0.5 bg-cream block"
-              animate={isMenuOpen ? { opacity: 0 } : { opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            />
-            <motion.span
-              className="w-6 h-0.5 bg-cream block"
-              animate={isMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }}
-              transition={{ duration: 0.3 }}
-            />
-          </motion.button>
+              <motion.span
+                className="w-6 h-0.5 bg-cream block"
+                animate={isMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
+                transition={{ duration: 0.3 }}
+              />
+              <motion.span
+                className="w-6 h-0.5 bg-cream block"
+                animate={isMenuOpen ? { opacity: 0 } : { opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+              <motion.span
+                className="w-6 h-0.5 bg-cream block"
+                animate={isMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }}
+                transition={{ duration: 0.3 }}
+              />
+            </motion.button>
           </div>
         </div>
       </header>
@@ -191,20 +283,24 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
           <>
             {/* Backdrop */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm touch-none"
             />
 
             {/* Menu Panel - Mini ventana lateral */}
             <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 bottom-0 z-50 w-[75vw] sm:w-80 bg-pane rounded-l-2xl border-l border-line shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+              variants={drawerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="fixed top-0 right-0 bottom-0 z-50 w-[75vw] sm:w-80 bg-pane rounded-l-2xl border-l border-line shadow-[0_0_50px_rgba(0,0,0,0.5)] touch-pan-y"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menú de navegación"
             >
               <div className="flex flex-col h-full">
                 {/* Header with Close Button */}
@@ -241,7 +337,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                         </span>
                       </div>
                     )}
-                    {/* User Info */}
+                    {/* User Info + badge de rol */}
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold text-cream truncate">
                         {user?.displayName || 'Usuario'}
@@ -249,12 +345,22 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                       {user?.email && (
                         <p className="text-sm text-husk truncate">{user.email}</p>
                       )}
+                      {isAdmin ? (
+                        <span className="mt-1 inline-flex rounded-full bg-honey/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-honey">
+                          ADMIN
+                        </span>
+                      ) : (
+                        <span className="mt-1 inline-flex rounded-full bg-husk/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-husk">
+                          USUARIO
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Navigation Menu Items */}
                 <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+                  {/* SECCIONES DEL DASHBOARD */}
                   {menuItems.map((item, index) => {
                     const isActive = activeSection === item.id;
                     const IconComponent = item.icon;
@@ -272,9 +378,9 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                         }`}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
+                        transition={{ delay: index * 0.03 }}
                         whileHover={{ x: 4 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileTap={{ scale: TAP_SCALE, transition: SPRING_TAP }}
                       >
                         {/* Indicador de opción activa */}
                         <motion.div
@@ -310,14 +416,8 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                       className="w-full px-4 py-3 text-sm font-medium text-cream hover:bg-pane2 rounded-lg transition-all duration-200 flex items-center gap-3"
                       whileHover={{ x: 4 }}
                       whileTap={{ scale: 0.98 }}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
                     >
-                      <svg className="w-5 h-5 text-honey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
+                      <GearIcon className="w-5 h-5 text-honey" />
                       Ajustes
                     </motion.button>
                   )}
@@ -328,10 +428,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                     }}
                     className="w-full px-4 py-3 text-sm font-medium text-coral hover:bg-coral/10 rounded-lg transition-all duration-200 flex items-center gap-3"
                     whileHover={{ x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 }}
+                    whileTap={{ scale: TAP_SCALE, transition: SPRING_TAP }}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -359,7 +456,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
           >
             {/* Backdrop - tapa TODA la pantalla */}
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => setShowLogoutConfirm(false)}
             />
 
@@ -372,7 +469,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                   onClick={() => setShowLogoutConfirm(false)}
                   className="flex-1 px-4 py-2 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
                   whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileTap={{ scale: TAP_SCALE, transition: SPRING_TAP }}
                 >
                   Cancelar
                 </motion.button>
@@ -380,7 +477,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, activeSection
                   onClick={handleLogout}
                   className="flex-1 px-4 py-2 text-sm font-medium text-ink bg-coral rounded-lg hover:bg-coral/90 transition-colors"
                   whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileTap={{ scale: TAP_SCALE, transition: SPRING_TAP }}
                 >
                   Cerrar sesión
                 </motion.button>

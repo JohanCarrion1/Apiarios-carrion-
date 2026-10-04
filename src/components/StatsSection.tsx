@@ -428,34 +428,41 @@ export default function StatsSection({
     });
   }, [inspections, currentYear]);
 
+  /* Piel y jerarquia compartidas por las 10 secciones de esta vista: antes
+     cada bloque repetia `card p-6` y sus propios margenes, por eso la jerarquia
+     se rompia al bajar de tamano. */
+  const cardCls = 'bg-[#1a140d] rounded-2xl p-4 sm:p-6 border border-yellow-900/30 shadow-lg';
+  const kpiCls = 'bg-[#1a140d] rounded-2xl p-4 border border-yellow-900/30 shadow-lg';
+  const titleCls = 'font-display text-lg sm:text-xl font-bold text-honey';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Tarjetas de estadísticas básicas */}
       <motion.div
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Total Colmenas</p>
           <p className="font-display text-3xl font-black text-cream">
             {basicStats.totalHives}
           </p>
         </div>
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Producción Total</p>
           <p className="font-display text-3xl font-black text-honey">
             {basicStats.totalProduction.toFixed(1)} kg
           </p>
         </div>
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Promedio Varroa</p>
           <p className="font-display text-3xl font-black text-cream">
             {basicStats.avgVarroa !== null ? `${basicStats.avgVarroa.toFixed(1)}%` : 'N/A'}
           </p>
         </div>
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Tasa de Salud</p>
           <p className="font-display text-3xl font-black text-sage">
             {basicStats.healthRate !== null ? `${basicStats.healthRate.toFixed(0)}%` : 'N/A'}
@@ -465,20 +472,20 @@ export default function StatsSection({
 
       {/* Estadísticas adicionales */}
       <motion.div
-        className="grid grid-cols-3 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
       >
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Inspecciones Este Mes</p>
           <p className="font-display text-2xl font-black text-cream">{basicStats.inspectionsThisMonth}</p>
         </div>
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Cosechas Este Mes</p>
           <p className="font-display text-2xl font-black text-honey">{basicStats.harvestsThisMonth}</p>
         </div>
-        <div className="card p-4">
+        <div className={kpiCls}>
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Tareas Pendientes</p>
           <p className="font-display text-2xl font-black text-coral">{basicStats.pendingTasks}</p>
         </div>
@@ -486,14 +493,14 @@ export default function StatsSection({
 
       {/* ============ 1. RANKING DE PRODUCCIÓN ============ */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
-            <h3 className="font-display text-xl font-bold text-cream">Top 5 Colmenas Productoras</h3>
+            <h3 className={titleCls}>Top 5 Colmenas Productoras</h3>
             <p className="font-mono text-[10px] uppercase tracking-widest text-husk">
               {period === 'mes' && 'Último mes'}
               {period === '3meses' && 'Últimos 3 meses'}
@@ -518,12 +525,13 @@ export default function StatsSection({
         </div>
 
         {rankingData.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-husk">
+          <div className="flex items-center justify-center h-64 text-husk">
             <p>Sin cosechas en este período</p>
           </div>
         ) : (
           <div className="space-y-5">
-            <ResponsiveContainer width="100%" height={Math.max(160, rankingData.length * 52)}>
+            <div className="h-64 sm:h-72 overflow-x-auto">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={rankingData} layout="vertical" margin={{ left: 8, right: 16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#392c19" horizontal={false} />
                 <XAxis type="number" stroke="#a3906a" style={{ fontSize: '12px' }} unit=" kg" />
@@ -532,6 +540,7 @@ export default function StatsSection({
                 <Bar dataKey="kg" name="kg totales" fill="#f0a41c" radius={[0, 8, 8, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
 
             <div className="space-y-2">
               {rankingData.map((row, idx) => (
@@ -557,13 +566,13 @@ export default function StatsSection({
       {/* ============ 2. PRODUCCIÓN POR COLMEÑA (DETALLE) ============ */}
       {colonies.length > 0 && (
         <motion.div
-          className="card p-6"
+          className={cardCls}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <h3 className="font-display text-xl font-bold text-cream">Producción por Colmena</h3>
+            <h3 className={titleCls}>Producción por Colmena</h3>
             <select
               value={effectiveSelected}
               onChange={(e) => setSelectedHiveId(e.target.value)}
@@ -604,14 +613,23 @@ export default function StatsSection({
           </div>
 
           {hiveMonthlyData.every(d => d.produccion === 0) ? (
-            <div className="flex items-center justify-center h-40 text-husk">
+            <div className="flex items-center justify-center h-64 text-husk">
               <p>Sin cosechas registradas para {selectedColony?.code}</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <div className="h-64 sm:h-72 overflow-x-auto">
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={hiveMonthlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
-                <XAxis dataKey="mes" stroke="#a3906a" style={{ fontSize: '12px' }} />
+                <XAxis
+                dataKey="mes"
+                stroke="#a3906a"
+                style={{ fontSize: 10 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
                 <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Line
@@ -625,27 +643,37 @@ export default function StatsSection({
                 />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           )}
         </motion.div>
       )}
 
       {/* Producción de Miel por Mes */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.4 }}
       >
-        <h3 className="font-display text-xl font-bold text-cream mb-4">Producción de Miel por Mes</h3>
+        <h3 className={`${titleCls} mb-4`}>Producción de Miel por Mes</h3>
         {monthlyData.length === 0 || monthlyData.every(d => d.produccion === 0) ? (
           <div className="flex items-center justify-center h-64 text-husk">
             <p>Sin datos de cosecha registrados</p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
+          <div className="h-64 sm:h-72 overflow-x-auto">
+          <ResponsiveContainer width="100%" height="100%">
             <LineChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
-              <XAxis dataKey="mes" stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <XAxis
+                dataKey="mes"
+                stroke="#a3906a"
+                style={{ fontSize: 10 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
               <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
               <Tooltip content={<CustomTooltip />} />
               <Line
@@ -659,17 +687,18 @@ export default function StatsSection({
               />
             </LineChart>
           </ResponsiveContainer>
+          </div>
         )}
       </motion.div>
 
       {/* ============ 4. ANÁLISIS ESTACIONAL ============ */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.5 }}
       >
-        <h3 className="font-display text-xl font-bold text-cream mb-1">Análisis Estacional</h3>
+        <h3 className={`${titleCls} mb-1`}>Análisis Estacional</h3>
         <p className="font-mono text-[10px] uppercase tracking-widest text-husk mb-4">
           Producción por estación · {currentYear}
         </p>
@@ -722,10 +751,19 @@ export default function StatsSection({
           </div>
         </div>
 
-        <ResponsiveContainer width="100%" height={260}>
+        <div className="h-64 sm:h-72 overflow-x-auto">
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={monthlyStackedData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
-            <XAxis dataKey="mes" stroke="#a3906a" style={{ fontSize: '12px' }} />
+            <XAxis
+                dataKey="mes"
+                stroke="#a3906a"
+                style={{ fontSize: 10 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
             <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: '12px' }} />
@@ -735,50 +773,62 @@ export default function StatsSection({
             <Bar dataKey="actual" name="Año actual" stackId="a" fill="#f0a41c" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </motion.div>
 
       {/* Comparativa Anual */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.6 }}
       >
-        <h3 className="font-display text-xl font-bold text-cream mb-4">Comparativa Anual</h3>
+        <h3 className={`${titleCls} mb-4`}>Comparativa Anual</h3>
         {yearlyData.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-husk">
             <p>Sin datos históricos</p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
+          <div className="h-64 sm:h-72 overflow-x-auto">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={yearlyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
-              <XAxis dataKey="año" stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <XAxis
+              dataKey="año"
+              stroke="#a3906a"
+              style={{ fontSize: 10 }}
+              interval={0}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+            />
               <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="produccion" fill="#f0a41c" radius={[8, 8, 0, 0]} name="Producción" />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         )}
       </motion.div>
 
       {/* ============ 3. SALUD DEL COLMENAR ============ */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.7 }}
       >
-        <h3 className="font-display text-xl font-bold text-cream mb-4">Salud del Colmenar</h3>
+        <h3 className={`${titleCls} mb-4`}>Salud del Colmenar</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             {statusData.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-husk">
+              <div className="flex items-center justify-center h-64 text-husk">
                 <p>Sin colmenas registradas</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
+              <div className="h-64 overflow-x-auto">
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={statusData}
@@ -799,6 +849,7 @@ export default function StatsSection({
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                 </PieChart>
               </ResponsiveContainer>
+              </div>
             )}
           </div>
 
@@ -841,21 +892,33 @@ export default function StatsSection({
 
       {/* Evolución de Varroa */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.8 }}
       >
-        <h3 className="font-display text-xl font-bold text-cream mb-4">Evolución de Varroa</h3>
+        <h3 className={`${titleCls} mb-4`}>Evolución de Varroa</h3>
         {varroaData.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-husk">
             <p>Sin datos de inspección</p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
+          <div className="h-64 sm:h-72 overflow-x-auto">
+          {/* min-w: las etiquetas son fechas ("17 sept"), mas largas que un mes
+              de 3 letras. El area de trazado en un movil de 375px queda en
+              ~281px, asi que con muchas inspecciones se encimarian. */}
+          <div className="min-w-[360px] h-full">
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={varroaData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
-              <XAxis dataKey="fecha" stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <XAxis
+                dataKey="fecha"
+                stroke="#a3906a"
+                style={{ fontSize: 10 }}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
               <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} unit="%" />
               <Tooltip content={<CustomTooltip />} />
               <Area
@@ -869,43 +932,55 @@ export default function StatsSection({
               />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
+          </div>
         )}
       </motion.div>
 
       {/* Inspecciones por Mes */}
       <motion.div
-        className="card p-6"
+        className={cardCls}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.9 }}
       >
-        <h3 className="font-display text-xl font-bold text-cream mb-4">Inspecciones por Mes</h3>
+        <h3 className={`${titleCls} mb-4`}>Inspecciones por Mes</h3>
         {inspectionsData.length === 0 || inspectionsData.every(d => d.inspecciones === 0) ? (
           <div className="flex items-center justify-center h-64 text-husk">
             <p>Sin inspecciones registradas este año</p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
+          <div className="h-64 sm:h-72 overflow-x-auto">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={inspectionsData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
-              <XAxis dataKey="mes" stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <XAxis
+                dataKey="mes"
+                stroke="#a3906a"
+                style={{ fontSize: 10 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
               <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="inspecciones" fill="#a3bf7f" radius={[8, 8, 0, 0]} name="Inspecciones" />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         )}
       </motion.div>
 
       {/* ============ 5. EFICIENCIA POR APIARIO ============ */}
       {apiaryEfficiency.length > 1 && (
         <motion.div
-          className="card p-6"
+          className={cardCls}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 1 }}
         >
-          <h3 className="font-display text-xl font-bold text-cream mb-1">Eficiencia por Apiario</h3>
+          <h3 className={`${titleCls} mb-1`}>Eficiencia por Apiario</h3>
           <p className="font-mono text-[10px] uppercase tracking-widest text-husk mb-4">
             Comparativa entre tus apiarios
           </p>
@@ -935,6 +1010,7 @@ export default function StatsSection({
             ))}
           </div>
 
+          <div className="max-h-80 overflow-y-auto">
           <ResponsiveContainer width="100%" height={Math.max(160, apiaryEfficiency.length * 52)}>
             <BarChart data={apiaryEfficiency} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" horizontal={false} />
@@ -944,6 +1020,7 @@ export default function StatsSection({
               <Bar dataKey="total" name="kg totales" fill="#a3bf7f" radius={[0, 8, 8, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </motion.div>
       )}
     </div>

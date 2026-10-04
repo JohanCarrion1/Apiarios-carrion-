@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants } from '../lib/motion';
 import { IconX } from '../ui';
-import type { Hive, HiveStatus, QueenMarkColor, EntityType } from '../types/hive';
+import type { Hive, HiveStatus, QueenMarkColor, EntityType, QueenInfoOrigin } from '../types/hive';
 import { HIVE_STATUS_LABELS, QUEEN_MARK_COLORS } from '../types/hive';
 
 interface AddHiveModalProps {
@@ -20,10 +22,16 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
   const [queenYear, setQueenYear] = useState<number | undefined>(undefined);
   const [queenMarkColor, setQueenMarkColor] = useState<QueenMarkColor | undefined>(undefined);
   const [status, setStatus] = useState<HiveStatus>('saludable');
+  const [hasQueen, setHasQueen] = useState(true);
+  const [queenOrigin, setQueenOrigin] = useState<QueenInfoOrigin | undefined>(undefined);
+  const [queenIntroducedAt, setQueenIntroducedAt] = useState('');
+  const [queenMark, setQueenMark] = useState('');
   const [lastInspection, setLastInspection] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [autoCode, setAutoCode] = useState(true);
+
+  useScrollLock(open);
 
   // Generar código automático según el tipo de entidad
   const generateNextCode = () => {
@@ -50,6 +58,10 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
         setQueenYear(hive.queenYear);
         setQueenMarkColor(hive.queenMarkColor);
         setStatus(hive.status);
+        setHasQueen(hive.hasQueen !== false && hive.status !== 'sin_reina');
+        setQueenOrigin(hive.queenInfo?.origin);
+        setQueenIntroducedAt(hive.queenInfo?.introducedAt || '');
+        setQueenMark(hive.queenInfo?.mark || '');
         setLastInspection(hive.updatedAt ? hive.updatedAt.split('T')[0] : '');
         setNotes(hive.notes || '');
         setAutoCode(false);
@@ -62,6 +74,10 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
         setQueenYear(undefined);
         setQueenMarkColor(undefined);
         setStatus('saludable');
+        setHasQueen(true);
+        setQueenOrigin(undefined);
+        setQueenIntroducedAt('');
+        setQueenMark('');
         setLastInspection(new Date().toISOString().split('T')[0]);
         setNotes('');
         setAutoCode(true);
@@ -98,6 +114,12 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
       queenYear,
       queenMarkColor,
       status,
+      hasQueen,
+      queenInfo: hasQueen ? {
+        origin: queenOrigin,
+        introducedAt: queenIntroducedAt || undefined,
+        mark: queenMark.trim() || undefined,
+      } : undefined,
       notes: notes.trim() || undefined,
       entityType: entityType,
       updatedAt: lastInspection ? new Date(lastInspection).toISOString() : new Date().toISOString(),
@@ -113,21 +135,21 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
         <>
           {/* Backdrop */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-ink/90 backdrop-blur-sm"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 z-50 bg-ink/90 backdrop-blur-sm touch-none"
             onClick={onClose}
           />
 
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative w-full max-w-2xl my-8 shadow-[0_30px_80px_rgba(0,0,0,.6)]"
             >
               {/* Header */}
@@ -163,6 +185,113 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
+                  {/* ¿Cuenta con reina? */}
+                  <div>
+                    <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+                      ¿Cuenta con reina?
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <motion.button
+                        type="button"
+                        onClick={() => {
+                          setHasQueen(true);
+                          setStatus(prev => prev === 'sin_reina' ? 'saludable' : prev);
+                        }}
+                        className={`rounded-xl border py-3 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                          hasQueen
+                            ? 'border-sage/70 bg-sage/15 text-sage'
+                            : 'border-line text-husk hover:border-sage/50 hover:text-cream'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <span>👑</span>
+                        Sí, tiene reina
+                      </motion.button>
+                      <motion.button
+                        type="button"
+                        onClick={() => {
+                          setHasQueen(false);
+                          setStatus('sin_reina');
+                        }}
+                        className={`rounded-xl border py-3 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                          !hasQueen
+                            ? 'border-[#bd93b8]/70 bg-[#bd93b8]/15 text-[#bd93b8]'
+                            : 'border-line text-husk hover:border-[#bd93b8]/50 hover:text-cream'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <span>⚠️</span>
+                        No, está huérfana
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {hasQueen ? (
+                    <div className="space-y-4 rounded-xl border border-line bg-ink/40 p-4">
+                      {/* Origen de la reina */}
+                      <div>
+                        <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+                          Origen de la reina
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {([
+                            { v: 'criada', label: 'Criada propia' },
+                            { v: 'comprada', label: 'Comprada' },
+                            { v: 'desconocido', label: 'Desconocido' },
+                          ] as const).map((o) => (
+                            <motion.button
+                              key={o.v}
+                              type="button"
+                              onClick={() => setQueenOrigin(queenOrigin === o.v ? undefined : o.v)}
+                              className={`rounded-lg border py-2.5 text-xs font-semibold transition-all ${
+                                queenOrigin === o.v
+                                  ? 'border-honey bg-honey/15 text-honey'
+                                  : 'border-line text-husk hover:border-honey/50 hover:text-cream'
+                              }`}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                            >
+                              {o.label}
+                            </motion.button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Fecha de introducción */}
+                      <div>
+                        <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+                          Fecha de introducción
+                        </label>
+                        <input
+                          type="date"
+                          value={queenIntroducedAt}
+                          onChange={(e) => setQueenIntroducedAt(e.target.value)}
+                          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream focus:border-honey/70"
+                        />
+                      </div>
+
+                      {/* Marca/color de la reina */}
+                      <div>
+                        <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+                          Marca/color de la reina
+                        </label>
+                        <input
+                          type="text"
+                          value={queenMark}
+                          onChange={(e) => setQueenMark(e.target.value)}
+                          placeholder="Ej: Roja 2026"
+                          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl border border-[#bd93b8]/40 bg-[#bd93b8]/10 text-[#bd93b8] text-xs leading-relaxed">
+                      ⚠️ Una colonia huérfana necesita reina o celda real pronto. Se marcará como estado SIN REINA.
+                    </div>
+                  )}
+
                   {/* Código */}
                   <div>
                     <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
@@ -288,7 +417,14 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                         <motion.button
                           key={value}
                           type="button"
-                          onClick={() => setStatus(value as HiveStatus)}
+                          onClick={() => {
+                            setStatus(value as HiveStatus);
+                            if (value === 'sin_reina') {
+                              setHasQueen(false);
+                            } else if (!hasQueen) {
+                              setHasQueen(true);
+                            }
+                          }}
                           className={`rounded-xl border py-3 text-xs font-semibold transition-all ${
                             status === value
                               ? 'border-honey bg-honey/15 text-honey'

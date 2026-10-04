@@ -9,6 +9,9 @@ import type { Queen } from '../types/queen';
 import { IconPlus, IconQueen, IconTrash } from '../ui';
 import BreedingForm from './BreedingForm';
 import BreedingDetail from './BreedingDetail';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { useClosingPanel } from '../hooks/useClosingPanel';
+import { backdropVariants, modalVariants } from '../lib/motion';
 
 interface BreedingSectionProps {
   hives: Hive[];
@@ -45,6 +48,21 @@ export default function BreedingSection({
   const [assignHiveId, setAssignHiveId] = useState<string>('');
   const allColonies = [...hives, ...nuclei];
 
+  // Al reabrir un detalle se cancela cualquier cierre pendiente.
+  const { cancelClosing } = useClosingPanel();
+
+  const openDetail = (id: string) => {
+    cancelClosing();
+    setDetailLotId(id);
+  };
+
+  // Cierre inmediato: en superposición la animación de salida la gestiona
+  // AnimatePresence, así que ya no hace falta el retardo de `beginClose`
+  // (que estaba pensado para animar la altura del acordeón).
+  const requestClose = () => setDetailLotId(null);
+
+  useScrollLock(!!assignLotId || !!confirmDeleteLotId || !!detailLotId);
+
   useEffect(() => {
     if (!confirmDeleteLotId) return;
     const onKey = (e: KeyboardEvent) => {
@@ -53,6 +71,16 @@ export default function BreedingSection({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [confirmDeleteLotId]);
+
+  // Esc cierra la superposición del detalle.
+  useEffect(() => {
+    if (!detailLotId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDetailLotId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [detailLotId]);
 
   useEffect(() => {
     if (!openStateMenuId) return;
@@ -116,7 +144,7 @@ export default function BreedingSection({
   // Abrir directamente un lote del apiario (vinculado desde una reina)
   useEffect(() => {
     if (focusLotId) {
-      setDetailLotId(focusLotId);
+      openDetail(focusLotId);
       onConsumeFocusLot?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,11 +269,10 @@ export default function BreedingSection({
             return (
               <motion.div
                 key={lot.id}
-                className="card p-4 sm:p-5 cursor-pointer hover:bg-pane2/40 transition-colors"
+                className="card p-4 sm:p-5"
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.04 }}
-                onClick={() => setDetailLotId(lot.id)}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
@@ -335,9 +362,21 @@ export default function BreedingSection({
                     >
                       <IconTrash className="h-3.5 w-3.5" />
                     </motion.button>
-                    <svg className="w-5 h-5 text-husk" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    {/* Disparador del detalle. Antes era un <svg> suelto sin
+                        onClick, dentro de un contenedor con stopPropagation, por
+                        que no hacia nada. */}
+                    <motion.button
+                      type="button"
+                      onClick={() => openDetail(lot.id)}
+                      className="rounded-lg border border-line p-1.5 text-husk transition-colors hover:border-honey/50 hover:text-cream"
+                      whileTap={{ scale: 0.95 }}
+                      title="Ver detalle del lote"
+                      aria-label={`Ver detalle del lote ${getLotLabel(lot.id)}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </motion.button>
                   </div>
                 </div>
               </motion.div>
@@ -357,7 +396,7 @@ export default function BreedingSection({
             {historyLots.map((lot) => {
               const daysElapsed = differenceInDays(today, parseISO(lot.fechaInicio));
               return (
-                <div key={lot.id} className="card p-4 opacity-70 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => setDetailLotId(lot.id)}>
+                <div key={lot.id} className="card p-4 opacity-70 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => openDetail(lot.id)}>
                   <div className="flex items-center gap-3">
                     <span
                       className="h-2.5 w-2.5 rounded-full shrink-0"
@@ -387,9 +426,8 @@ export default function BreedingSection({
         className="fixed bottom-24 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-honey text-ink shadow-lg hover:bg-honeysoft"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.5 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
       >
         <IconPlus className="h-6 w-6" />
       </motion.button>
@@ -406,23 +444,47 @@ export default function BreedingSection({
         )}
       </AnimatePresence>
 
-      {/* Detalle */}
+      {/* Detalle del lote: SUPERPOSICIÓN.
+          Antes se desplegaba inline al final de la lista (accordion-grid) y
+          empujaba el contenido hacia abajo. Ahora flota sobre la vista. El
+          cierre sale por: la X del propio detalle, el fondo, o la tecla Esc. */}
       <AnimatePresence>
         {selectedLot && (
-          <BreedingDetail
-            lot={selectedLot}
-            hives={hives}
-            nuclei={nuclei}
-            breedingLots={breedingLots}
-            onClose={() => setDetailLotId(null)}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-            queens={queens}
-            onRequestAssign={(lotId) => {
-              setAssignLotId(lotId);
-              setAssignHiveId(selectedLot.coloniasReceptoras[0] || '');
-            }}
-          />
+          <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 touch-none"
+            onClick={requestClose}
+            aria-modal="true"
+            role="dialog"
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative w-full max-w-md max-h-[80dvh] md:max-h-[85vh] bg-[#1a140d] rounded-2xl flex flex-col border border-yellow-900/30 overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <BreedingDetail
+                lot={selectedLot}
+                hives={hives}
+                nuclei={nuclei}
+                breedingLots={breedingLots}
+                closing={false}
+                onClose={requestClose}
+                onUpdate={handleUpdate}
+                onDelete={handleDelete}
+                queens={queens}
+                onRequestAssign={(lotId) => {
+                  setAssignLotId(lotId);
+                  setAssignHiveId(selectedLot.coloniasReceptoras[0] || '');
+                }}
+              />
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -430,16 +492,18 @@ export default function BreedingSection({
       <AnimatePresence>
         {assignLotId && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
             onClick={() => setAssignLotId(null)}
           >
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card max-w-md w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
@@ -497,24 +561,28 @@ export default function BreedingSection({
       <AnimatePresence>
         {confirmDeleteLotId && (
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
           >
             {/* Backdrop - tapa TODA la pantalla */}
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => setConfirmDeleteLotId(null)}
             />
 
             {/* Modal - centrado encima del backdrop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative max-w-sm w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >

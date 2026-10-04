@@ -121,12 +121,13 @@ export default function NotificationDropdown({
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        onClose();
-      }
+      const target = e.target as Node;
+      if (dropdownRef.current && dropdownRef.current.contains(target)) return;
+      // La campana es el ancla del dropdown y vive FUERA de dropdownRef. Si se
+      // cerrara aquí, su onClick (que alterna) vería isOpen=false y volvería a
+      // abrir: el menú quedaba imposible de cerrar pulsando la campana.
+      if (anchorRef.current && anchorRef.current.contains(target)) return;
+      onClose();
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -139,7 +140,7 @@ export default function NotificationDropdown({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, anchorRef]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -163,7 +164,7 @@ export default function NotificationDropdown({
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           style={{ top: position.top, left: position.left, width: position.width }}
-          className="fixed z-50 overflow-hidden rounded-xl border border-honey/40 bg-gray-900 shadow-[0_10px_40px_rgba(0,0,0,0.6)]"
+          className="fixed z-50 overflow-hidden rounded-xl border border-honey/40 bg-ink shadow-[0_10px_40px_rgba(0,0,0,0.6)]"
         >
           {/* Header */}
           <div className="flex items-center justify-between gap-3 border-b border-line bg-pane px-4 py-3">

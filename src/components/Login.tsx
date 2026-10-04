@@ -1,28 +1,52 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
+import { clearAdminSession } from '../lib/adminSession';
+import { useAdminList, isEmailAdmin } from '../lib/adminAccess';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { user, login, register, loginWithGoogle, loginWithFacebook, loginWithGithub, error, clearError, firebaseAvailable } = useAuth();
+  const location = useLocation();
+  const { user, login, register, loginWithGoogle, loginWithTwitter, error, clearError, firebaseAvailable } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
-  // Redirigir automáticamente cuando el usuario cambia
+  // Lista viva de administradores (Firestore config/admins).
+  const { status: adminStatus } = useAdminList();
+
+  // En /tienda/admin solo entra el admin: le damos sesión de 7 días y lo
+  // llevamos al panel. Cualquier otro correo es redirigido a /seleccionar
+  // con el aviso "Acceso denegado" (sin cerrarle la sesión de Firebase).
+  const onAdminRoute = location.pathname.startsWith('/tienda/admin');
   useEffect(() => {
-    console.log('🔵 [LOGIN] useEffect de redirección ejecutado');
-    console.log('🔵 [LOGIN] User actual:', user ? user.uid : 'null');
-    
-    if (user) {
-      console.log('✅ [LOGIN] Usuario autenticado, redirigiendo a la pantalla de bienvenida');
-      navigate('/seleccionar', { replace: true });
+    if (!user) return;
+    // Esperar el veredicto de Firestore antes de decidir: así un admin recién
+    // agregado no pierde el acceso durante la primera carga de la lista.
+    if (adminStatus === 'loading') return;
+    console.log('🔐 [LOGIN] Login automático tras autenticación');
+    console.log('📧 [LOGIN] Email del usuario:', user.email);
+    const admin = isEmailAdmin(user.email);
+    console.log('✅ [LOGIN] ¿Es admin?', admin, '| estado:', adminStatus);
+    console.log('🔐 [LOGIN] Ruta actual:', location.pathname, '| onAdminRoute:', onAdminRoute);
+    clearAdminSession();
+    if (onAdminRoute && !admin) {
+      // No-admin tocando el panel admin → /seleccionar con aviso de denegado.
+      navigate('/seleccionar', {
+        replace: true,
+        state: { accessDenied: 'Solo personal autorizado puede gestionar el panel de la tienda.' },
+      });
+      return;
     }
-  }, [user, navigate]);
+    // Flujo unificado: TODOS los usuarios (admin o no) pasan por /seleccionar
+    // tras el login. La tarjeta "Cotizaciones" se muestra u oculta según el rol.
+    console.log('🔐 [LOGIN] Redirigiendo a /seleccionar (flujo unificado)...');
+    navigate('/seleccionar', { replace: true });
+  }, [user, adminStatus, navigate, onAdminRoute, location.pathname]);
 
   // Mostrar mensaje de error si Firebase no está disponible
   if (!firebaseAvailable) {
@@ -115,36 +139,36 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setLoadingProvider('google');
+    console.log('🔐 [LOGIN] Intentando login con Google...');
     try {
       await loginWithGoogle();
+      console.log('✅ [LOGIN] loginWithGoogle() completado');
     } catch (error) {
-      // El error ya está manejado en el contexto
+      console.error('❌ [LOGIN] Error en login con Google:', error);
+    } finally {
+      setLoadingProvider(null);
+      console.log('🔐 [LOGIN] Handler de Google finalizado');
+    }
+  };
+
+  const handleTwitterLogin = async () => {
+    setLoadingProvider('twitter');
+    if (import.meta.env.DEV) console.log('🔐 [LOGIN] Intentando login con X (Twitter)...');
+    try {
+      await loginWithTwitter();
+      // No hay redirección aquí: la navega el efecto de `user` de más arriba,
+      // que espera el veredicto de admin antes de enviar a /seleccionar.
+    } catch (error) {
+      // El mensaje ya está en el estado `error` del contexto, que se pinta en
+      // el banner. Nunca se usa alert() a propósito.
+      if (import.meta.env.DEV) console.error('❌ [LOGIN] Error en login con X:', error);
     } finally {
       setLoadingProvider(null);
     }
   };
 
-  const handleFacebookLogin = async () => {
-    setLoadingProvider('facebook');
-    try {
-      await loginWithFacebook();
-    } catch (error) {
-      // El error ya está manejado en el contexto
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
-
-  const handleGithubLogin = async () => {
-    setLoadingProvider('github');
-    try {
-      await loginWithGithub();
-    } catch (error) {
-      // El error ya está manejado en el contexto
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
+  // Pantalla de "Acceso denegado": se muestra cuando el correo autenticado
+  // intenta entrar a la tienda/admin sin estar autorizado.
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-ink">
@@ -245,48 +269,28 @@ export default function Login() {
               Continuar con Google
             </motion.button>
 
-            {/* Facebook */}
+            {/* X (Twitter) — diseño oficial: fondo negro, marca blanca */}
             <motion.button
-              onClick={handleFacebookLogin}
+              onClick={handleTwitterLogin}
               disabled={loading || loadingProvider !== null}
-              className="w-full flex items-center justify-center gap-3 rounded-xl bg-[#1877F2] text-white py-3.5 font-semibold transition-all hover:bg-[#166FE5] disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-busy={loadingProvider === 'twitter'}
+              className="w-full flex items-center justify-center gap-3 rounded-xl bg-black text-white py-3.5 font-semibold ring-1 ring-white/15 shadow-[0_4px_16px_rgba(0,0,0,.45)] transition-all duration-200 hover:bg-neutral-900 hover:ring-white/25 hover:shadow-[0_6px_22px_rgba(0,0,0,.55)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:ring-white/15"
               whileHover={{ scale: loading || loadingProvider ? 1 : 1.02 }}
               whileTap={{ scale: loading || loadingProvider ? 1 : 0.98 }}
             >
-              {loadingProvider === 'facebook' ? (
+              {loadingProvider === 'twitter' ? (
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                   className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
                 />
               ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                /* Logotipo oficial de X (no el pájaro antiguo de Twitter). */
+                <svg className="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
                 </svg>
               )}
-              Continuar con Facebook
-            </motion.button>
-
-            {/* GitHub */}
-            <motion.button
-              onClick={handleGithubLogin}
-              disabled={loading || loadingProvider !== null}
-              className="w-full flex items-center justify-center gap-3 rounded-xl bg-[#24292e] text-white py-3.5 font-semibold transition-all hover:bg-[#1b1f23] disabled:opacity-50 disabled:cursor-not-allowed"
-              whileHover={{ scale: loading || loadingProvider ? 1 : 1.02 }}
-              whileTap={{ scale: loading || loadingProvider ? 1 : 0.98 }}
-            >
-              {loadingProvider === 'github' ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                />
-              ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-              )}
-              Continuar con GitHub
+              {loadingProvider === 'twitter' ? 'Conectando con X...' : 'Continuar con X'}
             </motion.button>
           </div>
 

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, calculateTotalSize, formatBytes, generateId, getPhotosSerializedSize, wouldExceedStorageLimit, STORAGE_FULL_MESSAGE, type PhotoData } from '../services/photos';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface PhotoUploaderProps {
   photos: PhotoData[];
@@ -21,6 +22,8 @@ export default function PhotoUploader({
   const [error, setError] = useState<string | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<PhotoData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useScrollLock(!!lightboxPhoto);
 
   const totalSize = calculateTotalSize(photos);
   const totalSizeMB = totalSize / (1024 * 1024);
@@ -255,7 +258,7 @@ export default function PhotoUploader({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 touch-none"
             onClick={() => setLightboxPhoto(null)}
           >
             <motion.img

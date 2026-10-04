@@ -25,6 +25,8 @@
 // Si al cargar el JSON está corrupto se restaura desde el backup.
 // ============================================================
 import { auth } from '../lib/firebase';
+import { ADMIN_EMAILS } from '../config';
+import { sortByEntityCode } from './entityCode';
 
 export const STORAGE_VERSION = 'panal_v1';
 
@@ -129,9 +131,12 @@ export const entityKey = (entity: string, opts: EntityKeyOpts = {}): string => {
 // ------------------------------------------------------------
 
 const backupPrefixFor = (storageKey: string): string => {
-  const uid = storageKey.split('_user_')[1]?.split('_')[0] || '?';
+  const marker = '_user_';
+  const idx = storageKey.indexOf(marker);
+  if (idx === -1) return `${STORAGE_VERSION}_backup_${storageKey}`;
+  const uid = storageKey.slice(idx + marker.length).split('_')[0] || '?';
   // storageKey: panal_v1_user_${uid}_<entity><scope>
-  const afterUser = storageKey.slice(`${STORAGE_VERSION}_user_${uid}_`.length);
+  const afterUser = storageKey.slice(idx + marker.length + (uid || '').length + 1);
   return `${STORAGE_VERSION}_user_${uid}_backup_${afterUser}`;
 };
 
@@ -218,6 +223,93 @@ export const onDataRestored = (listener: (info: DataRestoredInfo) => void): (() 
 };
 
 // ------------------------------------------------------------
+// PUENTE DE SINCRONIZACIÓN CON FIRESTORE
+// ------------------------------------------------------------
+// La capa única de almacenamiento (localStorage) sigue siendo la caché de
+// lectura síncrona de TODA la app, pero cuando hay sesión activa una entidad
+// autorizada (Firestore como fuente de verdad) se replica vía un handler
+// registrado por `firestoreSync`. Si no hay handler (sesión anónima / offline)
+// la app funciona exactamente igual que antes.
+
+/** Entidades de datos del apicultor que se replican a Firestore. */
+export const SYNC_ENTITIES = new Set([
+  'apiaries',
+  'hives',
+  'nuclei',
+  'inspections',
+  'tasks',
+  'harvests',
+  'breeding',
+  'queens',
+  'queenHistory',
+  'fecundadores',
+  'cuadernoEntries',
+  'inventory',
+  'transferHistory',
+  'events',
+  'recurringTasks',
+  'flowering',
+  'eventTemplates',
+]);
+
+export interface StoreSyncEvent {
+  entity: string;
+  userId: string;
+  apiaryId?: string;
+  items: unknown[];
+  /** true cuando la entidad se eliminó por completo (no escribir vacío). */
+  removed?: boolean;
+}
+
+export type StoreSyncHandler = (evt: StoreSyncEvent) => void | Promise<void>;
+
+let syncHandler: StoreSyncHandler | null = null;
+
+export const setSyncHandler = (handler: StoreSyncHandler | null): void => {
+  syncHandler = handler;
+};
+
+const deriveSyncScope = (
+  key: string,
+  opts: DataOpts
+): { userId: string; apiaryId?: string } => {
+  let apiaryId = opts.apiaryId || undefined;
+  if (!apiaryId && opts.suffix) {
+    let s = opts.suffix;
+    const uid = opts.userId || getCurrentUserId();
+    if (s.startsWith(`_${uid}`)) s = s.slice(`_${uid}`.length);
+    if (s.startsWith('_')) s = s.slice(1);
+    if (s && s !== uid) apiaryId = s;
+  }
+  return { userId: opts.userId || getCurrentUserId(), apiaryId };
+};
+
+const notifySync = (
+  key: string,
+  items: unknown[],
+  opts: DataOpts,
+  removed = false
+): void => {
+  if (!syncHandler || !SYNC_ENTITIES.has(key)) return;
+  const { userId, apiaryId } = deriveSyncScope(key, opts);
+  if (userId === 'anonymous') return;
+  try {
+    // El handler puede devolver una promesa (escritura real en Firestore). Sin
+    // capturarla, un setDoc rechazado se convertía en promesa no manejada y el
+    // fallo quedaba invisible: la UI mostraba el estado nuevo y al recargar
+    // volvía el anterior.
+    const result = syncHandler({ entity: key, userId, apiaryId, items, removed });
+    if (result && typeof (result as Promise<void>).catch === 'function') {
+      (result as Promise<void>).catch((error) => {
+        console.error(`[STORAGE] Error sincronizando "${key}" con Firestore:`, error);
+      });
+    }
+  } catch (error) {
+    console.error('[STORAGE] Error notificando sincronización:', error);
+  }
+};
+
+// ------------------------------------------------------------
 // NÚCLEO: loadData / saveData (TODO pasa por aquí)
 // ------------------------------------------------------------
 
@@ -272,7 +364,7 @@ export const loadData = <T>(key: string, fallback: T, opts: DataOpts = {}): T =>
   return readFromKey<T>(storageKey, fallback, key);
 };
 
-const writeToKey = <T>(storageKey: string, data: T, entity: string, force = false): void => {
+const writeToKey = <T>(storageKey: string, data: T, entity: string, force = false): boolean => {
   const newRaw = JSON.stringify(data);
 
   // Guardia anti-borrado: si esta clave NO se ha leído aún en esta sesión y
@@ -285,7 +377,7 @@ const writeToKey = <T>(storageKey: string, data: T, entity: string, force = fals
       console.warn(
         `[STORAGE] ⛔ Escritura vacía bloqueada sobre datos existentes en '${storageKey}' (se preservan los datos del usuario)`
       );
-      return;
+      return false;
     }
   }
 
@@ -303,8 +395,10 @@ const writeToKey = <T>(storageKey: string, data: T, entity: string, force = fals
     } else {
       console.log(`[STORAGE] save ${entity}: ${countRecords(data)} registros`);
     }
+    return true;
   } catch (error) {
     console.error(`❌ [STORAGE] Error al guardar ${entity}:`, error);
+    return false;
   }
 };
 
@@ -318,7 +412,10 @@ export const saveData = <T>(key: string, data: T, opts: DataOpts = {}): void => 
     apiaryId: opts.apiaryId,
     suffix: opts.suffix,
   });
-  writeToKey(storageKey, data, key, opts.force);
+  const ok = writeToKey(storageKey, data, key, opts.force);
+  if (ok) {
+    notifySync(key, Array.isArray(data) ? data : [data], opts);
+  }
 };
 
 // ------------------------------------------------------------
@@ -342,19 +439,24 @@ export const removeFromStorage = (key: string, suffix: string = ''): void => {
       /* ignore */
     }
   });
+  notifySync(key, [], { suffix }, true);
 };
 
 // ------------------------------------------------------------
 // Entidades de datos (wrappers sobre loadData/saveData)
 // ------------------------------------------------------------
 
-// Colmenas (por apiario)
+// Colmenas (por apiario). El load ordena por código numérico (C-2 antes que
+// C-10) para que el honeycomb salga en orden secuencial y no por orden de
+// inserción, que se desordena al transferir o recargar.
 export const saveHives = (hives: any[], suffix: string = '') => saveData('hives', hives, { suffix });
-export const loadHives = (suffix: string = '') => loadData('hives', [] as any[], { suffix });
+export const loadHives = (suffix: string = ''): any[] =>
+  sortByEntityCode(loadData('hives', [] as any[], { suffix }));
 
 // Núcleos (por apiario)
 export const saveNuclei = (nuclei: any[], suffix: string = '') => saveData('nuclei', nuclei, { suffix });
-export const loadNuclei = (suffix: string = '') => loadData('nuclei', [] as any[], { suffix });
+export const loadNuclei = (suffix: string = ''): any[] =>
+  sortByEntityCode(loadData('nuclei', [] as any[], { suffix }));
 
 // Inspecciones (por apiario)
 export const saveInspections = (inspections: any[], suffix: string = '') => saveData('inspections', inspections, { suffix });
@@ -368,21 +470,67 @@ export const loadTasks = (suffix: string = '') => loadData('tasks', [] as any[],
 export const saveHarvests = (harvests: any[], suffix: string = '') => saveData('harvests', harvests, { suffix });
 export const loadHarvests = (suffix: string = '') => loadData('harvests', [] as any[], { suffix });
 
-// Eventos del calendario (por usuario)
-export const saveEvents = (events: any[]) => saveData('events', events);
-export const loadEvents = () => loadData('events', [] as any[]);
+// Eventos del calendario (por apiario)
+export const saveEvents = (events: any[], suffix: string = '') => saveData('events', events, { suffix });
+export const loadEvents = (suffix: string = ''): any[] => loadData('events', [] as any[], { suffix });
 
-// Plantillas de eventos (por usuario)
-export const saveEventTemplates = (templates: any[]) => saveData('eventTemplates', templates);
-export const loadEventTemplates = () => loadData('eventTemplates', [] as any[]);
+// Plantillas de eventos (por apiario)
+export const saveEventTemplates = (templates: any[], suffix: string = '') => saveData('eventTemplates', templates, { suffix });
+export const loadEventTemplates = (suffix: string = ''): any[] => loadData('eventTemplates', [] as any[], { suffix });
 
-// Tareas recurrentes (por usuario)
-export const saveRecurringTasks = (tasks: any[]) => saveData('recurringTasks', tasks);
-export const loadRecurringTasks = () => loadData('recurringTasks', [] as any[]);
+// Tareas recurrentes (por apiario)
+export const saveRecurringTasks = (tasks: any[], suffix: string = '') => saveData('recurringTasks', tasks, { suffix });
+export const loadRecurringTasks = (suffix: string = ''): any[] => loadData('recurringTasks', [] as any[], { suffix });
 
-// Calendario de floración (por usuario)
-export const saveFloweringEntries = (entries: any[]) => saveData('flowering', entries);
-export const loadFloweringEntries = () => loadData('flowering', [] as any[]);
+// Calendario de floración (por apiario)
+export const saveFloweringEntries = (entries: any[], suffix: string = '') => saveData('flowering', entries, { suffix });
+export const loadFloweringEntries = (suffix: string = ''): any[] => loadData('flowering', [] as any[], { suffix });
+
+// Entidades del calendario que se migraron de "por usuario" a "por apiario".
+// Antes vivían en una clave sin apiario (`..._events`) y por eso nunca se
+// sincronizaron con Firestore. La migración COPIA (no mueve) los datos
+// heredados al ámbito del apiario activo, y es no destructiva: si el destino ya
+// existe, no se toca. Así nada se borra al registrar.
+const LEGACY_CALENDAR_ENTITIES = ['events', 'recurringTasks', 'flowering', 'eventTemplates'] as const;
+
+export const migrateLegacyCalendarScope = (userId: string, apiaryId: string): void => {
+  // Marcador por usuario: la migración corre UNA sola vez. Sin esto, la clave
+  // legacy seguiría poblada y al cambiar de apiario el calendario se copiaría
+  // también al apiario nuevo, duplicando eventos.
+  const markerKey = `${STORAGE_VERSION}_user_${userId}_calendarMigrated`;
+  if (localStorage.getItem(markerKey) === '1') return;
+
+  let migratedAny = false;
+  for (const entity of LEGACY_CALENDAR_ENTITIES) {
+    const legacyKey = entityKey(entity, { userId });
+    const legacyRaw = localStorage.getItem(legacyKey);
+    if (!legacyRaw) continue;
+
+    const legacy = safeParse(legacyRaw);
+    if (!Array.isArray(legacy) || legacy.length === 0) continue;
+
+    const scopedKey = entityKey(entity, { userId, apiaryId });
+    // Destino ya poblado: no sobrescribir.
+    if (localStorage.getItem(scopedKey) != null) continue;
+
+    localStorage.setItem(scopedKey, legacyRaw);
+    sessionReadKeys.add(scopedKey);
+    migratedAny = true;
+    console.log(
+      `[STORAGE] 📦 Calendario migrado al apiario ${apiaryId}: ${legacy.length} registro(s) de '${entity}'`
+    );
+  }
+
+  // Se marca aunque no haya nada que migrar, para no re-evaluar en cada carga.
+  try {
+    localStorage.setItem(markerKey, '1');
+  } catch {
+    /* sin espacio: se reintentará, es idempotente */
+  }
+  if (!migratedAny) {
+    console.log('[STORAGE] Calendario: no había datos heredados que migrar');
+  }
+};
 
 // Recordatorios calculados (por usuario)
 export const saveReminders = (reminders: any[]) => saveData('reminders', reminders);
@@ -419,6 +567,221 @@ export const saveWeatherCache = (cache: any, userId?: string) =>
   saveData('weatherCache', cache, { userId: userId || getCurrentUserId() });
 export const loadWeatherCache = (userId?: string): any =>
   loadData('weatherCache', null, { userId: userId || getCurrentUserId() });
+
+// Tienda — catálogo y carrito (por usuario)
+// Claves: panal_v1_user_${userId}_products y panal_v1_user_${userId}_cart
+export const loadStoreProducts = (userId?: string): any[] =>
+  loadData('products', [] as any[], { userId: userId || getCurrentUserId() });
+export const saveStoreProducts = (products: any[], userId?: string): void =>
+  saveData('products', products, { userId: userId || getCurrentUserId() });
+
+export const loadStoreCart = (userId?: string): any[] =>
+  loadData('cart', [] as any[], { userId: userId || getCurrentUserId() });
+export const saveStoreCart = (cart: any[], userId?: string): void =>
+  saveData('cart', cart, { userId: userId || getCurrentUserId() });
+
+// Flag de migración: primer plano de la reina fecundada. Se marca una sola
+// vez por usuario para reemplazar la imagen vieja del catálogo guardado.
+export const loadReinaCloseMigrated = (userId?: string): boolean =>
+  loadData('reinaCloseMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveReinaCloseMigrated = (userId?: string): void =>
+  saveData('reinaCloseMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v9): imagen real del "Núcleo 4 bastidores" (colmena de
+// 4 marcos con abejas visibles). Se marca una sola vez por usuario para
+// reemplazar la imagen vieja del catálogo guardado.
+export const loadNucleo4ImageMigrated = (userId?: string): boolean =>
+  loadData('nucleo4ImageMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveNucleo4ImageMigrated = (userId?: string): void =>
+  saveData('nucleo4ImageMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v10): imágenes Unsplash de los 13 productos de la
+// categoría "Herramientas para apicultura" (hojas de cera, jaulas, ahumador,
+// etc.). Se marca una sola vez por usuario para reemplazar las imágenes
+// genéricas guardadas del catálogo por las URLs asignadas en el semilla.
+export const loadToolImagesMigrated = (userId?: string): boolean =>
+  loadData('toolImagesMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveToolImagesMigrated = (userId?: string): void =>
+  saveData('toolImagesMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v11): imagen real de "Miel en panal" (panal dorado con
+// miel, desde Adobe Stock). Se marca una sola vez por usuario para reemplazar
+// la imagen genérica guardada del catálogo por la nueva.
+export const loadMielPanalImageMigrated = (userId?: string): boolean =>
+  loadData('mielPanalImageMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveMielPanalImageMigrated = (userId?: string): void =>
+  saveData('mielPanalImageMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v12): imagen real de "Miel en panal" con URL directa de
+// Brave Search (panal dorado con miel). Se marca una sola vez por usuario para
+// reemplazar la imagen anterior guardada del catálogo por la nueva.
+export const loadMielPanalBraveMigrated = (userId?: string): boolean =>
+  loadData('mielPanalBraveMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveMielPanalBraveMigrated = (userId?: string): void =>
+  saveData('mielPanalBraveMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v13): imagen real de "Miel en panal" con URL directa de
+// ladrondemiel.com (panal de miel cortado). Se marca una sola vez por usuario
+// para reemplazar la imagen anterior guardada del catálogo por la nueva.
+export const loadMielPanalDirectMigrated = (userId?: string): boolean =>
+  loadData('mielPanalDirectMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveMielPanalDirectMigrated = (userId?: string): void =>
+  saveData('mielPanalDirectMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v14): imagen real de "Miel en panal" con URL de
+// Cloudinary (panal de miel cortado). Se marca una sola vez por usuario para
+// reemplazar la imagen anterior guardada del catálogo por la nueva.
+export const loadMielPanalCloudinaryMigrated = (userId?: string): boolean =>
+  loadData('mielPanalCloudinaryMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveMielPanalCloudinaryMigrated = (userId?: string): void =>
+  saveData('mielPanalCloudinaryMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Flag de migración (v15): imagen real de "Miel en panal" con URL directa de
+// Imgur (panal de miel). Se marca una sola vez por usuario para reemplazar la
+// imagen anterior guardada del catálogo por la nueva.
+export const loadMielPanalImgurMigrated = (userId?: string): boolean =>
+  loadData('mielPanalImgurMigrated', false as boolean, { userId: userId || getCurrentUserId() });
+export const saveMielPanalImgurMigrated = (userId?: string): void =>
+  saveData('mielPanalImgurMigrated', true, { userId: userId || getCurrentUserId() });
+
+// Versión del catálogo semilla aplicada (migración a 3 macro-categorías).
+// Se marca una sola vez por usuario: evita que tras la migración reaparezcan
+// productos semilla que el vendedor ya eliminó.
+export const loadStoreSeedVersion = (userId?: string): string =>
+  loadData('seedVersion', '' as string, { userId: userId || getCurrentUserId() });
+export const saveStoreSeedVersion = (version: string, userId?: string): void =>
+  saveData('seedVersion', version, { userId: userId || getCurrentUserId() });
+
+/* ---------------------------------------------------------------------------
+   Catálogo GLOBAL de administración (fuente única del panel /tienda/admin).
+   Es el catálogo que ve la tienda pública: cuando existe, la tienda lee de
+   aquí y las ediciones del admin aparecen de inmediato. Consta de:
+   - panal_v1_admin_products   (catálogo)
+   - panal_v1_finalCatalog_migrated  (migración one-shot del catálogo previo)
+   --------------------------------------------------------------------------- */
+export const PRODUCTS_STORAGE_KEY = 'panal_v1_admin_products';
+export const ADMIN_PRODUCTS_KEY = PRODUCTS_STORAGE_KEY;
+export const ADMIN_ORDERS_KEY = 'panal_v1_admin_orders';
+const ADMIN_FINAL_CATALOG_FLAG = 'panal_v1_finalCatalog_migrated';
+
+/**
+ * Evento lanzado tras guardar el catálogo en el panel admin. La tienda
+ * pública /tienda lo escucha para refrescar sus productos al instante
+ * (sin recargar, incluso en otra pestaña mediante el evento 'storage').
+ */
+export const PRODUCTS_UPDATED_EVENT = 'products-updated';
+
+const notifyProductsUpdated = (products: any[]): void => {
+  try {
+    if (typeof window === 'undefined') return;
+    const evt = new CustomEvent<{ products: any[] }>(PRODUCTS_UPDATED_EVENT, {
+      detail: { products },
+    });
+    window.dispatchEvent(evt);
+  } catch {
+    /* ignore */
+  }
+};
+
+/** Suscribirse a actualizaciones del catálogo (admin → tienda). Devuelve unsubscribe. */
+export const onProductsUpdated = (listener: (products: any[]) => void): (() => void) => {
+  if (typeof window === 'undefined') return () => undefined;
+  const handler = (e: Event) => {
+    const detail = (e as CustomEvent<{ products?: any[] }>).detail;
+    if (Array.isArray(detail?.products)) listener(detail.products);
+  };
+  window.addEventListener(PRODUCTS_UPDATED_EVENT, handler);
+  return () => window.removeEventListener(PRODUCTS_UPDATED_EVENT, handler);
+};
+
+/** Tamaño en MB que ocuparía el catálogo en localStorage (debugging). */
+export const getProductsStorageSizeMB = (products: any[]): number => {
+  try {
+    return new Blob([JSON.stringify(products)]).size / (1024 * 1024);
+  } catch {
+    return 0;
+  }
+};
+
+export const loadAdminProducts = (): any[] => {
+  const raw = localStorage.getItem(ADMIN_PRODUCTS_KEY);
+  const parsed = raw ? safeParse(raw) : undefined;
+  return Array.isArray(parsed) ? (parsed as any[]) : [];
+};
+
+export const saveAdminProducts = (products: any[]): void => {
+  const newRaw = JSON.stringify(products);
+  const prev = localStorage.getItem(ADMIN_PRODUCTS_KEY);
+  if (prev != null && prev !== newRaw) createBackup(ADMIN_PRODUCTS_KEY, prev);
+
+  // Guardia de tamaño: las imágenes Base64 pueden saturar localStorage (~5-10MB).
+  const sizeMB = getProductsStorageSizeMB(products);
+  console.log(`📊 Tamaño de localStorage (${ADMIN_PRODUCTS_KEY}): ${sizeMB.toFixed(2)} MB / ${products.length} productos`);
+  if (sizeMB > 8) {
+    console.warn(
+      `⚠️ El catálogo excede 8MB (${sizeMB.toFixed(2)} MB). Considera usar URLs externas (Cloudinary/Imgur) en vez de Base64.`
+    );
+  }
+
+  try {
+    localStorage.setItem(ADMIN_PRODUCTS_KEY, newRaw);
+    // NOTIFICAR a la tienda pública que el catálogo cambió.
+    notifyProductsUpdated(products);
+  } catch (error) {
+    console.error('❌ localStorage lleno al guardar el catálogo admin:', error);
+  }
+};
+
+export const loadAdminOrders = (): any[] => {
+  const raw = localStorage.getItem(ADMIN_ORDERS_KEY);
+  const parsed = raw ? safeParse(raw) : undefined;
+  return Array.isArray(parsed) ? (parsed as any[]) : [];
+};
+
+export const saveAdminOrders = (orders: any[]): void => {
+  const prev = localStorage.getItem(ADMIN_ORDERS_KEY);
+  if (prev != null && prev !== JSON.stringify(orders)) createBackup(ADMIN_ORDERS_KEY, prev);
+  try {
+    localStorage.setItem(ADMIN_ORDERS_KEY, JSON.stringify(orders));
+  } catch (error) {
+    console.error('[STORAGE] Error al guardar los pedidos admin:', error);
+  }
+};
+
+/**
+ * Migración one-shot: lleva el catálogo persistido previo del vendedor
+ * (panal_v1_user_*_products) al catálogo admin global. Así el panel arranca
+ * con los productos reales de la tienda y la tienda pública pasa a leer el
+ * catálogo global. No se ejecuta si ya se migró o si ya existe catálogo global.
+ */
+export const migrateCatalogToAdmin = (): void => {
+  try {
+    if (localStorage.getItem(ADMIN_FINAL_CATALOG_FLAG) === '1') return;
+    if (loadAdminProducts().length > 0) {
+      localStorage.setItem(ADMIN_FINAL_CATALOG_FLAG, '1');
+      return;
+    }
+    let source: any[] = [];
+    const adminUser = ADMIN_EMAILS[0] || 'admin';
+    const adminKey = entityKey('products', { userId: adminUser });
+    const stored = localStorage.getItem(adminKey);
+    if (stored == null) {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith(`${STORAGE_VERSION}_user_`) && k.endsWith('_products'));
+      if (keys.length > 0) {
+        const first = localStorage.getItem(keys[0]);
+        if (first) source = safeParse(first) as any[];
+      }
+    } else {
+      source = safeParse(stored) as any[];
+    }
+    if (Array.isArray(source) && source.length > 0) {
+      saveAdminProducts(source);
+    }
+    localStorage.setItem(ADMIN_FINAL_CATALOG_FLAG, '1');
+  } catch (error) {
+    console.error('[STORAGE] Error al migrar el catálogo al panel admin:', error);
+  }
+};
 
 // Apiarios (por usuario) — entidad 'apiaries'
 export const getApiariesKey = (userId: string): string => entityKey('apiaries', { userId });
@@ -484,6 +847,43 @@ export const saveLastActiveApiaryId = (apiaryId: string | null, userId?: string)
   }
 };
 
+// Ruta de la última sección visitada (por usuario), unificada para TODA la app:
+//   panal_v1_user_${userId}_lastView
+// Guarda el id de la sección del dashboard (p. ej. 'colmenas', 'tareas') o el
+// destino de la tienda (LAST_VIEW_STORE → '/tienda'). Se escribe en el MISMO
+// handler de navegación cada vez que el usuario cambia de sección/tab (sin
+// debounce). Se lee al montar el dashboard tras resolver la sesión activa para
+// abrir en la última sección guardada, y en HomeRedirect para decidir entre
+// /tienda o /dashboard al entrar a la app. NO se borra al cerrar sesión (al
+// reingresar el usuario retoma donde quedó).
+export const LAST_VIEW_STORE = 'tienda';
+export const getLastViewKey = (userId: string): string =>
+  `${STORAGE_VERSION}_user_${userId}_lastView`;
+
+export const loadLastView = (userId?: string): string | null => {
+  const uid = userId || getCurrentUserId();
+  const raw = localStorage.getItem(getLastViewKey(uid));
+  if (raw != null) {
+    const parsed = safeParse(raw);
+    if (typeof parsed === 'string' && parsed) return parsed;
+  }
+  return null;
+};
+
+export const saveLastView = (view: string, userId?: string): void => {
+  const uid = userId || getCurrentUserId();
+  const key = getLastViewKey(uid);
+  try {
+    const previousRaw = localStorage.getItem(key);
+    if (previousRaw != null && previousRaw !== JSON.stringify(view)) {
+      createBackup(key, previousRaw);
+    }
+    localStorage.setItem(key, JSON.stringify(view));
+  } catch (error) {
+    console.error('[STORAGE] Error guardando vista activa:', error);
+  }
+};
+
 // Idioma (compartido entre usuarios, no es dato registrado)
 export const saveLanguage = (language: string): void => {
   localStorage.setItem('language', language);
@@ -520,6 +920,15 @@ export const loadBreedingLots = (userId: string, apiaryId: string): any[] =>
   loadData('breeding', [] as any[], { userId, apiaryId });
 export const saveBreedingLots = (lots: any[], userId: string, apiaryId: string): void =>
   saveData('breeding', lots, { userId, apiaryId });
+
+// Fecundadores / baby nucs (por usuario y apiario)
+// Clave: panal_v1_user_${userId}_fecundadores_${apiaryId}
+export const getFecundadoresKey = (userId: string, apiaryId: string): string =>
+  entityKey('fecundadores', { userId, apiaryId });
+export const loadFecundadores = (userId: string, apiaryId: string): any[] =>
+  sortByEntityCode(loadData('fecundadores', [] as any[], { userId, apiaryId }));
+export const saveFecundadores = (fecundadores: any[], userId: string, apiaryId: string): void =>
+  saveData('fecundadores', fecundadores, { userId, apiaryId });
 
 // Reinas (por usuario y apiario)
 export const getQueensKey = (userId: string, apiaryId: string): string =>
@@ -575,6 +984,8 @@ const LEGACY_ENTITY_MAP: Record<string, string> = {
   reinas: 'queens',
   breeding: 'breeding',
   breedingLots: 'breeding',
+  fecundadores: 'fecundadores',
+  fecundador: 'fecundadores',
   queenHistory: 'queenHistory',
   cuadernoEntries: 'cuadernoEntries',
   inventory: 'inventory',
@@ -608,7 +1019,7 @@ const LEGACY_ENTITY_MAP: Record<string, string> = {
 const APIARY_ENTITIES = new Set([
   'hives', 'colmenas', 'nuclei', 'nucleos', 'inspections', 'inspecciones',
   'tasks', 'tareas', 'harvests', 'cosechas', 'queens', 'reinas',
-  'breedingLots', 'queenHistory', 'cuadernoEntries',
+  'breedingLots', 'fecundadores', 'queenHistory', 'cuadernoEntries',
 ]);
 
 const URL_SAFE_WORDS = new Set([
@@ -797,6 +1208,13 @@ export const removeApiaryData = (userId: string, apiaryId: string): void => {
       localStorage.removeItem(`user_${userId}_apiary_${apiaryId}_${legacyMaps[entity]}`);
     } catch { /* ignore */ }
   });
+
+  // Fecundadores (baby nucs) — por apiario
+  const fecundadoresKey = entityKey('fecundadores', { userId, apiaryId });
+  removeKeyAndBackups(fecundadoresKey);
+  try {
+    localStorage.removeItem(`user_${userId}_apiary_${apiaryId}_fecundadores`);
+  } catch { /* ignore */ }
 };
 
 export const clearUserData = (): void => {

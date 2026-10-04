@@ -4,6 +4,7 @@ import { useTranslation } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { clearUserData, exportUserData, importUserData, loadHives } from '../utils/storage';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -15,6 +16,8 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
   const { settings, updateSettings } = useSettings();
   const [activeSection, setActiveSection] = useState('profile');
   const [storageUsed, setStorageUsed] = useState(0);
+
+  useScrollLock(true);
 
   useEffect(() => {
     // Calcular almacenamiento usado

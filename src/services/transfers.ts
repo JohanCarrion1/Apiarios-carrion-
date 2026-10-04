@@ -21,10 +21,13 @@ import {
   saveQueens,
   loadQueenHistory,
   saveQueenHistory,
+  loadFecundadores,
+  saveFecundadores,
   loadCuadernoEntries,
   saveCuadernoEntries,
   getTransferHistoryKey,
 } from '../utils/storage';
+import { sortByEntityCode } from '../utils/entityCode';
 
 const registerId = (): string => uid();
 
@@ -129,6 +132,21 @@ export const getNextNucleoCode = (nucleos: { code: string }[]): string => {
     .filter(n => n > 0);
   const maxNum = numeros.length > 0 ? Math.max(...numeros) : 0;
   return `N-${(maxNum + 1).toString().padStart(2, '0')}`;
+};
+
+// ------------------------------------------------------------
+// 2b. Siguiente código de fecundador disponible (F-XX)
+// ------------------------------------------------------------
+
+export const getNextFecundadorCode = (fecundadores: { code: string }[]): string => {
+  const numeros = fecundadores
+    .map(f => {
+      const match = f.code.match(/F-(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter(n => n > 0);
+  const maxNum = numeros.length > 0 ? Math.max(...numeros) : 0;
+  return `F-${(maxNum + 1).toString().padStart(2, '0')}`;
 };
 
 // ------------------------------------------------------------
@@ -287,21 +305,28 @@ function transferirAOtroApiario(opts: {
     // 2. Obtener entidades del apiario destino
     const destList = (isHive ? loadHives(destSuffix) : loadNuclei(destSuffix)) as any[];
 
-    // 3. Calcular nuevo código en destino
-    const nuevoCodigo = isHive ? getNextHiveCode(destList) : getNextNucleoCode(destList);
+    // 3. La colmena se transfiere manteniendo su código original (ej: C-25)
+    const nuevoCodigo = entity.code;
 
-    // 4. Crear entidad en destino con nuevo código pero mismos datos
+    // 4. Crear entidad en destino con el mismo código pero mismos datos
     const entityTransferida = {
       ...entity,
       id: registerId(),
       code: nuevoCodigo,
       apiaryId: destApiaryId,
+      apiario: destApiaryName,
+      apiario_original: sourceApiaryName,
+      transferida: true,
+      fecha_transferencia: fecha || now,
+      motivo_transferencia: motivo || 'Sin motivo especificado',
       updatedAt: now,
     };
 
     // 5. Eliminar del origen y agregar al destino
     const nextSource = sourceList.filter((e: any) => e.id !== entityId);
-    const nextDest = [...destList, entityTransferida];
+    // Se ordena por código numérico: si no, el honeycomb de destino mostraría
+    // la entidad transferida siempre al final (C-2 después de C-10).
+    const nextDest = sortByEntityCode([...destList, entityTransferida]);
 
     if (isHive) {
       saveHives(nextSource, sourceSuffix);
@@ -341,8 +366,8 @@ function transferirAOtroApiario(opts: {
     const entityWord = isHive ? 'Colmena' : 'Núcleo';
     const verb = isHive ? 'transferida' : 'transferido';
     const cuadernoText = motivo
-      ? `${entityWord} ${entity.code} ${verb} de ${sourceApiaryName} a ${destApiaryName} como ${nuevoCodigo} - Motivo: ${motivo}`
-      : `${entityWord} ${entity.code} ${verb} de ${sourceApiaryName} a ${destApiaryName} como ${nuevoCodigo}`;
+      ? `${entityWord} ${entity.code} ${verb} de ${sourceApiaryName} a ${destApiaryName} - Motivo: ${motivo}`
+      : `${entityWord} ${entity.code} ${verb} de ${sourceApiaryName} a ${destApiaryName}`;
     const cuadernoEntry = { id: registerId(), date: now, text: cuadernoText, type: 'general' as const };
 
     const sourceCuaderno = loadCuadernoEntries(userId, sourceApiaryId) as any[];
@@ -402,6 +427,113 @@ export function transferNucleoToApiary(opts: {
   fecha?: string;
 }) {
   return transferirAOtroApiario({ ...opts, kind: 'nucleus' });
+}
+
+// ------------------------------------------------------------
+// 6. FUNCIONALIDAD: Transferir fecundador (baby nuc) a otro apiario
+// ------------------------------------------------------------
+
+export function transferFecundadorToApiary(opts: {
+  userId: string;
+  sourceApiaryId: string;
+  sourceApiaryName: string;
+  destApiaryId: string;
+  destApiaryName: string;
+  entityId: string;
+  motivo?: string;
+  fecha?: string;
+}): {
+  fecundador: any;
+  code: string;
+  fromName: string;
+  toName: string;
+  cuadernoEntry: { id: string; date: string; text: string; type: 'general' };
+} {
+  try {
+    const {
+      userId,
+      sourceApiaryId,
+      sourceApiaryName,
+      destApiaryId,
+      destApiaryName,
+      entityId,
+      motivo,
+      fecha,
+    } = opts;
+    const now = new Date().toISOString();
+
+    if (sourceApiaryId === destApiaryId) {
+      throw new Error('El apiario destino debe ser diferente al actual');
+    }
+    if (!destApiaryId) {
+      throw new Error('No se seleccionó un apiario de destino');
+    }
+
+    const sourceSuffix = `_${userId}_${sourceApiaryId}`;
+    const destSuffix = `_${userId}_${destApiaryId}`;
+
+    // 1. Obtener fecundador del apiario origen
+    const sourceList = loadFecundadores(userId, sourceApiaryId) as any[];
+    const fecundador = sourceList.find((e: any) => e.id === entityId);
+    if (!fecundador) {
+      throw new Error('Fecundador no encontrado');
+    }
+
+    // 2. Obtener fecundadores del apiario destino
+    const destList = loadFecundadores(userId, destApiaryId) as any[];
+
+    // 3. Calcular nuevo código en destino
+    const nuevoCodigo = getNextFecundadorCode(destList);
+
+    // 4. Crear entidad en destino con nuevo código pero mismos datos
+    const fecundadorTransferido = {
+      ...fecundador,
+      id: registerId(),
+      code: nuevoCodigo,
+      apiaryId: destApiaryId,
+      apiario: destApiaryName,
+      apiario_original: sourceApiaryName,
+      transferida: true,
+      fecha_transferencia: fecha || now,
+      motivo_transferencia: motivo || 'Sin motivo especificado',
+      updatedAt: now,
+    };
+
+    // 5. Eliminar del origen y agregar al destino
+    const nextSource = sourceList.filter((e: any) => e.id !== entityId);
+    const nextDest = sortByEntityCode([...destList, fecundadorTransferido]);
+    saveFecundadores(nextSource, userId, sourceApiaryId);
+    saveFecundadores(nextDest, userId, destApiaryId);
+
+    // 6. Registrar en cuaderno (origen y destino)
+    const cuadernoText = motivo
+      ? `Fecundador ${fecundador.code} transferido de ${sourceApiaryName} a ${destApiaryName} como ${nuevoCodigo} - Motivo: ${motivo}`
+      : `Fecundador ${fecundador.code} transferido de ${sourceApiaryName} a ${destApiaryName} como ${nuevoCodigo}`;
+    const cuadernoEntry = { id: registerId(), date: now, text: cuadernoText, type: 'general' as const };
+
+    const sourceCuaderno = loadCuadernoEntries(userId, sourceApiaryId) as any[];
+    const destCuaderno = loadCuadernoEntries(userId, destApiaryId) as any[];
+    saveCuadernoEntries([cuadernoEntry, ...sourceCuaderno], userId, sourceApiaryId);
+    saveCuadernoEntries([cuadernoEntry, ...destCuaderno], userId, destApiaryId);
+
+    // 7. Registrar en historial de transferencias
+    addTransferRecord(userId, {
+      tipo: 'fecundador_apiario',
+      entidadCodigo: fecundador.code,
+      desdeApiarioId: sourceApiaryId,
+      hastaApiarioId: destApiaryId,
+      desdeApiarioNombre: sourceApiaryName,
+      hastaApiarioNombre: destApiaryName,
+      motivo: motivo || undefined,
+      fecha: fecha || now,
+    });
+
+    console.log('✅ [TRANSFER] Fecundador transferido:', fecundador.code, sourceApiaryName, '→', destApiaryName, 'como', nuevoCodigo);
+    return { fecundador: fecundadorTransferido, code: nuevoCodigo, fromName: sourceApiaryName, toName: destApiaryName, cuadernoEntry };
+  } catch (error) {
+    console.error('[TRANSFER] Error al transferir fecundador:', error);
+    throw error;
+  }
 }
 
 export type { TransferRecord, TransferType };

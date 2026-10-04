@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   format, 
@@ -32,20 +32,49 @@ import { computeReminders, generateRecurringTaskInstances, floweringEventsForPer
 import EventForm from './EventForm';
 import RecurringTaskForm from './RecurringTaskForm';
 import FloweringForm from './FloweringForm';
-import { loadEventTemplates, saveEventTemplates } from '../utils/storage';
 import { useSettings } from '../context/SettingsContext';
 import { formatHour, formatHourFromTime } from '../utils/formatTime';
 
 const uid = () => Math.random().toString(36).slice(2, 11);
 
+/** Plantillas por defecto. Ids nuevos en cada siembra: son de solo lectura. */
+const DEFAULT_TEMPLATES = (): EventTemplate[] => [
+  {
+    id: uid(),
+    name: 'Inspeccion rutinaria',
+    type: 'inspection',
+    title: 'Inspeccion rutinaria',
+    description: 'Revision general de la colmena',
+    color: EVENT_COLORS.inspection,
+  },
+  {
+    id: uid(),
+    name: 'Tratamiento varroa',
+    type: 'treatment',
+    title: 'Tratamiento varroa',
+    description: 'Aplicar tratamiento contra varroa',
+    color: EVENT_COLORS.treatment,
+  },
+  {
+    id: uid(),
+    name: 'Cosecha de miel',
+    type: 'harvest',
+    title: 'Cosecha de miel',
+    description: 'Cosecha de miel de la colmena',
+    color: EVENT_COLORS.harvest,
+  },
+];
+
 interface CalendarSectionProps {
   hives: Hive[];
   events: CalendarEvent[];
-  onEventsChange: (events: CalendarEvent[]) => void;
+  onEventsChange: Dispatch<SetStateAction<CalendarEvent[]>>;
   recurringTasks: RecurringTask[];
   onRecurringTasksChange: (tasks: RecurringTask[]) => void;
   floweringEntries: FloweringEntry[];
   onFloweringEntriesChange: (entries: FloweringEntry[]) => void;
+  eventTemplates: EventTemplate[];
+  onEventTemplatesChange: Dispatch<SetStateAction<EventTemplate[]>>;
   breedingLots?: BreedingLot[];
   apiaries?: { id: string; name: string }[];
   apiaryName?: string;
@@ -59,12 +88,13 @@ export default function CalendarSection({
   onRecurringTasksChange,
   floweringEntries,
   onFloweringEntriesChange,
+  eventTemplates: templates,
+  onEventTemplatesChange: setTemplates,
   breedingLots = [],
   apiaries = [],
   apiaryName = '',
 }: CalendarSectionProps) {
   const { settings } = useSettings();
-  const [templates, setTemplates] = useState<EventTemplate[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewType, setViewType] = useState<CalendarViewType>('month');
@@ -91,43 +121,15 @@ export default function CalendarSection({
     tasks: notificationCfg.kinds?.tasks ?? true,
   };
 
-  // Cargar plantillas desde localStorage
+  // Sembrado inicial de plantillas. Los datos reales llegan como prop desde
+  // App.tsx, que los carga con ambito de apiario desde Firestore. Este efecto
+  // corre una sola vez por montaje y escribe por el setter de arriba, de modo
+  // que la persistencia la haga el efecto guardado de App.tsx y no una
+  // escritura suelta dentro del componente.
   useEffect(() => {
-    const savedTemplates = loadEventTemplates();
-    
-    if (savedTemplates.length > 0) {
-      setTemplates(savedTemplates);
-    } else {
-      // Plantillas por defecto
-      const defaultTemplates: EventTemplate[] = [
-        {
-          id: uid(),
-          name: 'Inspección rutinaria',
-          type: 'inspection',
-          title: 'Inspección rutinaria',
-          description: 'Revisión general de la colmena',
-          color: EVENT_COLORS.inspection,
-        },
-        {
-          id: uid(),
-          name: 'Tratamiento varroa',
-          type: 'treatment',
-          title: 'Tratamiento varroa',
-          description: 'Aplicar tratamiento contra varroa',
-          color: EVENT_COLORS.treatment,
-        },
-        {
-          id: uid(),
-          name: 'Cosecha de miel',
-          type: 'harvest',
-          title: 'Cosecha de miel',
-          description: 'Cosecha de miel de la colmena',
-          color: EVENT_COLORS.harvest,
-        },
-      ];
-      setTemplates(defaultTemplates);
-      saveEventTemplates(defaultTemplates);
-    }
+    if (templates.length > 0) return;
+    setTemplates(DEFAULT_TEMPLATES());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Atajos de teclado
@@ -360,16 +362,16 @@ export default function CalendarSection({
 
   const handleSaveEvent = (eventData: Omit<CalendarEvent, 'id' | 'createdAt'>) => {
     if (editingEvent) {
-      onEventsChange(events.map(e => 
-        e.id === editingEvent.id ? { ...e, ...eventData } : e
-      ));
+      onEventsChange(prev =>
+        prev.map(e => (e.id === editingEvent.id ? { ...e, ...eventData } : e))
+      );
     } else {
       const newEvent: CalendarEvent = {
         ...eventData,
         id: uid(),
         createdAt: new Date().toISOString(),
       };
-      onEventsChange([...events, newEvent]);
+      onEventsChange(prev => (prev.some(e => e.id === newEvent.id) ? prev : [...prev, newEvent]));
       
       // Seleccionar automáticamente la fecha del nuevo evento
       setSelectedDate(new Date(newEvent.date));
@@ -379,22 +381,22 @@ export default function CalendarSection({
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    onEventsChange(events.filter(e => e.id !== eventId));
+    onEventsChange(prev => prev.filter(e => e.id !== eventId));
   };
 
   const handleToggleComplete = (eventId: string) => {
-    onEventsChange(events.map(e => 
-      e.id === eventId ? { ...e, completed: !e.completed } : e
-    ));
+    onEventsChange(prev =>
+      prev.map(e => (e.id === eventId ? { ...e, completed: !e.completed } : e))
+    );
   };
 
   const handlePostpone = (eventId: string) => {
     const event = events.find(e => e.id === eventId);
     if (event) {
       const tomorrow = addDays(new Date(), 1);
-      onEventsChange(events.map(e => 
-        e.id === eventId ? { ...e, date: tomorrow.toISOString() } : e
-      ));
+      onEventsChange(prev =>
+        prev.map(e => (e.id === eventId ? { ...e, date: tomorrow.toISOString() } : e))
+      );
     }
   };
 
@@ -580,7 +582,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
 
         {/* Grid de días */}
         <div className="grid grid-cols-7 gap-2">
-          {days.map((day, index) => {
+          {days.map((day) => {
             const dayEvents = getEventsForDate(day);
             const isCurrentMonth = isSameMonth(day, currentDate);
             const isCurrentDay = isToday(day);
@@ -597,9 +599,6 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                     ? 'border-honey/50 bg-honey/10'
                     : 'border-line hover:border-honey/30 hover:bg-pane2'
                 } ${!isCurrentMonth ? 'opacity-40' : ''}`}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.01 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -615,14 +614,11 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                 {/* Indicadores de eventos */}
                 {dayEvents.length > 0 && (
                   <div className="absolute bottom-1 left-1 right-1 flex justify-center gap-0.5">
-                    {dayEvents.slice(0, 3).map((event, idx) => (
-                      <motion.div
+                    {dayEvents.slice(0, 3).map((event) => (
+                      <div
                         key={event.id}
                         className="w-1.5 h-1.5 rounded-full"
                         style={{ backgroundColor: event.color || EVENT_COLORS[event.type] }}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: idx * 0.05 }}
                       />
                     ))}
                     {dayEvents.length > 3 && (
@@ -669,11 +665,9 @@ ${event.description ? `📋 ${event.description}` : ''}`;
             const isCurrentDay = isToday(day);
 
             return (
-              <motion.div
+              <div
                 key={day.toString()}
                 className={`p-4 rounded-lg border ${isCurrentDay ? 'border-honey/50 bg-honey/5' : 'border-line'}`}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className={`font-semibold ${isCurrentDay ? 'text-honey' : 'text-cream'}`}>
@@ -712,7 +706,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                 ) : (
                   <p className="text-sm text-husk text-center py-2">Sin eventos</p>
                 )}
-              </motion.div>
+              </div>
             );
           })}
         </div>
@@ -760,12 +754,10 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                 </div>
                 <div className="flex-1 border-l border-line pl-4">
                   {hourEvents.map(event => (
-                    <motion.div
+                    <div
                       key={event.id}
                       className="p-3 rounded-lg bg-ink/50 hover:bg-ink/70 transition-colors cursor-pointer mb-2"
                       onClick={() => handleEditEvent(event)}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
                     >
                       <div className="flex items-center gap-2">
                         <div
@@ -777,7 +769,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                       {event.description && (
                         <p className="text-sm text-husk mt-1">{event.description}</p>
                       )}
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -961,14 +953,10 @@ ${event.description ? `📋 ${event.description}` : ''}`;
       </div>
 
       {/* Eventos atrasados */}
-      <AnimatePresence>
+      <div className={`accordion-grid ${showOverdue && overdueEvents.length > 0 ? 'open' : ''}`}>
         {showOverdue && overdueEvents.length > 0 && (
-          <motion.div
-            className="card p-6 border-coral/50"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
+          <div>
+            <div className="card p-6 border-coral/50">
             <h3 className="font-display text-lg font-bold text-coral mb-4">⚠️ Eventos Atrasados</h3>
             <div className="space-y-2">
               {overdueEvents.map(event => (
@@ -992,9 +980,10 @@ ${event.description ? `📋 ${event.description}` : ''}`;
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
+        </div>
         )}
-      </AnimatePresence>
+      </div>
 
       {/* Vista del calendario */}
       {viewType === 'month' && renderMonthView()}
@@ -1003,11 +992,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
 
       {/* Recordatorios del día */}
       {dayReminders.length > 0 && (
-        <motion.div
-          className="card p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-xl font-bold text-cream">🔔 Recordatorios próximos</h3>
             <span className="text-xs font-mono text-husk">
@@ -1041,7 +1026,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Gestión de tareas recurrentes y floración */}
@@ -1152,11 +1137,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
 
       {/* Panel de eventos del día seleccionado */}
       {selectedDate && viewType === 'month' && (
-        <motion.div
-          className="card p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-xl font-bold text-cream">
               Eventos del {format(selectedDate, 'd MMMM yyyy', { locale: es })}
@@ -1212,7 +1193,7 @@ ${event.description ? `📋 ${event.description}` : ''}`;
           ) : (
             <p className="text-center text-husk py-8">No hay eventos para este día</p>
           )}
-        </motion.div>
+        </div>
       )}
 
       {/* Formulario de evento */}

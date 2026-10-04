@@ -6,6 +6,7 @@ import type { CalendarEvent, EventType } from '../types/calendar';
 import { EVENT_COLORS, EVENT_LABELS, PRIORITY_COLORS, PRIORITY_LABELS } from '../types/calendar';
 import type { Hive } from '../types/hive';
 import { formatHourFromTime } from '../utils/formatTime';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface EventPanelProps {
   selectedDate: Date | null;
@@ -70,6 +71,8 @@ export default function EventPanel({
 }: EventPanelProps) {
   if (!selectedDate) return null;
 
+  useScrollLock(true);
+
   const dayEvents = events.filter(event => {
     const eventDate = new Date(event.date);
     return eventDate.toDateString() === selectedDate.toDateString();
@@ -97,7 +100,7 @@ export default function EventPanel({
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
         onClick={onClose}
-        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm touch-none"
       />
 
       <motion.div

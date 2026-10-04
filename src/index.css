@@ -54,6 +54,260 @@ body {
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 
+/* ---------- panal compacto (colmenas / núcleos / fecundadores) ----------
+   REGLA DE ORO: --hex-w fluido con min(): 7 hexágonos (desktop) / 6 (móvil)
+   por fila caben SIEMPRE sin desborde. --hex-h SIEMPRE derivado de un ancho
+   válido: calc(var(--hex-w) * 1.1547). */
+.map-panal {
+  --hex-gap: 8px;
+  --hex-w: min(116px, calc((100vw - (6 * var(--hex-gap))) / 7));
+  --hex-h: calc(var(--hex-w) * 1.1547);
+  overflow-x: clip;
+}
+/* ---------- gap por breakpoint móvil (solo el radio de separación; el ancho es fluido) ---------- */
+/* móvil pequeño */
+@media (max-width: 380px) {
+  .map-panal {
+    --hex-gap: 3px;
+  }
+}
+/* móvil estándar */
+@media (min-width: 381px) and (max-width: 430px) {
+  .map-panal {
+    --hex-gap: 4px;
+  }
+}
+/* móvil grande / phablet */
+@media (min-width: 431px) and (max-width: 767px) {
+  .map-panal {
+    --hex-gap: 4px;
+  }
+}
+/* tablet y desktop: mantener el patrón 7/6 actual sin regresión */
+@media (min-width: 768px) {
+  .map-panal {
+    --hex-gap: 8px;
+  }
+}
+
+/* ---------- móvil: contenedor + texto proporcional ---------- */
+@media (max-width: 767px) {
+  /* Padding interno 8px + full-bleed (recupera el px-4 del <main>):
+     el hexágono se encoge con min() hasta caber 6 por fila en cualquier ancho ✓ */
+  .map-panal {
+    padding: 8px !important;
+    margin-inline: -16px;
+  }
+
+  /* <=380px: código 9px · sub 7px */
+  .hex-content .hex-code {
+    font-size: 9px !important;
+    font-weight: 700 !important;
+  }
+  .hex-content .hex-meta {
+    font-size: 7px !important;
+  }
+}
+/* 381-430px: código 10px · sub 8px */
+@media (min-width: 381px) and (max-width: 430px) {
+  .hex-content .hex-code {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+  }
+  .hex-content .hex-meta {
+    font-size: 8px !important;
+  }
+}
+/* 431-767px: código 11px · sub 8px */
+@media (min-width: 431px) and (max-width: 767px) {
+  .hex-content .hex-code {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+  }
+  .hex-content .hex-meta {
+    font-size: 8px !important;
+  }
+}
+
+/* ---------- contenedor del panal: centrado simétrico en desktop, full-width en móvil ----------
+   REGLA DE ORO: el layout del panal (centrado, filas, offset por paridad, solape)
+   vive AQUÍ en index.css. NO definir clases de layout del mapa con Tailwind en TSX. */
+.mapa-hex-container {
+  position: relative;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+.fila {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: var(--hex-gap);
+  position: relative;
+  animation: hex-row-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--hex-row-delay, 0ms);
+}
+/* Cada fila entra con una subida ligera en cascada (one-shot). */
+@keyframes hex-row-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* offset por paridad: las filas pares (2ª, 4ª, ...) se corren media celda a la derecha */
+.fila:nth-child(even) {
+  margin-left: calc((var(--hex-w) + var(--hex-gap)) / 2);
+}
+/* solape vertical: cada fila sube un cuarto de la altura del hexágono */
+.fila + .fila {
+  margin-top: calc((var(--hex-h) * -0.25) + var(--hex-gap));
+}
+
+.hex-cell {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--hex-w);
+  height: var(--hex-h);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  opacity: 0;
+  animation: hex-fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--hex-row-delay, 0ms);
+}
+/* Entrada limpia del panal (one-shot CSS, NO se repite al re-renderizar):
+   las filas suben ligeramente en cascada y las celdas hacen fade-in.
+   Solo anima opacity en la celda (framer-motion controla el transform). */
+@keyframes hex-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hex-cell,
+  .fila {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Fundido de entrada al cambiar de ruta (RouteFade).
+   Solo opacidad: no provoca reflow, no desplaza el layout y NO crea un
+   containing block, así que los hijos `position: fixed` (cabecera, modales,
+   toasts) siguen anclados al viewport durante la animación. El fondo del tema
+   queda detrás desde el primer frame, así que nunca se ve un hueco blanco o
+   negro entre páginas.
+   La curva es la misma del resto de animaciones de la app (hex-fade-in). */
+.route-fade {
+  animation: route-fade-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes route-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Este bloque va DESPUÉS de la regla base a propósito. Una media query no añade
+   especificidad, así que si el `animation: none` se declarara antes, la regla
+   base posterior la pisaría y el fundido seguiría reproduciéndose para quien
+   tiene "reducir movimiento" activado. */
+@media (prefers-reduced-motion: reduce) {
+  .route-fade {
+    animation: none;
+    opacity: 1;
+  }
+}
+.hex-border,
+.hex-fill {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+/* Borde fino premium: el wrapper lleva el degradado metálico (claro arriba-izq → oscuro
+   abajo-der = metal pulido con luz) y el interior (inset 1.5px) el fondo oscuro. El
+   degradado se deriva del color del TIPO (oro champán / bronce miel / lila plata). */
+.hex-border {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 72%, #ffffff 28%) 0%,
+    color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 96%, #ffffff 4%) 45%,
+    color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 54%, #000000 46%) 100%);
+  /* Glow exterior MUY sutil del color del tipo + halo difuso del estado (si no está saludable) */
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 22%, transparent))
+          drop-shadow(0 0 8px var(--hex-status-halo, transparent));
+  transition: filter .25s ease;
+}
+.hex-fill {
+  inset: 1.5px;
+  /* Resplandor central tipo LED de POTENCIA ALTA: el color del ESTADO
+     (--hex-glow) brilla al 95% en el centro, 40% al 40% del radio y se apaga
+     100% al 75%, dejando los bordes sobre la base oscura. El borde del TIPO
+     (dorado/cobre/lila) vive en .hex-border y NO se toca. */
+  background:
+    radial-gradient(circle at center,
+      color-mix(in srgb, var(--hex-glow, #241C12) 95%, transparent) 0%,
+      color-mix(in srgb, var(--hex-glow, #241C12) 40%, transparent) 40%,
+      transparent 75%),
+    #241C12;
+  transition: background 200ms ease-in-out;
+}
+
+/* Color LED por ESTADO (tonos vibrantes). El estado también se lee por los
+   filtros y el ícono/halo pequeño dentro de la celda. */
+.hex-cell { --hex-glow: #241C12; }
+.hex-cell.st-saludable { --hex-glow: #4CAF50; }
+.hex-cell.st-revision { --hex-glow: #FF9800; }
+.hex-cell.st-alerta { --hex-glow: #F44336; }
+.hex-cell.st-sin_reina { --hex-glow: #9C27B0; }
+.hex-cell.st-transferida { --hex-glow: #2196F3; }
+
+/* Estados de fecundadores (by nucs) */
+.hex-cell.st-celda_real { --hex-glow: #FF9800; }
+.hex-cell.st-virgen { --hex-glow: #2196F3; }
+.hex-cell.st-fecundada { --hex-glow: #9C27B0; }
+.hex-cell.st-en_puesta { --hex-glow: #4CAF50; }
+
+/* Overlay para selección - mantiene legibilidad y resalta borde */
+.hex-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(255, 255, 255, 0.05) 40%,
+    rgba(36, 28, 18, 0.4) 90%,
+    rgba(36, 28, 18, 0.6) 100%);
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  mix-blend-mode: screen;
+}
+.hex-cell.selected .hex-fill::after {
+  opacity: 1;
+}
+.hex-content {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  padding: 3px 6%;
+  overflow: hidden;
+}
+.hex-cell.selected .hex-border {
+  /* Glow de selección del color del TIPO: luz difuminada doble (cercana intensa
+     + lejana suave) que sigue la forma hexagonal mediante drop-shadow, más el
+     halo de estado cuando aplica. El scale(1.06) lo anima framer-motion en TSX. */
+  filter: drop-shadow(0 0 4px var(--hex-status-halo, transparent))
+          drop-shadow(0 0 7px color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 85%, transparent))
+          drop-shadow(0 0 18px color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 45%, transparent))
+          drop-shadow(0 0 42px color-mix(in srgb, var(--hex-border-color, var(--color-husk)) 22%, transparent));
+}
+.hex-status-icon {
+  width: calc(var(--hex-w) * 0.2);
+  height: calc(var(--hex-w) * 0.2);
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
 .card {
   background: linear-gradient(158deg, var(--color-pane2), var(--color-pane) 72%);
   border: 1px solid var(--color-line);
@@ -118,22 +372,103 @@ body {
 }
 .pulse-dot { animation: pulse-dot 1.8s ease-out infinite; }
 
+/* ============================================================
+   SISTEMA DE TRANSICIONES UNIFORME — TRANSICIONES-FLUIDAS.md
+   Entrada 200ms · Salida 160ms · easing cubic-bezier(0.22,1,0.36,1)
+   ============================================================ */
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(16px) scale(0.95); }
+  from { opacity: 0; transform: translateX(80px) scale(0.95); }
   to { opacity: 1; transform: none; }
 }
-.toast-in { animation: toast-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.toast-in { animation: toast-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateX(80px) scale(0.95); }
+}
+.toast-out { animation: toast-out 160ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Entrada/salida de paneles de detalle — UNA sola vez con keyframes
+   (DETALLE-SIN-JITTER.md). La entrada usa fill-mode backwards para que al
+   terminar vuelva al estado estático de `:not(.closing)` (opacity 1 ·
+   transform none) SIN valores rellenos que mantengan una capa de
+   composición fantasma al scrollear en móvil. El cierre usa el MISMO nodo
+   con estado closing (fill both) y unmount post-animación.
+   Entrada 200ms · crossfade de contenido 160ms (.anim-in-sm) · salida 140ms */
+@keyframes detalle-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes detalle-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(6px); }
+}
+.detalle-panel {
+  animation: detalle-in 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.detalle-panel.anim-in-sm {
+  animation: detalle-in 160ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.detalle-panel.closing {
+  animation: detalle-out 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Estado estático tras la animación: NINGÚN transform/opacity residual, sin
+   transiciones que se re-evalúen en cada frame de scroll y prohibido
+   will-change/backdrop-filter/filter en el contenedor del detalle. */
+.detalle-panel:not(.closing) {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  will-change: auto;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  filter: none;
+}
+
+/* Acordeón con grid-template-rows 0fr→1fr (200ms), sin saltos de scroll */
+.accordion-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.accordion-grid.open { grid-template-rows: 1fr; }
+.accordion-grid > * {
+  min-height: 0;
+  overflow: hidden;
+}
 
 @keyframes modal-in {
-  from { opacity: 0; transform: translateY(20px) scale(0.965); }
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
-.modal-in { animation: modal-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.12) both; }
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.modal-in { animation: modal-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ---------- scroll lock global de modales / drawers / lightbox ----------
+   overscroll-behavior:contain en TODO contenedor scrolleable corta el
+   scroll chaining: al llegar al límite del modal el gesto NO se propaga
+   al fondo. touch-action:none en backdrops evita que arrastrar sobre el
+   fondo oscuro mueva la página en móvil. */
+.overflow-y-auto,
+.overflow-y-scroll,
+.overflow-auto {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
-.fade-in { animation: fade-in 0.25s ease both; }
+.modal-cuerpo {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- scroll horizontal suave sin scrollbar visible (chips de macro) ---------- */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
 /* ---------- data viz ---------- */
 .bar {
@@ -149,6 +484,20 @@ body {
   transition: stroke-dashoffset 1.7s ease 0.25s;
 }
 .in .spark { stroke-dashoffset: 0; }
+
+/* ---------- inputs numéricos: quitar flechas nativas del spinner ---------- */
+.qty-spin-none::-webkit-inner-spin-button,
+.qty-spin-none::-webkit-outer-spin-button,
+input[type="number"].qty-spin-none::-webkit-inner-spin-button,
+input[type="number"].qty-spin-none::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.qty-spin-none,
+input[type="number"].qty-spin-none {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
 
 /* ---------- range inputs ---------- */
 input[type="range"] {
@@ -323,6 +672,101 @@ html {
   padding: 2px 6px !important;
 }
 
+/* ---------- FondoVivo (solo /tienda) ----------
+   Ola del panal: cada hexágono sube a 0.10 y vuelve a 0.04 (ciclo 7s).
+   El delay por fila+columna está inline (negative, para que la ola ya
+   vaya en marcha al entrar). Sin will-change: la animación de opacity es
+   compositable y no debe reservar cientos de capas en móvil. */
+@keyframes fv-hex-wave {
+  0%, 100% { opacity: 0.04; }
+  50%      { opacity: 0.10; }
+}
+.fv-hex {
+  position: absolute;
+  opacity: 0.04;
+  animation: fv-hex-wave 7s ease-in-out infinite;
+}
+/* Aleteo de las abejas (alas) */
+@keyframes fv-flutter {
+  from { transform: scaleY(1); }
+  to   { transform: scaleY(0.35); }
+}
+.fv-wing {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: fv-flutter 0.12s linear infinite alternate;
+}
+.fv-wing-b { animation-delay: -0.06s; }
+/* Abeja: el área de vuelo es el span; el glyph es ~26px dentro del SVG */
+.fv-bee {
+  position: absolute;
+  text-align: left;
+  overflow: visible;
+  transform-origin: 50% 50%;
+}
+.fv-bee svg { display: block; }
+/* Las capas del fondo nunca interactúan ni se seleccionan */
+.fv-root,
+.fv-layer,
+.fv-hex,
+.fv-bee {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* reduced-motion: panal estático y elegante (sin ola) */
+.fv-reduced .fv-hex {
+  animation: none;
+  opacity: 0.05;
+}
+
+/* ---------- OriginalBackground (fondo EXACTO original de /tienda) ----------
+   Abejas pequeñas (24px) semi-transparentes volando en trayectorias suaves
+   (15-25s, ease-in-out) y partículas de luz/polen (3px, glow ámbar) que
+   flotan con fade. Todo bajo pointer-events:none, detrás del contenido. */
+.bee {
+  position: absolute;
+  font-size: 24px;
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: bee-float 20s ease-in-out infinite;
+}
+.bee-1 { top: 15%; left: 60%; animation-delay: 0s; }
+.bee-2 { top: 45%; left: 20%; animation-delay: -7s; }
+.bee-3 { top: 70%; left: 75%; animation-delay: -14s; }
+
+@keyframes bee-float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(30px, -20px) rotate(10deg); }
+  50% { transform: translate(60px, 10px) rotate(-5deg); }
+  75% { transform: translate(20px, 30px) rotate(5deg); }
+}
+
+.particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: #F5A623;
+  border-radius: 50%;
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 0 6px rgba(245, 166, 35, 0.6);
+  animation: particle-float 15s ease-in-out infinite;
+}
+.particle-1 { top: 30%; left: 25%; animation-delay: 0s; }
+.particle-2 { top: 50%; left: 70%; animation-delay: -3s; }
+.particle-3 { top: 70%; left: 40%; animation-delay: -6s; }
+.particle-4 { top: 20%; left: 80%; animation-delay: -9s; }
+.particle-5 { top: 80%; left: 15%; animation-delay: -12s; }
+
+@keyframes particle-float {
+  0%, 100% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(-20px); opacity: 0.6; }
+}
+
 /* ---------- PWA: modo standalone ---------- */
 @media (display-mode: standalone) {
   /* Safe-areas de iOS (muesca, barra inferior) */
@@ -335,11 +779,5 @@ html {
 
   .pwa-standalone-header {
     padding-top: env(safe-area-inset-top);
-  }
-
-  /* Al estar instalada la app ya es una aplicación: se oculta el
-     botón "Regresar a inicio" por si se deshablita en algún momento. */
-  .pwa-hide-standalone {
-    display: none !important;
   }
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { IconBee, IconDownload, IconX, IconRefresh, IconCheck } from '../ui';
+import { IconDownload, IconX, IconRefresh, IconCheck } from '../ui';
+import AppLogo from './AppLogo';
 
 /**
  * Evento beforeinstallprompt — no está en los tipos estándar de TS.
@@ -80,9 +81,7 @@ export function InstallPrompt() {
           transition={{ type: 'spring', stiffness: 300, damping: 26 }}
         >
           <div className="card flex items-center gap-3 border-honey/40 p-4 shadow-[0_16px_40px_rgba(0,0,0,.5)]">
-            <span className="hexclip flex h-10 w-9 shrink-0 items-center justify-center bg-honey text-ink">
-              <IconBee className="h-5 w-5" />
-            </span>
+            <AppLogo size="sm" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-snug text-cream">
                 Instala Apiarios Carrión para usar sin internet

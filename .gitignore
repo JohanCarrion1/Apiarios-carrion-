@@ -3,3 +3,10 @@ node_modules/
 dist/
 build/
 *.log
+
+# Variables de entorno (credenciales de Firebase y Cloudinary)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

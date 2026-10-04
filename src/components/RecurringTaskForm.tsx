@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { backdropVariants, modalVariants } from '../lib/motion';
 import { format } from 'date-fns';
+import { useScrollLock } from '../hooks/useScrollLock';
 import type { RecurringTaskDraft, RecurringTaskFrequency } from '../types/reminders';
 
 interface RecurringTaskFormProps {
@@ -31,6 +33,8 @@ export default function RecurringTaskForm({ onClose, onCreate }: RecurringTaskFo
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [materializeAll, setMaterializeAll] = useState(true);
 
+  useScrollLock(true);
+
   const applyPreset = (index: number) => {
     const preset = PRESETS[index];
     setPresetIndex(index);
@@ -59,21 +63,22 @@ export default function RecurringTaskForm({ onClose, onCreate }: RecurringTaskFo
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-xl w-full max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="card relative flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between border-b border-line px-6 py-5">
             <div>
               <h2 className="font-display text-2xl font-bold text-cream">Nueva tarea recurrente</h2>
               <p className="text-xs text-husk mt-1">Se generará automáticamente en el calendario</p>
@@ -88,7 +93,8 @@ export default function RecurringTaskForm({ onClose, onCreate }: RecurringTaskFo
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
             {/* Título */}
             <div>
               <label className="block text-sm font-medium text-cream mb-2">Título *</label>
@@ -223,8 +229,10 @@ export default function RecurringTaskForm({ onClose, onCreate }: RecurringTaskFo
               </div>
             </div>
 
+            </div>
+
             {/* Botones */}
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 border-t border-line px-6 py-4">
               <motion.button
                 type="button"
                 onClick={onClose}
@@ -244,7 +252,6 @@ export default function RecurringTaskForm({ onClose, onCreate }: RecurringTaskFo
               </motion.button>
             </div>
           </form>
-        </div>
       </motion.div>
     </motion.div>
   );

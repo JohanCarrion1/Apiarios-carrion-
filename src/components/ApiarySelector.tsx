@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LoadingScreen from './LoadingScreen';
 import { getUserApiaries, createApiary, type Apiary } from '../services/apiaryService';
 import { saveLastActiveApiaryId } from '../utils/storage';
 import PhotoUploader from './PhotoUploader';
@@ -92,18 +93,7 @@ export default function ApiarySelector() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink">
-        <div className="flex flex-col items-center gap-4">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="w-12 h-12 border-4 border-honey border-t-transparent rounded-full"
-          />
-          <p className="text-husk font-mono text-sm">Cargando apiarios...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen size="lg" label="Cargando apiarios..." fullScreen />;
   }
 
   return (

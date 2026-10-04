@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { backdropVariants, modalVariants } from '../lib/motion';
 import { addDays, format, parseISO } from 'date-fns';
 import type { Hive } from '../types/hive';
 import type { BreedingLot, BreedingType, WithdrawalMethod } from '../types/breeding';
 import { IconPlus, IconX } from '../ui';
 import PhotoUploader from './PhotoUploader';
 import type { PhotoData } from '../services/photos';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface BreedingFormProps {
   hives: Hive[];
@@ -21,13 +23,19 @@ export default function BreedingForm({ hives, nuclei, onClose, onCreate }: Breed
   const [tipo, setTipo] = useState<BreedingType>('Traslarve');
   const [coloniaDonante, setColoniaDonante] = useState<string>('');
   const [coloniasReceptoras, setColoniasReceptoras] = useState<string[]>([]);
-  const [cantidadPortacupulas, setCantidadPortacupulas] = useState<number>(20);
+  // Arranca vacio a proposito: el 20 solo aparece en el placeholder y se
+  // aplica como fallback al guardar. `''` es el unico valor no numerico
+  // posible, asi que el input queda de verdad en blanco, sin el '0' forzado
+  // que aparecia con un number puro al re-renderizar.
+  const [cantidadPortacupulas, setCantidadPortacupulas] = useState<number | ''>('');
   const [fechaInicio, setFechaInicio] = useState<string>(toDateStr(new Date()));
   const [fechaEnjauladoEstimada, setFechaEnjauladoEstimada] = useState<string>(toDateStr(addDays(new Date(), 10)));
   const [metodoRetiro, setMetodoRetiro] = useState<WithdrawalMethod>('enjaular');
   const [notas, setNotas] = useState<string>('');
   const [photos, setPhotos] = useState<PhotoData[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
+
+  useScrollLock(true);
 
   const getColonyLabel = (id: string) => {
     const colony = allColonies.find(c => c.id === id);
@@ -62,11 +70,15 @@ export default function BreedingForm({ hives, nuclei, onClose, onCreate }: Breed
   };
 
   const handleSubmit = () => {
+    // Fallback de guardado: si la caja quedo vacia se crea el lote con 20,
+    // el valor recomendado. El placeholder y el texto de ayuda lo comunican.
+    const cantidad = cantidadPortacupulas === '' ? 20 : cantidadPortacupulas;
+
     const errs: string[] = [];
     if (!coloniaDonante) errs.push('Selecciona una colonia donante');
     if (coloniasReceptoras.length < 1) errs.push('Selecciona al menos 1 colonia receptora');
     if (coloniasReceptoras.includes(coloniaDonante)) errs.push('La colonia donante no puede ser también receptora');
-    if (cantidadPortacupulas < 10 || cantidadPortacupulas > 40) errs.push('Portacúpulas debe estar entre 10 y 40');
+    if (cantidad < 10 || cantidad > 40) errs.push('Portacúpulas debe estar entre 10 y 40');
     if (!fechaInicio) errs.push('Ingresa la fecha de inicio');
     if (!fechaEnjauladoEstimada) errs.push('Ingresa la fecha estimada de enjaulado');
 
@@ -82,7 +94,7 @@ export default function BreedingForm({ hives, nuclei, onClose, onCreate }: Breed
       coloniaDonante,
       coloniasReceptoras,
       fechaInicio,
-      cantidadPortacupulas,
+      cantidadPortacupulas: cantidad,
       fechaEnjauladoEstimada,
       fechaNacimientoEstimada,
       metodoRetiro,
@@ -95,25 +107,36 @@ export default function BreedingForm({ hives, nuclei, onClose, onCreate }: Breed
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="relative w-full max-w-md flex flex-col bg-[#1a140d] rounded-2xl shadow-2xl overflow-hidden max-h-[80dvh] md:max-h-[85vh] touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-6">
+        {/* Cabecera fija: `flex-none` impide que la flexbox la aplaste y el
+            `border-b` la separa del formulario. */}
+        <div className="flex-none p-5 border-b border-yellow-900/30 flex justify-between items-center bg-[#1a140d]">
           <h3 className="font-display text-2xl font-bold text-cream">Nuevo Lote de Cría</h3>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-ink/50 hover:bg-ink/70 flex items-center justify-center">
             <IconX className="w-5 h-5 text-cream" />
           </button>
         </div>
+
+        {/* Cuerpo scrolleable. El `min-h-0` es imprescindible: sin el, este
+            hijo flex no baja de su altura de contenido y el `overflow-y-auto`
+            se ignora, estirando la tarjeta mas alla de su max-h.
+            `touch-auto` rehabilita el gesto de scroll dentro del backdrop
+            `touch-none`. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 touch-auto">
 
         {errors.length > 0 && (
           <div className="mb-4 p-3 rounded-lg border border-coral/50 bg-coral/10">
@@ -207,7 +230,21 @@ export default function BreedingForm({ hives, nuclei, onClose, onCreate }: Breed
               min={10}
               max={40}
               value={cantidadPortacupulas}
-              onChange={(e) => setCantidadPortacupulas(parseInt(e.target.value) || 0)}
+              placeholder="20"
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Vacio: se respeta el '', sin forzar un 0.
+                if (raw === '') {
+                  setCantidadPortacupulas('');
+                  return;
+                }
+                // Number() normaliza y elimina los ceros a la izquierda:
+                // '020' -> 20. Con type="number" el navegador ya entrega una
+                // cadena numerica valida o '', pero el guard de NaN impide que
+                // un 'NaN' llegue a renderizarse dentro del input.
+                const n = Number(raw);
+                setCantidadPortacupulas(Number.isNaN(n) ? '' : n);
+              }}
               className={inputCls}
             />
             <p className="mt-1 text-[11px] text-husk">Mínimo 10 · Máximo 40 · Recomendado 20</p>
@@ -283,8 +320,12 @@ export default function BreedingForm({ hives, nuclei, onClose, onCreate }: Breed
             <PhotoUploader photos={photos} onPhotosChange={setPhotos} />
           </div>
 
-          {/* Acciones */}
-          <div className="flex gap-2 pt-2">
+        </div>
+        </div>
+
+        {/* Pie fijo: crear/cancelar no viajan con el scroll del formulario. */}
+        <div className="flex-none p-5 border-t border-yellow-900/30 bg-[#1a140d]">
+          <div className="flex gap-2">
             <motion.button
               onClick={handleSubmit}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-honey py-2.5 text-sm font-semibold text-ink hover:bg-honeysoft"

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants } from '../lib/motion';
 import { IconX } from '../ui';
 import type { Apiary } from '../services/apiaryService';
 
@@ -30,6 +32,8 @@ export default function ManageApiariesModal({
   const [editState, setEditState] = useState<EditState>({ name: '', location: '', altitud: '' });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  useScrollLock(open);
 
   const handleClose = () => {
     setEditingId(null);
@@ -89,19 +93,19 @@ export default function ManageApiariesModal({
       {open && (
         <>
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-ink/90 backdrop-blur-sm"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 z-50 bg-ink/90 backdrop-blur-sm touch-none"
             onClick={handleClose}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative w-full max-w-xl my-8 shadow-[0_30px_80px_rgba(0,0,0,.6)]"
             >
               <div className="border-b border-line p-5 flex items-start justify-between">

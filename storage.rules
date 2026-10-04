@@ -1,0 +1,44 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper: sesión iniciada. Storage NO tiene funciones predefinidas como
+    // en Firestore, así que hay que declararla aquí. Si falta, el ruleset no
+    // compila y `firebase deploy --only storage` falla, dejando el bucket con
+    // las reglas antiguas (o en denegar todo) y rompiendo la subida del
+    // comprobante de pago.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Comprobantes de pago Yape (`comprobantes/{pedidoId}/{fileName}`).
+    // - write: solo usuarios autenticados, imagen ≤2 MB, solo formatos
+    //   aceptados por el cliente (JPG/PNG/WebP).
+    // - read: público (la URL lleva token de descarga); la privacidad del
+    //   pedido se aísla en Firestore por tenantId/clienteUid.
+    // - delete: denegado (se evita borrar evidencia de pago).
+    match /comprobantes/{pedidoId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+        && request.resource.size <= (2 * 1024 * 1024)
+        && (request.resource.contentType.matches('image/jpeg')
+            || request.resource.contentType.matches('image/png')
+            || request.resource.contentType.matches('image/webp'));
+      allow delete: if false;
+    }
+
+    // Fotos de inspección (`inspections/{colmenaId}/{fileName}`).
+    // - write: solo usuarios autenticados, imagen ≤10 MB (el cliente las
+    //   comprime a JPEG antes de subirlas), solo formatos imagen.
+    // - read: público (la URL lleva token de descarga); el documento de la
+    //   inspección guarda esas URLs en `photos`.
+    // - delete: permitido para sesiones iniciadas (al quitar una foto de una
+    //   inspección se evita acumular huérfanos en el bucket).
+    match /inspections/{colmenaId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+        && request.resource.size <= (10 * 1024 * 1024)
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn();
+    }
+  }
+}

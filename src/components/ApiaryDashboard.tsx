@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LoadingScreen from './LoadingScreen';
 import { getApiary, getApiaryHives, type Apiary, type HiveWithApiary } from '../services/apiaryService';
 import type { Hive } from '../types/hive';
 import PhotoGallery from './PhotoGallery';
@@ -44,18 +45,7 @@ export default function ApiaryDashboard({ apiaryId }: ApiaryDashboardProps) {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink">
-        <div className="flex flex-col items-center gap-4">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="w-12 h-12 border-4 border-honey border-t-transparent rounded-full"
-          />
-          <p className="text-husk font-mono text-sm">Cargando apiario...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen size="lg" label="Cargando apiario..." fullScreen />;
   }
 
   if (!apiary) {

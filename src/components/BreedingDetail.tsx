@@ -1,7 +1,10 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { differenceInDays, parseISO, format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants } from '../lib/motion';
 import type { Hive } from '../types/hive';
 import type { BreedingLot, BreedingStatus } from '../types/breeding';
 import { BREEDING_STATUS_LABELS, BREEDING_STATUS_COLORS, BREEDING_TYPE_LABELS, ACCEPTANCE_BADGES } from '../types/breeding';
@@ -20,13 +23,14 @@ interface BreedingDetailProps {
   onDelete: (lotId: string) => void;
   queens?: Queen[];
   onRequestAssign?: (lotId: string) => void;
+  closing?: boolean;
 }
 
 const STATUS_FLOW: BreedingStatus[] = ['enRealeras', 'enjauladas', 'nacidas', 'fecundando', 'aceptadas'];
 
 const formatDate = (iso: string) => format(parseISO(iso), 'd MMM yyyy', { locale: es });
 
-export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], onClose, onUpdate, onDelete, queens = [], onRequestAssign }: BreedingDetailProps) {
+export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], onClose, onUpdate, onDelete, queens = [], onRequestAssign, closing = false }: BreedingDetailProps) {
   const allColonies = [...hives, ...nuclei];
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStateMenu, setShowStateMenu] = useState(false);
@@ -34,11 +38,34 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
   const [acceptanceInput, setAcceptanceInput] = useState('');
   const [acceptanceNotes, setAcceptanceNotes] = useState('');
   const [acceptanceError, setAcceptanceError] = useState('');
-  const detailScrollRef = useRef<HTMLDivElement>(null);
+  // Ref al contenedor que scrollea dentro de la tarjeta.
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (detailScrollRef.current) detailScrollRef.current.scrollTop = 0;
-  }, []);
+  useScrollLock(showAcceptanceModal || showDeleteConfirm);
+
+  const lastIdRef = useRef<string | null>(null);
+  const prevId = lastIdRef.current;
+  const isContentSwap = prevId !== null && prevId !== lot.id;
+  lastIdRef.current = lot.id;
+  const animClass = closing ? 'detalle-panel closing' : isContentSwap ? 'detalle-panel anim-in-sm' : 'detalle-panel';
+
+  /* Al abrir el modal el scroll de la tarjeta debe quedar arriba, con la
+     cabecera (titulo y fechas) a la vista.
+     No basta un useEffect normal con deps []: en un montaje nuevo scrollTop
+     ya vale 0, asi que ahi no hay nada que forzar, y el efecto se ejecuta
+     ANTES de que el navegador resuelva el scroll anchoring y los ajustes de
+     layout de la tarjeta (fotos/portacupulas), que volvian a empujar el
+     contenido hacia abajo y dejaban el titulo fuera de vista. Por eso va en
+     useLayoutEffect (antes del pintado) y se reafirma en el siguiente frame. */
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [lot.id]);
 
   useEffect(() => {
     if (!showDeleteConfirm) return;
@@ -166,25 +193,14 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
   }, [lot, daysUntilEnjaulado, daysUntilBirth, isOverdueBirth]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center overflow-y-auto"
-      style={{ paddingTop: 'calc(4rem + env(safe-area-inset-top))', paddingLeft: '1rem', paddingRight: '1rem', paddingBottom: '2rem' }}
-      onClick={onClose}
-    >
-      <motion.div
-        ref={detailScrollRef}
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-2xl w-full p-6 my-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between mb-5">
-          <div>
+    /* La tarjeta (fondo, borde, flex-col, overflow-hidden) la pinta
+       BreedingSection como contenedor relative; aqui solo va el contenido. */
+    <aside key={lot.id} className="flex min-h-0 flex-1 flex-col">
+      {/* Cabecera fija: NO scrollea. `flex-none` le impide a la flexbox
+          aplastarla y el `border-b` dibuja la linea divisoria. */}
+      <div className="flex-none p-5 sm:p-6 border-b border-yellow-900/30">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <span
                 className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-widest"
@@ -203,10 +219,23 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
               Inicio {formatDate(lot.fechaInicio)} · {daysElapsed} días transcurridos
             </p>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full bg-ink/50 hover:bg-ink/70 flex items-center justify-center">
+          <button
+            onClick={onClose}
+            className="flex-none p-2 rounded-full bg-ink/60 hover:bg-ink/80 flex items-center justify-center"
+            title="Cerrar"
+            aria-label="Cerrar detalle del lote"
+          >
             <IconX className="w-5 h-5 text-cream" />
           </button>
         </div>
+      </div>
+
+      {/* Cuerpo scrolleable: arranca justo debajo de la linea divisoria, con la
+          alerta naranja como primer bloque. */}
+      <div
+        ref={scrollRef}
+        className={`flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 [overflow-anchor:none] ${animClass}`}
+      >
 
         {/* Alert */}
         {alertBanner && (
@@ -487,24 +516,33 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
           </div>
         )}
 
-        {/* Modal de aceptación */}
-        {showAcceptanceModal && (
+        {/* Modal de aceptación.
+            Portalizado a document.body a proposito: la tarjeta animada por
+            framer lleva `transform` (scale/y), y cualquier transform la
+            convierte en containing block de los `position: fixed` hijos; con
+            `overflow-hidden` en la tarjeta, estos modales quedarian recortados
+            dentro de ella. */}
+        {showAcceptanceModal && createPortal(
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => setShowAcceptanceModal(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative max-w-sm w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -530,7 +568,6 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
                   setAcceptanceError('');
                 }}
                 placeholder="0"
-                autoFocus
                 className="w-full rounded-xl border border-line bg-ink px-4 py-4 text-center font-display text-4xl font-bold text-cream focus:border-honey/70 focus:outline-none mb-2"
               />
 
@@ -583,30 +620,35 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
                 </motion.button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
 
-        {/* Confirmación eliminar */}
-        {showDeleteConfirm && (
+        {/* Confirmación eliminar — portalizado por el mismo motivo. */}
+        {showDeleteConfirm && createPortal(
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
           >
             {/* Backdrop - tapa TODA la pantalla */}
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => setShowDeleteConfirm(false)}
             />
 
             {/* Modal - centrado encima del backdrop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative max-w-sm w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -634,9 +676,10 @@ export default function BreedingDetail({ lot, hives, nuclei, breedingLots = [], 
                 </motion.button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
-      </motion.div>
-    </motion.div>
+      </div>
+    </aside>
   );
 }

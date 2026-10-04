@@ -1,17 +1,25 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
-import { STATUS_COLORS, type Hive, type HiveStatus, type EntityType } from "../types/hive";
-import { Pulse } from './Animations';
+import {
+  STATUS_COLORS,
+  ENTITY_BORDER_COLORS,
+  STATUS_HALO_COLORS,
+  type Hive,
+  type HiveStatus,
+  type EntityType,
+} from "../types/hive";
+import { IconAlert, IconCrown } from '../ui';
 
 interface Props {
   hives: Hive[];
   selectedId: string;
   onSelect: (id: string) => void;
-  filter: HiveStatus | "todas";
-  onFilter: (f: HiveStatus | "todas") => void;
+  filter: HiveStatus | "todas" | "transferidas" | "polinizacion";
+  onFilter: (f: HiveStatus | "todas" | "transferidas" | "polinizacion") => void;
   query: string;
-  onAdd: () => void;
   entityType?: EntityType;
+  /** Códigos de colmena asignados a contratos de polinización activos. */
+  polinizacionCodes?: string[];
   favorites?: string[];
   onToggleFavorite?: (hiveId: string) => void;
   compareMode?: boolean;
@@ -44,8 +52,8 @@ export default function HiveComb({
   filter, 
   onFilter, 
   query, 
-  onAdd,
   entityType = 'colmena',
+  polinizacionCodes = [],
   favorites = [],
   onToggleFavorite,
   compareMode = false,
@@ -61,157 +69,161 @@ export default function HiveComb({
   helpText = 'Toca una celda para ver detalles de la colmena',
   entitySingular = 'colmena',
 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [positions, setPositions] = useState<Array<{
-    hive: Hive;
-    x: number;
-    y: number;
-    hexWidth: number;
-    hexHeight: number;
-  }>>([]);
+  // Chunks fijos por capacidad: móvil (<768px) filas impares/pares 6/5, desktop 7/6
+  const getCols = () => {
+    if (typeof window === 'undefined') return { even: 6, odd: 5 } as const;
+    const w = window.innerWidth;
+    // 7 columnas necesitan ~900 px reales. Entre 768 y ~940 la rejilla se
+    // salía del contenedor y los hexágonos de los extremos quedaban cortados
+    // (el contenedor tiene overflow oculto), así que se baja a 6/5 antes.
+    if (w < 768) return { even: 6, odd: 5 } as const;
+    if (w < 1000) return { even: 6, odd: 5 } as const;
+    return { even: 7, odd: 6 } as const;
+  };
+  const [cols, setCols] = useState(getCols);
+  // useEffect, no useMemo: con useMemo el valor de retorno (la función de
+  // limpieza) se descarta, así que el listener de 'resize' nunca se daba de
+  // baja y se acumulaba uno por cada montaje del componente.
+  useEffect(() => {
+    const onResize = () => setCols(getCols());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
-  const isDim = (h: Hive) =>
-    (filter !== "todas" && h.status !== filter) ||
-    (query.trim() !== "" && !h.code.toLowerCase().includes(query.trim().toLowerCase()));
+  const isDim = useCallback(
+    (h: Hive) =>
+      (filter === "transferidas" ? !h.transferida :
+        filter === "polinizacion" ? !polinizacionCodes.includes(h.code) :
+        (filter !== "todas" && h.status !== filter)) ||
+      (query.trim() !== "" && !h.code.toLowerCase().includes(query.trim().toLowerCase())),
+    [filter, query, polinizacionCodes]
+  );
 
   // Calcular estadísticas para los chips
   const healthyCount = hives.filter(h => h.status === 'saludable').length;
   const revisionCount = hives.filter(h => h.status === 'revision').length;
   const alertCount = hives.filter(h => h.status === 'alerta').length;
   const noQueenCount = hives.filter(h => h.status === 'sin_reina').length;
+  const transferredCount = hives.filter(h => h.transferida === true).length;
+  const polinizacionCount = hives.filter(h => polinizacionCodes.includes(h.code)).length;
 
-  const chips: { key: HiveStatus | "todas"; label: string; n: number; color?: string }[] = [
+  const chips: { key: HiveStatus | "todas" | "transferidas" | "polinizacion"; label: string; n: number; color?: string }[] = [
     { key: "todas", label: allChipLabel, n: hives.length, color: "#f0a41c" },
     { key: "saludable", label: "SALUDABLE", n: healthyCount, color: STATUS_COLORS.saludable },
     { key: "revision", label: "REVISIÓN", n: revisionCount, color: STATUS_COLORS.revision },
     { key: "alerta", label: "ALERTA", n: alertCount, color: STATUS_COLORS.alerta },
     { key: "sin_reina", label: "SIN REINA", n: noQueenCount, color: STATUS_COLORS.sin_reina },
+    { key: "transferidas", label: "TRANSFERIDAS", n: transferredCount, color: "#8fa3bf" },
   ];
 
-  // Filtrar colmenas visibles
-  const visibleHives = useMemo(() => hives.filter(h => !isDim(h)), [hives, filter, query]);
+  if (entityType === 'colmena') {
+    chips.push({ key: "polinizacion", label: "EN POLINIZACIÓN", n: polinizacionCount, color: "#7fa572" });
+  }
 
-  // Calcular posiciones del panal en useEffect con las dependencias correctas
-  useEffect(() => {
-    if (!containerRef.current || visibleHives.length === 0) {
-      setPositions([]);
-      return;
+  // Filtrar colmenas visibles. `polinizacionCodes` faltaba en las
+  // dependencias: al cambiar el filtro de polinización (que llega como prop
+  // desde App) la rejilla seguía mostrando las celdas del conjunto anterior.
+  const visibleHives = useMemo(() => hives.filter((h) => !isDim(h)), [hives, isDim]);
+
+  // Agrupar hexágonos en filas alternadas: impares `even`, pares `odd` (izquierda a derecha)
+  const rows = useMemo(() => {
+    const { even, odd } = cols;
+    const out: Hive[][] = [];
+    let i = 0;
+    while (i < visibleHives.length) {
+      const n = out.length % 2 === 0 ? even : odd;
+      out.push(visibleHives.slice(i, i + n));
+      i += n;
     }
+    return out;
+  }, [visibleHives, cols]);
 
-    const calculatePositions = () => {
-      const containerWidth = containerRef.current!.offsetWidth;
-      
-      // Para un panal real con separación uniforme:
-      // - Gap horizontal: 8% del ancho del hexágono (reducido de 15%)
-      // - Gap vertical: 5% de la altura del hexágono (reducido de 15%)
-      const gapHorizontal = 0.08; // 8% de gap horizontal (más compacto)
-      const gapVertical = 0.05; // 5% de gap vertical (más compacto)
-      
-      // Calcular tamaño base del hexágono (aumentado 18%: de 8.5 a 7.2)
-      const hexWidth = Math.min(containerWidth / 7.2, 118); // Aumentado 18%
-      const hexHeight = hexWidth * 1.1547; // Proporción exacta de hexágono (√3)
-      
-      // Espaciado entre hexágonos (incluye el gap)
-      const hexSpacingX = hexWidth * (1 + gapHorizontal);
-      const hexSpacingY = hexHeight * (1 - gapVertical); // Las filas se superponen ligeramente
+  const renderHex = (hive: Hive) => {
+    const selected = hive.id === selectedId;
+    const borderColor = entityType === 'nucleo' ? ENTITY_BORDER_COLORS.nucleo : ENTITY_BORDER_COLORS.colmena;
+    const stateClass = hive.transferida ? 'st-transferida' : `st-${hive.status}`;
 
-      const colsEven = 7;
-      const colsOdd = 6;
-      
-      const positions: Array<{
-        hive: Hive;
-        x: number;
-        y: number;
-        hexWidth: number;
-        hexHeight: number;
-        row: number;
-      }> = [];
+    const cell = (
+      <motion.div
+        key={hive.id}
+        className={`hex-cell ${stateClass} ${selected ? 'selected' : ''}`}
+        style={{
+          width: 'var(--hex-w)',
+          height: 'var(--hex-h)',
+          zIndex: selected ? 100 : 1,
+          '--hex-border-color': borderColor,
+          '--hex-status-halo': STATUS_HALO_COLORS[hive.status],
+        } as CSSProperties}
+        aria-label={`${hive.code} · ${entitySingular}`}
+        onClick={() => {
+          if (compareMode && onToggleCompare) {
+            onToggleCompare(hive.id);
+          } else {
+            onSelect(hive.id);
+          }
+        }}
+        whileHover={{ scale: 1.05, zIndex: 100 }}
+        whileTap={{ scale: 0.97 }}
+        initial={false}
+        animate={{ scale: selected ? 1.05 : 1 }}
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {/* Borde del color del TIPO (dorado colmena / cobre núcleo) */}
+        <div className="hex-border" />
+        {/* Relleno con degradado (borde de 3px visible) */}
+        <div className="hex-fill" />
+        {/* Contenido centrado: ícono de ESTADO arriba del código */}
+        <div className="hex-content">
+          <div
+            style={{
+              height: 'calc(var(--hex-w) * 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 4,
+              lineHeight: 1,
+            }}
+          >
+            {hive.status === 'revision' && (
+              <span
+                style={{
+                  width: 'calc(var(--hex-w) * 0.15)',
+                  height: 'calc(var(--hex-w) * 0.15)',
+                  borderRadius: '50%',
+                  background: STATUS_HALO_COLORS.revision,
+                  boxShadow: `0 0 8px ${STATUS_HALO_COLORS.revision}`,
+                }}
+              />
+            )}
+            {hive.status === 'alerta' && (
+              <span style={{ color: STATUS_HALO_COLORS.alerta, display: 'flex' }}>
+                <IconAlert className="hex-status-icon" />
+              </span>
+            )}
+            {hive.status === 'sin_reina' && (
+              <span style={{ color: STATUS_HALO_COLORS.sin_reina, display: 'flex' }}>
+                <IconCrown className="hex-status-icon" />
+              </span>
+            )}
+          </div>
+          <div className="hex-code" style={{ fontSize: 'calc(var(--hex-w) * 0.2)', fontWeight: 900, letterSpacing: 1, lineHeight: 1.15 }}>
+            {hive.code}
+          </div>
+          <div className="hex-meta" style={{ fontSize: 'calc(var(--hex-w) * 0.13)', opacity: 0.9, fontWeight: 600, lineHeight: 1 }}>
+            {shortDays(hive.updatedAt)}
+          </div>
+        </div>
+      </motion.div>
+    );
 
-      let placed = 0;
-      let row = 0;
-
-      while (placed < visibleHives.length) {
-        const colsInRow = row % 2 === 0 ? colsEven : colsOdd;
-        for (let col = 0; col < colsInRow && placed < visibleHives.length; col++) {
-          // Offset exacto de medio hexágono para filas impares (patrón de panal auténtico)
-          const x = col * hexSpacingX + (row % 2 === 1 ? hexSpacingX / 2 : 0);
-          const y = row * hexSpacingY;
-          positions.push({
-            hive: visibleHives[placed],
-            x,
-            y,
-            hexWidth,
-            hexHeight,
-            row
-          });
-          placed++;
-        }
-        row++;
-      }
-
-      // Calcular offsets para centrar el panal completo
-      let minX = Infinity, maxX = -Infinity;
-      let minY = Infinity, maxY = -Infinity;
-
-      positions.forEach((pos) => {
-        minX = Math.min(minX, pos.x);
-        maxX = Math.max(maxX, pos.x + hexWidth);
-        minY = Math.min(minY, pos.y);
-        maxY = Math.max(maxY, pos.y + hexHeight);
-      });
-
-      const panalWidth = maxX - minX;
-      const panalHeight = maxY - minY;
-      
-      // Centrar horizontalmente el panal completo
-      const offsetX = (containerWidth - panalWidth) / 2 - minX;
-      const offsetY = -minY;
-
-      // Aplicar offsets
-      positions.forEach((pos) => {
-        pos.x += offsetX;
-        pos.y += offsetY;
-      });
-
-      setDimensions({ width: containerWidth, height: panalHeight });
-      setPositions(positions);
-    };
-
-    calculatePositions();
-
-    // Agregar event listener de resize UNA SOLA VEZ con cleanup
-    const handleResize = () => {
-      calculatePositions();
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [visibleHives.length]); // Solo depende del número de colmenas visibles
-
-  const getStatusClass = (status: string): string => {
-    switch (status) {
-      case 'saludable': return 'saludable';
-      case 'revision': return 'revision';
-      case 'alerta': return 'alerta';
-      case 'sin_reina': return 'sin-reina';
-      default: return '';
-    }
-  };
-
-  const getStatusIcon = (status: string): string => {
-    switch (status) {
-      case 'alerta': return '⚠️';
-      case 'sin_reina': return '👑';
-      default: return '';
-    }
+    return cell;
   };
 
   return (
     <div>
       {/* Filtros tipo pill */}
       <motion.div 
-        className="mb-6 flex flex-wrap items-center gap-2"
+        className="mb-6 flex flex-wrap items-center gap-1.5"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
@@ -222,18 +234,18 @@ export default function HiveComb({
             <motion.button
               key={c.key}
               onClick={() => onFilter(c.key)}
-              className={`flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider transition-all duration-200 ${
+              className={`flex w-auto items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 font-mono text-xs font-bold uppercase tracking-wide transition-all duration-200 ${
                 active
                   ? "border-honey bg-honey text-ink shadow-[0_0_20px_rgba(240,164,28,.4)]"
                   : "border-line bg-pane text-husk hover:border-honey/60 hover:text-cream"
               }`}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.95 }}
             >
-              {c.color && <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />}
+              {c.color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />}
               {c.label}
               <span 
-                className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${active ? "bg-ink/20 text-ink" : ""}`}
+                className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${active ? "bg-ink/20 text-ink" : ""}`}
                 style={!active && c.color ? { 
                   background: `${c.color}20`,
                   color: c.color,
@@ -247,37 +259,16 @@ export default function HiveComb({
         })}
       </motion.div>
 
-      {/* Mapa hexagonal con posicionamiento absoluto */}
-      <motion.div 
-        className="card relative overflow-visible px-6 py-8 sm:px-8"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
+      {/* Mapa hexagonal compacto (panal: filas 7/6 alternadas, solape vertical) */}
+      <div
+        className="card map-panal relative overflow-visible"
+        style={{ padding: 16 }}
       >
-        {/* Botón flotante de agregar - Fuera del área de celdas */}
-        <motion.button
-          onClick={onAdd}
-          className="absolute right-2 top-2 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-honey text-ink shadow-[0_4px_20px_rgba(240,164,28,.5)] transition-all hover:shadow-[0_6px_30px_rgba(240,164,28,.7)]"
-          whileHover={{ scale: 1.1, rotate: 90 }}
-          whileTap={{ scale: 0.9 }}
-          initial={{ opacity: 0, scale: 0 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-        >
-          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
-        </motion.button>
+        {/* Botón flotante de agregar - Eliminado: el "+" vive en el encabezado de sección */}
 
-        {/* Contenedor del panal - Ancho completo para centrado correcto */}
-        <div 
-          ref={containerRef}
-          className="relative w-full"
-          style={{ 
-            minHeight: dimensions.height > 0 ? `${dimensions.height}px` : '200px'
-          }}
-        >
-          {positions.length === 0 && visibleHives.length === 0 && (
+        {/* Contenedor del panal - centrado definido en index.css (.mapa-hex-container) */}
+        <div className="mapa-hex-container">
+          {visibleHives.length === 0 && (
             <motion.div 
               className="text-center py-16"
               initial={{ opacity: 0 }}
@@ -298,87 +289,19 @@ export default function HiveComb({
             </motion.div>
           )}
 
-          {/* Hexágonos posicionados absolutamente */}
-          {positions.map((pos, index) => {
-            const { hive, x, y, hexWidth, hexHeight } = pos;
-            const statusClass = getStatusClass(hive.status);
-            const icon = getStatusIcon(hive.status);
-            const selected = hive.id === selectedId;
-            const isFavorite = favorites.includes(hive.id);
-            const isSelectedForCompare = selectedForCompare.includes(hive.id);
-            const health = calculateHealth ? calculateHealth(hive) : 100;
-            const daysSinceInspection = Math.floor((Date.now() - new Date(hive.updatedAt).getTime()) / (1000 * 60 * 60 * 24));
-
-            const hexCell = (
-              <motion.div
-                key={hive.id}
-                className={`hex-cell absolute cursor-pointer ${statusClass} ${selected ? 'selected' : ''}`}
-                style={{
-                  left: `${x}px`,
-                  top: `${y}px`,
-                  width: `${hexWidth}px`,
-                  height: `${hexHeight}px`,
-                  zIndex: selected ? 100 : 1
-                }}
-                aria-label={`${hive.code} · ${entitySingular}`}
-                onClick={() => {
-                  if (compareMode && onToggleCompare) {
-                    onToggleCompare(hive.id);
-                  } else {
-                    onSelect(hive.id);
-                  }
-                }}
-                whileHover={{ scale: 1.08, zIndex: 100 }}
-                whileTap={{ scale: 0.95 }}
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.03, type: "spring", stiffness: 260, damping: 20 }}
-              >
-                {/* SVG del hexágono */}
-                <svg viewBox="0 0 100 115" style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
-                  <defs>
-                    <radialGradient id={`hexGradient-${hive.id}`} cx="50%" cy="30%" r="70%">
-                      <stop offset="0%" stopColor="#3a3530"/>
-                      <stop offset="100%" stopColor="#1a1510"/>
-                    </radialGradient>
-                  </defs>
-                  <polygon 
-                    points="50,2 97,28 97,87 50,113 3,87 3,28"
-                    fill={`url(#hexGradient-${hive.id})`}
-                    stroke={STATUS_COLORS[hive.status]}
-                    strokeWidth="3"
-                    style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))' }}
-                  />
-                </svg>
-
-                {/* Contenido */}
-                <div className="relative z-10 flex flex-col items-center justify-center h-full text-white" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-                  {icon && (
-                    <div style={{ fontSize: `${Math.max(hexWidth * 0.16, 11)}px`, marginBottom: '4px' }}>
-                      {icon}
-                    </div>
-                  )}
-                  <div style={{ fontSize: `${Math.max(hexWidth * 0.2, 12)}px`, fontWeight: 900, letterSpacing: '1px', marginBottom: '4px' }}>
-                    {hive.code}
-                  </div>
-                  <div style={{ fontSize: `${Math.max(hexWidth * 0.13, 9)}px`, opacity: 0.7, fontWeight: 500 }}>
-                    {shortDays(hive.updatedAt)}
-                  </div>
-                </div>
-              </motion.div>
-            );
-
-            // Si está en alerta, envolver con Pulse
-            if (hive.status === 'alerta') {
-              return (
-                <Pulse key={hive.id}>
-                  {hexCell}
-                </Pulse>
-              );
-            }
-
-            return hexCell;
-          })}
+          {/* Filas del panal: offset por paridad lo define index.css (.fila:nth-child(even)) */}
+          {rows.map((row, ri) => (
+            <div
+              key={ri}
+              className="fila"
+              style={{
+                zIndex: rows.length - ri,
+                '--hex-row-delay': `${ri * 90}ms`,
+              } as CSSProperties}
+            >
+              {row.map((hive) => renderHex(hive))}
+            </div>
+          ))}
         </div>
 
         <motion.p 
@@ -389,13 +312,7 @@ export default function HiveComb({
         >
           {helpText}
         </motion.p>
-      </motion.div>
-
-      <style>{`
-        .hex-cell.selected {
-          filter: drop-shadow(0 0 12px rgba(240, 164, 28, 0.8));
-        }
-      `}</style>
+      </div>
     </div>
   );
 }

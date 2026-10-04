@@ -5,6 +5,8 @@ import { es } from 'date-fns/locale';
 import type { CalendarEvent, EventType, EventPriority, RecurrenceType, ReminderType, EventTemplate } from '../types/calendar';
 import { EVENT_COLORS, EVENT_LABELS } from '../types/calendar';
 import type { Hive } from '../types/hive';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants } from '../lib/motion';
 
 interface EventFormProps {
   isOpen: boolean;
@@ -58,6 +60,8 @@ export default function EventForm({
     reminders: [],
     completed: false,
   });
+
+  useScrollLock(isOpen);
 
   // Cargar datos del evento si estamos editando
   useEffect(() => {
@@ -147,17 +151,19 @@ export default function EventForm({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+        variants={backdropVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.9, y: 20 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.9, y: 20 }}
-          className="card max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="card max-w-2xl w-full max-h-[90vh] overflow-y-auto touch-auto"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6">

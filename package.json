@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-apiar-reglas \"node --test tests/rules/*.test.mjs\"",
+    "bootstrap:admins": "node scripts/bootstrap-admins.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
@@ -17,6 +19,7 @@
     "date-fns": "^2.30.0",
     "firebase": "^12.19.0",
     "framer-motion": "^11.16.1",
+    "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
@@ -28,12 +31,14 @@
     "vite-plugin-pwa": "^1.3.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/vite": "^4.1.7",
     "@types/canvas-confetti": "^1.6.4",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/uuid": "^9.0.7",
     "@vitejs/plugin-react": "^4.3.4",
+    "firebase-admin": "^14.5.0",
     "tailwindcss": "^4.1.7",
     "typescript": "^5.7.0",
     "vite": "^6.3.5"

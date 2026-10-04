@@ -1,28 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { STATUS_COLORS, HIVE_STATUS_LABELS, type Hive, type Inspection, isNucleus } from "../types/hive";
+import { backdropVariants, modalVariants } from '../lib/motion';
+import { STATUS_COLORS, HIVE_STATUS_LABELS, type Hive, type Equipamiento, getEquipamiento, type Inspection, isNucleus, hiveHasQueen } from "../types/hive";
+import { useScrollLock } from '../hooks/useScrollLock';
 import type { Queen, QueenChange } from '../types/queen';
 import type { BreedingLot } from '../types/breeding';
-import {
-  QUEEN_AGE_LABEL,
-  QUEEN_CHANGE_REASON_LABELS,
-  QUEEN_ORIGIN_LABELS,
-  QUEEN_STATUS_COLORS,
-  QUEEN_STATUS_LABELS,
-  QUEEN_YEAR_COLORS,
-  QUEEN_YEAR_COLOR_LABELS,
-  getQueenAlert,
-} from '../types/queen';
+// Queen imports removed — queen info block removed from detail; only badge remains in header
 import { IconCrown, IconPlus, IconNote, IconX, IconRefresh, IconLayers } from "../ui";
-import PhotoUploader from './PhotoUploader';
+import InspectionHistory from './InspectionHistory';
+import { collectInspectionPhotos } from '../services/inspectionPhotos';
 import type { PhotoData } from '../services/photos';
 
 interface Props {
   hive: Hive;
   inspections: Inspection[];
   totalHives: number;
+  onClose?: () => void;
   onInspect: (id: string) => void;
   onEdit: (hive: Hive) => void;
   onDelete: (id: string) => void;
@@ -30,6 +23,9 @@ interface Props {
   onDuplicate?: (hive: Hive) => void;
   onExport?: (hive: Hive) => void;
   onUpdateFotos?: (id: string, fotos: PhotoData[]) => void;
+  onDeleteInspection?: (inspectionId: string) => void;
+  onDeleteInspectionPhoto?: (inspectionId: string, photoId: string) => void;
+  onUpdateEquipment?: (id: string, equipamiento: Equipamiento) => void;
   tags?: string[];
   onToggleTag?: (tag: string) => void;
   queen?: Queen | null;
@@ -44,7 +40,8 @@ interface Props {
   currentApiaryId?: string;
   nextHiveCode?: string;
   onConvertNucleus?: (hive: Hive) => void;
-  onTransfer?: (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => void;
+  onTransfer?: (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => boolean;
+  closing?: boolean;
 }
 
 function daysAgo(date: string): string {
@@ -58,6 +55,7 @@ export default function HiveDetail({
   hive, 
   inspections, 
   totalHives, 
+  onClose,
   onInspect, 
   onEdit, 
   onDelete, 
@@ -65,6 +63,9 @@ export default function HiveDetail({
   onDuplicate,
   onExport,
   onUpdateFotos,
+  onDeleteInspection,
+  onDeleteInspectionPhoto,
+  onUpdateEquipment,
   tags = [],
   onToggleTag,
   queen,
@@ -80,6 +81,7 @@ export default function HiveDetail({
   nextHiveCode,
   onConvertNucleus,
   onTransfer,
+  closing = false,
 }: Props) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -90,6 +92,14 @@ export default function HiveDetail({
   const [moveDestApiaryId, setMoveDestApiaryId] = useState('');
   const [moveMotivo, setMoveMotivo] = useState('');
   const [moveFecha, setMoveFecha] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useScrollLock(showDeleteModal || showConvertModal || showMoveModal);
+
+  const lastIdRef = useRef<string | null>(null);
+  const prevId = lastIdRef.current;
+  const isContentSwap = prevId !== null && prevId !== hive.id;
+  lastIdRef.current = hive.id;
+  const animClass = closing ? 'detalle-panel closing' : isContentSwap ? 'detalle-panel anim-in-sm' : 'detalle-panel';
 
   useEffect(() => {
     if (!showDeleteModal) return;
@@ -113,7 +123,6 @@ export default function HiveDetail({
   }, [showConvertModal, showMoveModal, isConverting, isMoving]);
   
   const color = STATUS_COLORS[hive.status];
-  const history = inspections.slice(0, 3);
   const statusLabel = hive.status === 'sin_reina' ? 'SIN REINA' : hive.status.toUpperCase();
   const nucleus = isNucleus(hive);
   const entityLabel = nucleus ? 'Núcleo' : 'Colmena';
@@ -121,17 +130,25 @@ export default function HiveDetail({
   const entityArticleMask = nucleus ? 'otro' : 'otra';
   const entityArticleAcc = nucleus ? 'este' : 'esta';
 
-  // Reina
-  const queenAlert = queen ? getQueenAlert(queen) : null;
-  const queenAgeLabel = queen ? QUEEN_AGE_LABEL(queen) : '';
-  const queenChanges = queenHistory
-    .filter(h => h.hiveId === hive.id)
-    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-  const queenBirthLabel = queen ? format(parseISO(queen.fechaNacimiento), 'd MMM yyyy', { locale: es }) : '';
-  const queenLot = queen?.loteId ? breedingLots.find(l => l.id === queen.loteId) : undefined;
-  const queenLotLabel = queen?.loteId && queenLot
-    ? `Lote ${queen.loteId.slice(-6).toUpperCase()}`
-    : '';
+  // Equipamiento (solo colmenas): se lee del estado de la colmena seleccionada.
+  const equip = getEquipamiento(hive);
+  const equipLabels: { key: 'rejillaExcluidora' | 'alimentador' | 'trampaPolen' | 'mallaPropoleo' | 'colectorApitoxina'; label: string }[] = [
+    { key: 'rejillaExcluidora', label: 'Rejilla excluidora' },
+    { key: 'alimentador', label: 'Alimentador' },
+    { key: 'trampaPolen', label: 'Trampa de polen' },
+    { key: 'mallaPropoleo', label: 'Malla de propóleo' },
+    { key: 'colectorApitoxina', label: 'Colector de apitoxina' },
+  ];
+  const saveEquip = (next: Equipamiento) => {
+    if (onUpdateEquipment) onUpdateEquipment(hive.id, next);
+  };
+  const changeAlzas = (delta: number) => {
+    const alzas = Math.max(0, Math.min(20, equip.alzas + delta));
+    saveEquip({ ...equip, alzas });
+  };
+
+  // Reina — badge informativo en el encabezado; registro vía botón de acciones
+  /* queen detail variables removed */
 
   const handleDeleteClick = () => {
     if (totalHives <= 1) {
@@ -186,341 +203,187 @@ export default function HiveDetail({
 
   const handleConfirmMove = async () => {
     if (isMoving || !onTransfer || !moveDestApiaryId) return;
+    if (!moveFecha || Number.isNaN(new Date(moveFecha).getTime())) {
+      onShowToast('La fecha del traslado no es válida', 'error');
+      return;
+    }
     setIsMoving(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
-      onTransfer(hive, moveDestApiaryId, moveMotivo, moveFecha);
-      setShowMoveModal(false);
+      const ok = onTransfer(hive, moveDestApiaryId, moveMotivo, moveFecha);
+      if (ok) setShowMoveModal(false);
     } finally {
       setIsMoving(false);
     }
   };
 
   return (
-    <motion.aside 
-      className="lg:sticky lg:top-28"
-      initial={{ opacity: 0, x: 30 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, delay: 0.2 }}
-    >
-      <motion.div 
+    <aside>
+      <div
         key={hive.id}
-        className="card relative overflow-hidden"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
+        className={`card relative overflow-hidden ${animClass}`}
       >
         {/* Barra superior de color */}
-        <motion.div 
-          className="h-2"
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+        <div
+          className="h-[3px]"
           style={{ transformOrigin: 'left', background: `linear-gradient(90deg, ${color}, ${color}aa)` }}
         />
 
-        <div className="p-6" style={{ paddingTop: 'calc(4rem + env(safe-area-inset-top))' }}>
+        <div className="p-4 space-y-3">
           {/* Header con código y estado */}
-          <motion.div 
-            className="flex items-start justify-between gap-3 mb-4"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="tick-label mb-1">{entityLabel}</p>
-              <motion.h3 
-                className="font-display text-5xl font-black tracking-tight text-cream"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
-              >
+              <p className="tick-label">{entityLabel}</p>
+              <h3 className="font-display text-2xl font-black tracking-tight text-cream">
                 {hive.code}
-              </motion.h3>
+              </h3>
               {hive.name && (
-                <p className="mt-1 text-sm text-husk italic">{hive.name}</p>
+                <p className="mt-0.5 text-sm text-husk italic">{hive.name}</p>
               )}
             </div>
             <div className="flex flex-col items-end gap-2">
-              <span 
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider"
-                style={{ color, background: color + "20", border: `2px solid ${color}` }}
-              >
-                <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                {statusLabel}
-              </span>
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  aria-label="Cerrar detalle"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-ink/50 text-husk transition-colors hover:bg-ink/70 hover:text-cream"
+                >
+                  <IconX className="h-4 w-4" />
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                <span 
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color, background: color + "20", border: `2px solid ${color}` }}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                  {statusLabel}
+                </span>
+                {hiveHasQueen(hive) ? (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#a3bf7f] bg-[#a3bf7f14] border border-[#a3bf7f35]">
+                    👑 Con reina
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#bd93b8] bg-[#bd93b814] border border-[#bd93b835]">
+                    ⚠️ Sin reina
+                  </span>
+                )}
+              </div>
               <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
                 REV. {daysAgo(hive.updatedAt).toUpperCase()}
               </span>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Información de reina */}
-          {onRegisterQueen ? (
-            <motion.div 
-              className="mb-4 rounded-xl border border-honey/25 bg-honey/5 p-4"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
+          {/* Acciones principales: registrar reina / registrar inspección */}
+          <div className="grid grid-cols-2 gap-2">
+            <motion.button
+              onClick={() => onRegisterQueen && onRegisterQueen(hive)}
+              className="flex items-center justify-center gap-1.5 rounded-xl border-2 border-honey/50 bg-honey/10 px-3 py-2.5 text-sm font-semibold text-honey hover:bg-honey/20"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
             >
-              {/* Encabezado */}
-              <div className="flex items-center justify-between mb-3">
-                <p className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-husk">
-                  <IconCrown className="h-4 w-4 text-honey" />
-                  Reina
-                </p>
-                {queen && (
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider"
-                    style={{
-                      color: QUEEN_STATUS_COLORS[queen.estado],
-                      background: QUEEN_STATUS_COLORS[queen.estado] + '1c',
-                      border: `1px solid ${QUEEN_STATUS_COLORS[queen.estado]}55`,
-                    }}
+              <IconCrown className="h-4 w-4" />
+              Registrar reina
+            </motion.button>
+            <motion.button
+              onClick={() => onInspect(hive.id)}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-honey px-3 py-2.5 text-sm font-semibold text-ink shadow-[0_4px_18px_rgba(240,164,28,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-[0.97]"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <IconPlus className="h-4 w-4" />
+              Registrar inspección
+            </motion.button>
+          </div>
+
+          {/* Equipamiento en tiempo real (SOLO colmenas) */}
+          {!nucleus && onUpdateEquipment && (
+            <div className="space-y-3">
+              <p className="tick-label">Equipamiento</p>
+
+              {/* Cantidad de alzas */}
+              <div className="flex items-center justify-between rounded-xl border border-line bg-ink/50 p-3">
+                <span className="text-xs text-husk">Cantidad de alzas</span>
+                <div className="flex items-center gap-1.5">
+                  <motion.button
+                    type="button"
+                    onClick={() => changeAlzas(-1)}
+                    aria-label="Quitar alza"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-honey/40 bg-honey/10 font-mono text-lg font-bold text-honey transition-colors hover:bg-honey/25"
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
                   >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: QUEEN_STATUS_COLORS[queen.estado] }} />
-                    {QUEEN_STATUS_LABELS[queen.estado]}
-                  </span>
-                )}
+                    −
+                  </motion.button>
+                  <span className="w-8 text-center font-mono text-base font-bold text-cream">{equip.alzas}</span>
+                  <motion.button
+                    type="button"
+                    onClick={() => changeAlzas(1)}
+                    aria-label="Agregar alza"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-honey/40 bg-honey/10 font-mono text-lg font-bold text-honey transition-colors hover:bg-honey/25"
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                  >
+                    +
+                  </motion.button>
+                </div>
               </div>
 
-              {queen ? (
-                <div className="space-y-3">
-                  {/* Datos principales */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-line bg-ink/50 px-3 py-2">
-                      <p className="text-[10px] font-mono uppercase tracking-wider text-husk mb-0.5">Nacimiento</p>
-                      <p className="text-sm font-semibold text-cream">{queenBirthLabel}</p>
-                    </div>
-                    <div className="rounded-lg border border-line bg-ink/50 px-3 py-2">
-                      <p className="text-[10px] font-mono uppercase tracking-wider text-husk mb-0.5">Edad actual</p>
-                      <p className="text-sm font-semibold text-cream">{queenAgeLabel}</p>
-                    </div>
-                  </div>
-
-                  {/* Badges: color del año + alerta de edad */}
-                  <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-ink/50 px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider text-husk">
-                      <span className="h-3 w-3 rounded-full border-2 border-ink" style={{ background: QUEEN_YEAR_COLORS[queen.colorAño] }} />
-                      {QUEEN_YEAR_COLOR_LABELS[queen.colorAño]}
-                    </span>
-                    {queenAlert && (
-                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider ${queenAlert.cls}`}>
-                        {queenAlert.label}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Origen */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-xs font-mono uppercase tracking-wider text-husk">Origen</span>
-                    {queen.origen === 'lote' && queen.loteId ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="text-husk">{QUEEN_ORIGIN_LABELS[queen.origen]}</span>
-                        <span className="text-cream">·</span>
-                        <button
-                          onClick={() => onShowQueenLot && queen.loteId && onShowQueenLot(queen.loteId)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-honey/40 bg-honey/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-honey hover:bg-honey/20"
-                        >
-                          {queenLotLabel}
-                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </span>
-                    ) : (
-                      <span className="text-cream">{QUEEN_ORIGIN_LABELS[queen.origen]}</span>
-                    )}
-                  </div>
-
-                  {/* Línea genética */}
-                  {queen.lineaGenetica && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-xs font-mono uppercase tracking-wider text-husk">Línea genética</span>
-                      <span className="text-cream">{queen.lineaGenetica}</span>
-                    </div>
-                  )}
-
-                  {/* Características */}
-                  {queen.caracteristicas.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {queen.caracteristicas.map(c => (
-                        <span key={c} className="rounded-full border border-line bg-ink/60 px-2 py-0.5 text-[11px] text-husk">
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Notas */}
-                  {queen.notas && (
-                    <p className="rounded-lg border border-line bg-ink/50 p-2.5 text-xs italic text-husk">"{queen.notas}"</p>
-                  )}
-
-                  {/* Botones de acción */}
-                  {queen.estado === 'activa' && (
-                    <div className="flex flex-wrap gap-2">
-                      <motion.button
-                        onClick={() => onChangeQueen && onChangeQueen(queen, hive)}
-                        className="flex-1 rounded-lg border border-honey/50 bg-honey/10 px-3 py-2 text-xs font-semibold text-honey hover:bg-honey/20"
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                      >
-                        Registrar cambio de reina
-                      </motion.button>
-                      <motion.button
-                        onClick={() => onMarkQueenLost && onMarkQueenLost(queen)}
-                        className="flex-1 rounded-lg border border-coral/40 bg-coral/10 px-3 py-2 text-xs font-semibold text-coral hover:bg-coral/20"
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                      >
-                        Marcar como perdida
-                      </motion.button>
-                    </div>
-                  )}
-                  <motion.button
-                    onClick={() => onEditQueen && onEditQueen(queen)}
-                    className="w-full rounded-lg border border-line px-3 py-2 text-xs font-semibold text-husk hover:border-honey/50 hover:text-cream"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Editar información
-                  </motion.button>
-
-                  {/* Historial de cambios de reina */}
-                  {queenChanges.length > 0 && (
-                    <div className="border-t border-line pt-3">
-                      <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-husk">Historial de cambios</p>
-                      <div className="space-y-1.5">
-                        {queenChanges.slice(0, 5).map(change => (
-                          <div key={change.id} className="flex items-center gap-2 text-xs">
-                            <span className="h-2 w-2 rounded-full" style={{ background: QUEEN_STATUS_COLORS.cambiada }} />
-                            <span className="font-semibold text-cream">
-                              {format(parseISO(change.fecha), 'd MMM yyyy', { locale: es })}
-                            </span>
-                            <span className="text-husk">·</span>
-                            <span className="text-husk">{QUEEN_CHANGE_REASON_LABELS[change.razon]}</span>
-                          </div>
+              {/* Lista compacta de otros equipos */}
+              <div className="space-y-1.5">
+                {equipLabels.map((item) => {
+                  const active = equip[item.key];
+                  return (
+                    <div key={item.key} className="flex items-center justify-between rounded-lg border border-line bg-ink/50 px-3 py-2">
+                      <span className="text-xs text-husk">{item.label}</span>
+                      <div className="grid grid-cols-2 gap-1">
+                        {([
+                          { v: false, label: 'No' },
+                          { v: true, label: 'Sí' },
+                        ] as const).map((o) => (
+                          <motion.button
+                            key={o.label}
+                            type="button"
+                            onClick={() => saveEquip({ ...equip, [item.key]: o.v })}
+                            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all duration-200 ${
+                              active === o.v
+                                ? 'bg-honey text-ink'
+                                : 'border border-line text-husk hover:border-honey/50 hover:text-cream'
+                            }`}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {o.label}
+                          </motion.button>
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-3">
-                  <p className="mb-2 text-sm text-husk">Sin reina registrada</p>
-                  <motion.button
-                    onClick={() => onRegisterQueen(hive)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-honey px-4 py-2 text-xs font-semibold text-ink hover:bg-honeysoft"
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    <IconPlus className="h-3.5 w-3.5" />
-                    Registrar reina
-                  </motion.button>
-                </div>
-              )}
-            </motion.div>
-          ) : (
-            hive.queenYear && (
-              <motion.div 
-                className="mb-4 flex items-center gap-3 rounded-xl border border-honey/40 bg-honey/10 px-4 py-3"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-              >
-                <IconCrown className="h-5 w-5 text-honey" />
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-semibold text-cream">Reina {hive.queenYear}</span>
-                  {hive.queenMarkColor && hive.queenMarkColor !== 'sin_marca' && (
-                    <>
-                      <span className="text-husk">•</span>
-                      <span className="flex items-center gap-1.5 text-husk">
-                        marcada
-                        <span 
-                          className="h-3 w-3 rounded-full border-2 border-ink" 
-                          style={{ 
-                            background: hive.queenMarkColor === 'verde' ? '#7fb069' :
-                                        hive.queenMarkColor === 'amarillo' ? '#ffc961' :
-                                        hive.queenMarkColor === 'azul' ? '#6fa8dc' :
-                                        hive.queenMarkColor === 'rojo' ? '#e4603f' :
-                                        hive.queenMarkColor === 'blanco' ? '#e8e4da' : '#666'
-                          }} 
-                        />
-                        {hive.queenMarkColor}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            )
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Ubicación */}
           {hive.location && (
-            <motion.p 
-              className="mb-4 text-sm text-husk"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.55 }}
-            >
+            <p className="text-sm text-husk">
               📍 {hive.location}
-            </motion.p>
+            </p>
           )}
 
           {/* Notas */}
           {hive.notes && (
-            <motion.div
-              className="mb-4 rounded-lg border border-line bg-ink/50 p-3"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 }}
-            >
+            <div className="rounded-lg border border-line bg-ink/50 p-3">
               <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Notas</p>
               <p className="text-sm italic leading-relaxed text-husk">"{hive.notes}"</p>
-            </motion.div>
-          )}
-
-          {/* Historial de inspecciones */}
-          {history.length > 0 && (
-            <motion.div 
-              className="mb-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-            >
-              <p className="tick-label mb-2">Últimas Inspecciones</p>
-              <div className="space-y-2">
-                {history.map((i, index) => (
-                  <motion.div 
-                    key={i.id} 
-                    className="flex items-center gap-3 rounded-lg border border-line bg-ink/60 px-3 py-2"
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.7 + index * 0.1 }}
-                  >
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
-                      {new Date(i.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                    </span>
-                    {i.queenSeen && (
-                      <span className="text-[10px] text-sage">✓ Reina</span>
-                    )}
-                    <span className="ml-auto truncate text-xs text-husk">{i.note || 'Sin notas'}</span>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
+            </div>
           )}
 
           {/* Etiquetas */}
           {onToggleTag && (
-            <motion.div
-              className="mb-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.75 }}
-            >
-              <p className="tick-label mb-2">Etiquetas</p>
+            <div>
+              <p className="tick-label mb-1.5">Etiquetas</p>
               <div className="flex flex-wrap gap-2">
                 {['Alta producción', 'Reina nueva', 'Problemas', 'Experimental'].map(tag => {
                   const isActive = tags.includes(tag);
@@ -541,31 +404,29 @@ export default function HiveDetail({
                   );
                 })}
               </div>
-            </motion.div>
+            </div>
           )}
 
-          {/* Fotos de la colmena */}
-          {onUpdateFotos && (
-            <motion.div
-              className="mb-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.77 }}
-            >
-              <PhotoUploader
-                photos={hive.fotos || []}
-                onPhotosChange={(fotos) => onUpdateFotos(hive.id, fotos)}
+          {/* Historial de inspecciones (sustituye la sección Fotos) */}
+          {onInspect && onUpdateFotos && (
+            <div>
+              <InspectionHistory
+                inspections={inspections}
+                loosePhotos={(hive.fotos || []).filter(
+                  (photo) => !inspections.some((i) => collectInspectionPhotos(i).some((p) => p.id === photo.id))
+                )}
+                onDeleteInspection={onDeleteInspection}
+                onDeleteInspectionPhoto={onDeleteInspectionPhoto}
+                onDeleteLoosePhoto={(photoId) =>
+                  onUpdateFotos(hive.id, (hive.fotos || []).filter((p) => p.id !== photoId))
+                }
+                onRegisterInspection={() => onInspect(hive.id)}
               />
-            </motion.div>
+            </div>
           )}
 
           {/* Botones de acción */}
-          <motion.div 
-            className="flex gap-2 mb-3"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-          >
+          <div className="flex gap-2">
             <motion.button
               onClick={() => onEdit(hive)}
               className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs font-medium text-husk hover:text-cream hover:border-honey/50 transition-colors flex-1"
@@ -584,16 +445,11 @@ export default function HiveDetail({
               <IconX className="h-3.5 w-3.5" />
               Eliminar
             </motion.button>
-          </motion.div>
+          </div>
 
           {/* Botones de transferencia: convertir núcleo en colmena y mover a otro apiario */}
           {((nucleus && onConvertNucleus) || onTransfer) && (
-            <motion.div
-              className="flex gap-2 mb-3"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.86 }}
-            >
+            <div className="flex gap-2">
               {nucleus && onConvertNucleus && (
                 <motion.button
                   onClick={() => setShowConvertModal(true)}
@@ -617,17 +473,12 @@ export default function HiveDetail({
                   Mover a otro apiario
                 </motion.button>
               )}
-            </motion.div>
+            </div>
           )}
 
           {/* Botones adicionales: Duplicar y Exportar */}
           {(onDuplicate || onExport) && (
-            <motion.div
-              className="flex gap-2 mb-3"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.85 }}
-            >
+            <div className="flex gap-2">
               {onDuplicate && (
                 <motion.button
                   onClick={() => onDuplicate(hive)}
@@ -654,79 +505,54 @@ export default function HiveDetail({
                   Compartir
                 </motion.button>
               )}
-            </motion.div>
+            </div>
           )}
-
-          {/* Botón grande de inspección */}
-          <motion.button
-            onClick={() => onInspect(hive.id)}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_28px_rgba(240,164,28,.4)] active:scale-[0.98]"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
-          >
-            <IconPlus className="h-5 w-5" />
-            Registrar Inspección
-          </motion.button>
         </div>
-      </motion.div>
+      </div>
 
       {/* Modal de Confirmación de Eliminación */}
       <AnimatePresence>
         {showDeleteModal && (
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             aria-modal="true"
             role="dialog"
           >
             {/* Backdrop - tapa TODA la pantalla */}
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => !isDeleting && setShowDeleteModal(false)}
             />
 
             {/* Modal - centrado encima del backdrop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative max-w-md w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Icono de advertencia */}
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20"
-              >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20">
                 <span className="text-4xl">⚠️</span>
-              </motion.div>
+              </div>
 
               {/* Título */}
-              <motion.h3
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-center font-display text-2xl font-bold text-cream mb-2"
-              >
+              <h3 className="text-center font-display text-2xl font-bold text-cream mb-2">
                 Eliminar {entityLabel}
-              </motion.h3>
+              </h3>
 
               {/* Mensaje */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-center mb-6"
-              >
+              <div className="text-center mb-6">
                 <p className="text-husk mb-3">
                   ¿Estás seguro de eliminar <strong className="text-cream">{hive.code}</strong>?
                 </p>
@@ -735,15 +561,10 @@ export default function HiveDetail({
                     <strong>⚠️ Advertencia:</strong> Se eliminarán también todas las inspecciones, cosechas y tareas asociadas a {entityArticleAcc} {entityLower}. Esta acción no se puede deshacer.
                   </p>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Botones */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="flex gap-3"
-              >
+              <div className="flex gap-3">
                 <motion.button
                   onClick={() => setShowDeleteModal(false)}
                   disabled={isDeleting}
@@ -776,7 +597,7 @@ export default function HiveDetail({
                     </>
                   )}
                 </motion.button>
-              </motion.div>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -786,50 +607,39 @@ export default function HiveDetail({
       <AnimatePresence>
         {showConvertModal && (
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[110] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             aria-modal="true"
             role="dialog"
           >
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => setShowConvertModal(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative max-w-md w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-honey/20"
-              >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-honey/20">
                 <IconRefresh className="h-8 w-8 text-honey" />
-              </motion.div>
+              </div>
 
-              <motion.h3
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-center font-display text-2xl font-bold text-cream mb-2"
-              >
+              <h3 className="text-center font-display text-2xl font-bold text-cream mb-2">
                 Convertir núcleo en colmena
-              </motion.h3>
+              </h3>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-center mb-6"
-              >
+              <div className="text-center mb-6">
                 <p className="text-husk mb-3">
                   ¿Convertir <strong className="text-cream">{hive.code}</strong> en una colmena completa?
                 </p>
@@ -866,14 +676,9 @@ export default function HiveDetail({
                     <strong>⚠️ Advertencia:</strong> El núcleo {hive.code} dejará de existir. Esta acción no se puede deshacer.
                   </p>
                 </div>
-              </motion.div>
+              </div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="flex gap-3"
-              >
+              <div className="flex gap-3">
                 <motion.button
                   onClick={() => setShowConvertModal(false)}
                   className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
@@ -885,7 +690,7 @@ export default function HiveDetail({
                 <motion.button
                   onClick={handleConfirmConvert}
                   disabled={isConverting}
-                  className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-lg hover:bg-honeysoft transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-none disabled:pointer-events-none"
+                  className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-lg hover:bg-honeysoft transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                   whileHover={!isConverting ? { scale: 1.02 } : {}}
                   whileTap={!isConverting ? { scale: 0.98 } : {}}
                 >
@@ -905,7 +710,7 @@ export default function HiveDetail({
                     </>
                   )}
                 </motion.button>
-              </motion.div>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -915,50 +720,39 @@ export default function HiveDetail({
       <AnimatePresence>
         {showMoveModal && (
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[110] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             aria-modal="true"
             role="dialog"
           >
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => setShowMoveModal(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="card relative max-w-md w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-honey/20"
-              >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-honey/20">
                 <IconLayers className="h-8 w-8 text-honey" />
-              </motion.div>
+              </div>
 
-              <motion.h3
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-center font-display text-2xl font-bold text-cream mb-2"
-              >
+              <h3 className="text-center font-display text-2xl font-bold text-cream mb-2">
                 Mover {nucleus ? 'núcleo' : 'colmena'} a otro apiario
-              </motion.h3>
+              </h3>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="mb-6"
-              >
+              <div className="mb-6">
                 <p className="text-center text-sm text-husk mb-4">
                   {entityLabel} <strong className="text-cream">{hive.code}</strong> se moverá de{' '}
                   {currentApiaryName} a otro apiario manteniendo su código.
@@ -991,14 +785,9 @@ export default function HiveDetail({
                   onChange={(e) => setMoveFecha(e.target.value)}
                   className="w-full rounded-lg border border-line bg-ink/50 px-3 py-2.5 text-sm text-cream focus:border-honey/70"
                 />
-              </motion.div>
+              </div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="flex gap-3"
-              >
+              <div className="flex gap-3">
                 <motion.button
                   onClick={() => setShowMoveModal(false)}
                   className="flex-1 px-4 py-3 text-sm font-medium text-husk border border-line rounded-lg hover:bg-pane2 transition-colors"
@@ -1010,7 +799,7 @@ export default function HiveDetail({
                 <motion.button
                   onClick={handleConfirmMove}
                   disabled={!moveDestApiaryId || isMoving}
-                  className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-lg hover:bg-honeysoft transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-none disabled:pointer-events-none"
+                  className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-lg hover:bg-honeysoft transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                   whileHover={moveDestApiaryId && !isMoving ? { scale: 1.02 } : {}}
                   whileTap={moveDestApiaryId && !isMoving ? { scale: 0.98 } : {}}
                 >
@@ -1021,7 +810,7 @@ export default function HiveDetail({
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                         className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full"
                       />
-                      Procesando...
+                      Transfiriendo...
                     </>
                   ) : (
                     <>
@@ -1030,11 +819,11 @@ export default function HiveDetail({
                     </>
                   )}
                 </motion.button>
-              </motion.div>
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.aside>
+    </aside>
   );
 }

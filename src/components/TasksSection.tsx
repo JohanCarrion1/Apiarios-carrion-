@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useScrollLock } from "../hooks/useScrollLock";
 import type { Task, Hive } from "../types/hive";
 import { IconCheck, IconPlus, IconCalendar } from "../ui";
 import TaskForm, { type TaskFormData } from "./TaskForm";
@@ -8,7 +9,6 @@ interface Props {
   tasks: Task[];
   hives: Hive[];
   onToggle: (id: string) => void;
-  onAdd: (title: string) => void;
   onSaveTask: (data: TaskFormData) => boolean | void;
   onDelete: (id: string) => void;
 }
@@ -25,11 +25,13 @@ const PRIORITY_LABEL: Record<Task['priority'], string> = {
   baja: "Baja",
 };
 
-export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask, onDelete }: Props) {
+export default function TasksSection({ tasks, hives, onToggle, onSaveTask, onDelete }: Props) {
   const [draft, setDraft] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "priority">("priority");
   const [showTaskForm, setShowTaskForm] = useState(false);
+
+  useScrollLock(showTaskForm);
 
   const openTaskForm = () => {
     console.log('[TASK] Abriendo formulario de nueva tarea');
@@ -46,6 +48,7 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
     const ok = onSaveTask(data);
     if (ok !== false) {
       setShowTaskForm(false);
+      setDraft("");
     }
   }, [onSaveTask]);
 
@@ -64,13 +67,16 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
   const done = tasks.filter((t) => t.completed).length;
   const pending = tasks.filter((t) => !t.completed);
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const handleQuickTask = () => {
     const title = draft.trim();
     if (!title) return;
-    console.log('✅ [TASKS] Agregando tarea:', title);
-    onAdd(title);
-    setDraft("");
+    const ok = onSaveTask({
+      title,
+      dueDate: new Date().toISOString().split('T')[0],
+      priority: 'media',
+      tipo: 'simple',
+    });
+    if (ok !== false) setDraft("");
   };
 
   const handleDelete = (id: string) => {
@@ -128,12 +134,7 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
   return (
     <div className="space-y-6">
       {/* Estadísticas rápidas */}
-      <motion.div
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4">
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Total Tareas</p>
           <p className="font-display text-3xl font-black text-cream">{tasks.length}</p>
@@ -152,15 +153,10 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
             {tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0}%
           </p>
         </div>
-      </motion.div>
+      </div>
 
       {/* Barra de progreso general */}
-      <motion.div
-        className="card p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
+      <div className="card p-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display text-lg font-bold text-cream">Progreso General</h3>
           <span className="font-display text-2xl font-black text-honey">
@@ -175,15 +171,10 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
             transition={{ duration: 0.8, ease: "easeOut" }}
           />
         </div>
-      </motion.div>
+      </div>
 
       {/* Controles */}
-      <motion.div
-        className="flex flex-wrap gap-3"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-      >
+      <div className="flex flex-wrap gap-3">
         {/* Filtros */}
         <div className="flex rounded-xl border border-line overflow-hidden">
           <button
@@ -221,15 +212,10 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
           <option value="priority">Ordenar: Prioridad</option>
           <option value="date">Ordenar: Fecha</option>
         </select>
-      </motion.div>
+      </div>
 
       {/* Lista de tareas */}
-      <motion.div
-        className="card p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-      >
+      <div className="card p-6">
         <div className="mb-5 flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-ink text-honey">
             <IconCheck className="h-5 w-5" />
@@ -254,13 +240,8 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
           </div>
         ) : (
           <ul className="divide-y divide-line">
-            {sortedTasks.map((task, index) => (
-              <motion.li
-                key={task.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
+            {sortedTasks.map((task) => (
+              <li key={task.id}>
                 <div className="group flex w-full items-start gap-3.5 py-3.5">
                   <button
                     onClick={() => onToggle(task.id)}
@@ -307,24 +288,15 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
                     </svg>
                   </motion.button>
                 </div>
-              </motion.li>
+              </li>
             ))}
           </ul>
         )}
-      </motion.div>
+      </div>
 
       {/* Formulario para agregar tarea */}
-      <motion.form
-        onSubmit={submit}
-        className="card p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-      >
-        <div className="mb-4 flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-ink text-honey">
-            <IconPlus className="h-5 w-5" />
-          </span>
+      <div className="card p-6">
+        <div className="mb-4">
           <div>
             <h3 className="font-display text-lg font-bold text-cream">Agregar Nueva Tarea</h3>
             <p className="font-mono text-[10px] uppercase tracking-widest text-husk">
@@ -336,11 +308,14 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickTask(); } }}
             placeholder="Ej: Revisar colmena C-03, Aplicar tratamiento varroa..."
             className="min-w-0 flex-1 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
           />
           <motion.button
-            type="submit"
+            type="button"
+            onClick={openTaskForm}
+            aria-label="Crear nueva tarea"
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-honey text-ink transition-all hover:bg-honeysoft active:scale-95"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -348,29 +323,21 @@ export default function TasksSection({ tasks, hives, onToggle, onAdd, onSaveTask
             <IconPlus className="h-5 w-5" />
           </motion.button>
         </div>
-      </motion.form>
-
-      {/* Botón flotante + */}
-      <motion.button
-        onClick={openTaskForm}
-        aria-label="Crear nueva tarea"
-        aria-expanded={showTaskForm}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-amber-500 rounded-full shadow-lg flex items-center justify-center text-2xl text-gray-900 z-30 hover:bg-amber-400 active:scale-95 transition-all"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-      >
-        +
-      </motion.button>
+      </div>
 
       {/* Modal de nueva tarea */}
       {showTaskForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 touch-none">
           <div className="absolute inset-0 bg-black/80" onClick={closeTaskForm} />
-          <div className="relative bg-gray-900 border border-amber-500/30 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div
+            className="relative flex w-full max-w-md max-h-[80vh] flex-col overflow-hidden rounded-2xl border shadow-2xl touch-auto"
+            style={{ backgroundColor: '#2A2118', borderColor: 'rgba(245,158,11,0.3)' }}
+          >
             <TaskForm
               hives={hives}
               onClose={closeTaskForm}
               onSave={handleSaveTask}
+              initialTitle={draft}
             />
           </div>
         </div>

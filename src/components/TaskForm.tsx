@@ -19,20 +19,34 @@ interface TaskFormProps {
   hives: Hive[];
   onClose: () => void;
   onSave: (data: TaskFormData) => boolean | void;
+  initialTitle?: string;
 }
 
-const PRIORITIES: { value: TaskFormData['priority']; label: string; color: string }[] = [
-  { value: 'baja', label: 'Baja', color: '#a3906a' },
-  { value: 'media', label: 'Media', color: '#f0a41c' },
-  { value: 'alta', label: 'Alta', color: '#e4603f' },
+const PRIORITIES: { value: TaskFormData['priority']; label: string }[] = [
+  { value: 'baja', label: 'Baja' },
+  { value: 'media', label: 'Media' },
+  { value: 'alta', label: 'Alta' },
 ];
 
 const RECURRENCIA_OPTIONS = [7, 3, 30, 21];
 
 const today = () => new Date().toISOString().split('T')[0];
 
-export default function TaskForm({ hives, onClose, onSave }: TaskFormProps) {
-  const [title, setTitle] = useState('');
+const inputClass =
+  'w-full rounded-xl border border-[#4A3A24] bg-[#1F1811] px-4 py-3 text-sm text-[#F5EFE0] placeholder:text-[#B8A888]/60 focus:border-[#F5A623]';
+
+const labelClass =
+  'mb-2 block text-xs font-mono uppercase tracking-widest text-[#B8A888]';
+
+const chipClass = (selected: boolean) =>
+  `flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all ${
+    selected
+      ? 'border-transparent shadow-[0_4px_16px_rgba(0,0,0,.35)]'
+      : 'border-[#4A3A24] text-[#B8A888] hover:border-[#F5A623]/50 hover:text-[#F5EFE0]'
+  }`;
+
+export default function TaskForm({ hives, onClose, onSave, initialTitle }: TaskFormProps) {
+  const [title, setTitle] = useState(initialTitle ?? '');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState(today());
   const [priority, setPriority] = useState<TaskFormData['priority']>('media');
@@ -65,201 +79,200 @@ export default function TaskForm({ hives, onClose, onSave }: TaskFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="flex items-start justify-between">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      {/* Encabezado FIJO */}
+      <div
+        className="flex items-center justify-between border-b px-5 py-4"
+        style={{ borderColor: 'rgba(245,158,11,0.2)' }}
+      >
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-husk mb-1">Nueva tarea</p>
-          <h3 className="font-display text-xl font-bold text-cream">Crear tarea</h3>
+          <p className="text-[10px] font-mono uppercase tracking-widest text-[#B8A888]">Nueva tarea</p>
+          <h2 className="text-xl font-bold" style={{ color: '#F5EFE0' }}>Crear tarea</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Cerrar formulario"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-husk transition-colors hover:border-honey/60 hover:text-cream"
+          className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/5"
+          style={{ color: '#B8A888' }}
         >
           <IconX className="h-4 w-4" />
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-coral/40 bg-coral/10 p-3 text-sm text-coral">
-          {error}
+      {/* Cuerpo SCROLLEABLE */}
+      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        {error && (
+          <div className="rounded-lg border border-coral/40 bg-coral/10 p-3 text-sm text-coral">
+            {error}
+          </div>
+        )}
+
+        {/* Título */}
+        <div>
+          <label className={labelClass}>
+            Título de la tarea *
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ej: Revisar colmena C-03, Aplicar tratamiento varroa..."
+            className={inputClass}
+            autoFocus
+          />
         </div>
-      )}
 
-      {/* Título */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Título de la tarea *
-        </label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Ej: Revisar colmena C-03, Aplicar tratamiento varroa..."
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
-          autoFocus
-        />
-      </div>
-
-      {/* Descripción */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Descripción (opcional)
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          placeholder="Detalles, observaciones, material necesario..."
-          className="w-full resize-none rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70"
-        />
-      </div>
-
-      {/* Fecha de vencimiento */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Fecha de vencimiento
-        </label>
-        <input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream focus:border-honey/70"
-        />
-      </div>
-
-      {/* Prioridad */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Prioridad
-        </label>
-        <div className="flex gap-2">
-          {PRIORITIES.map((p) => (
-            <motion.button
-              key={p.value}
-              type="button"
-              onClick={() => setPriority(p.value)}
-              className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all ${
-                priority === p.value
-                  ? 'border-transparent text-ink shadow-[0_4px_16px_rgba(0,0,0,.35)]'
-                  : 'border-line text-husk hover:border-honey/50 hover:text-cream'
-              }`}
-              style={priority === p.value ? { background: p.color } : undefined}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              {p.label}
-            </motion.button>
-          ))}
+        {/* Descripción */}
+        <div>
+          <label className={labelClass}>
+            Descripción (opcional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Detalles, observaciones, material necesario..."
+            className={`${inputClass} resize-none`}
+          />
         </div>
-      </div>
 
-      {/* Tipo */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Tipo de tarea
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          <motion.button
-            type="button"
-            onClick={() => setTipo('simple')}
-            className={`rounded-xl border py-2.5 text-sm font-semibold transition-all ${
-              tipo === 'simple'
-                ? 'border-honey bg-honey/15 text-honey'
-                : 'border-line text-husk hover:border-honey/50 hover:text-cream'
-            }`}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            Simple
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={() => setTipo('recurrente')}
-            className={`rounded-xl border py-2.5 text-sm font-semibold transition-all ${
-              tipo === 'recurrente'
-                ? 'border-honey bg-honey/15 text-honey'
-                : 'border-line text-husk hover:border-honey/50 hover:text-cream'
-            }`}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            Recurrente
-          </motion.button>
+        {/* Fecha de vencimiento */}
+        <div>
+          <label className={labelClass}>
+            Fecha de vencimiento
+          </label>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className={inputClass}
+          />
         </div>
-      </div>
 
-      {/* Recurrencia */}
-      {tipo === 'recurrente' && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          transition={{ duration: 0.2 }}
-        >
-          <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-            Cada cuántos días
+        {/* Prioridad */}
+        <div>
+          <label className={labelClass}>
+            Prioridad
           </label>
           <div className="flex gap-2">
-            {RECURRENCIA_OPTIONS.map((days) => (
+            {PRIORITIES.map((p) => (
               <motion.button
-                key={days}
+                key={p.value}
                 type="button"
-                onClick={() => setRecurrencia(days)}
-                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all ${
-                  recurrencia === days
-                    ? 'border-honey bg-honey/15 text-honey'
-                    : 'border-line text-husk hover:border-honey/50 hover:text-cream'
-                }`}
+                onClick={() => setPriority(p.value)}
+                className={chipClass(priority === p.value)}
+                style={priority === p.value ? { background: '#F5A623', color: '#1F1811' } : undefined}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
-                {days} días
+                {p.label}
               </motion.button>
             ))}
           </div>
-        </motion.div>
-      )}
+        </div>
 
-      {/* Colmena asociada */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Colmena asociada (opcional)
-        </label>
-        <select
-          value={colmenaId}
-          onChange={(e) => setColmenaId(e.target.value)}
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream focus:border-honey/70"
-        >
-          <option value="">Sin colmena asociada</option>
-          {hives.map((hive) => (
-            <option key={hive.id} value={hive.id}>
-              {hive.code}{hive.name ? ` · ${hive.name}` : ''} ({getEntityType(hive) === 'nucleo' ? 'núcleo' : 'colmena'})
-            </option>
-          ))}
-        </select>
+        {/* Tipo */}
+        <div>
+          <label className={labelClass}>
+            Tipo de tarea
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <motion.button
+              type="button"
+              onClick={() => setTipo('simple')}
+              className={chipClass(tipo === 'simple')}
+              style={tipo === 'simple' ? { background: '#F5A623', color: '#1F1811' } : undefined}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Simple
+            </motion.button>
+            <motion.button
+              type="button"
+              onClick={() => setTipo('recurrente')}
+              className={chipClass(tipo === 'recurrente')}
+              style={tipo === 'recurrente' ? { background: '#F5A623', color: '#1F1811' } : undefined}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Recurrente
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Recurrencia */}
+        {tipo === 'recurrente' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.2 }}
+          >
+            <label className={labelClass}>
+              Cada cuántos días
+            </label>
+            <div className="flex gap-2">
+              {RECURRENCIA_OPTIONS.map((days) => (
+                <motion.button
+                  key={days}
+                  type="button"
+                  onClick={() => setRecurrencia(days)}
+                  className={chipClass(recurrencia === days)}
+                  style={recurrencia === days ? { background: '#F5A623', color: '#1F1811' } : undefined}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  {days} días
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Colmena asociada */}
+        <div>
+          <label className={labelClass}>
+            Colmena asociada (opcional)
+          </label>
+          <select
+            value={colmenaId}
+            onChange={(e) => setColmenaId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Sin colmena asociada</option>
+            {hives.map((hive) => (
+              <option key={hive.id} value={hive.id}>
+                {hive.code}{hive.name ? ` · ${hive.name}` : ''} ({getEntityType(hive) === 'nucleo' ? 'núcleo' : 'colmena'})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Asignado a */}
+        <div>
+          <label className={labelClass}>
+            Asignado a (opcional)
+          </label>
+          <input
+            type="text"
+            value={asignado}
+            onChange={(e) => setAsignado(e.target.value)}
+            placeholder="Ej: Carlos, Ana..."
+            className={inputClass}
+          />
+        </div>
       </div>
 
-      {/* Asignado a */}
-      <div>
-        <label className="mb-2 block text-xs font-mono uppercase tracking-widest text-husk">
-          Asignado a (opcional)
-        </label>
-        <input
-          type="text"
-          value={asignado}
-          onChange={(e) => setAsignado(e.target.value)}
-          placeholder="Ej: Carlos, Ana..."
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70"
-        />
-      </div>
-
-      {/* Botones */}
-      <div className="flex gap-3 border-t border-line pt-4">
+      {/* Pie FIJO */}
+      <div
+        className="flex gap-3 border-t px-5 py-4"
+        style={{ borderColor: 'rgba(245,158,11,0.2)' }}
+      >
         <motion.button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-xl border border-line px-4 py-3 text-sm font-medium text-husk transition-colors hover:bg-pane2"
+          className="flex-1 rounded-xl border py-3 text-sm font-medium transition-colors hover:bg-white/5"
+          style={{ borderColor: 'rgba(245,158,11,0.3)', color: '#B8A888' }}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
@@ -267,7 +280,8 @@ export default function TaskForm({ hives, onClose, onSave }: TaskFormProps) {
         </motion.button>
         <motion.button
           type="submit"
-          className="flex-1 rounded-xl bg-honey px-4 py-3 text-sm font-semibold text-ink shadow-[0_4px_20px_rgba(240,164,28,.3)] transition-colors hover:bg-honeysoft"
+          className="flex-1 rounded-xl py-3 text-sm font-semibold"
+          style={{ backgroundColor: '#F5A623', color: '#1F1811' }}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >

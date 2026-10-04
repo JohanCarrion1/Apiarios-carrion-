@@ -1,8 +1,9 @@
 {
-  "name": "Apiarios Carrión - Control de Colmenas",
-  "short_name": "Apiarios Carrión",
-  "description": "Gestión profesional de apiarios, colmenas y producción de miel",
-  "start_url": "/dashboard",
+  "name": "AC MANEJOS",
+  "short_name": "AC MANEJOS",
+  "description": "Apiarios Carrión - Manejo de colmenas y tienda",
+  "version": "2.0.0",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#1a1410",

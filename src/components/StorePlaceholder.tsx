@@ -1,12 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { CONTACT_EMAIL } from '../config';
+import { saveUltimaVista } from '../utils/lastView';
 
 export default function StorePlaceholder() {
   const navigate = useNavigate();
 
   const handleBackToSelection = () => {
-    // Limpiar la última elección para que no redirija automáticamente
+    // Persistir /seleccionar como vista para que el cierre de la app vuelva aquí
     localStorage.removeItem('lastSelection');
+    saveUltimaVista('/seleccionar');
     navigate('/seleccionar');
   };
 
@@ -157,10 +160,14 @@ export default function StorePlaceholder() {
             className="mt-8 pt-6 border-t border-line"
           >
             <p className="text-sm text-husk/60">
-              ¿Tienes sugerencias? Contáctanos en{' '}
-              <a href="mailto:info@apiarioscarrion.com" className="text-honey hover:underline">
-                info@apiarioscarrion.com
-              </a>
+              ¿Tienes sugerencias?{CONTACT_EMAIL ? (
+                <> Contáctanos en{' '}
+                <a href={`mailto:${CONTACT_EMAIL}`} className="text-honey hover:underline">
+                  {CONTACT_EMAIL}
+                </a></>
+              ) : (
+                <> Contáctanos por WhatsApp</>
+              )}
             </p>
           </motion.div>
         </div>

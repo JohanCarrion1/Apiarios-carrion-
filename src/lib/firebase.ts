@@ -1,5 +1,7 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, FacebookAuthProvider, GithubAuthProvider, Auth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, TwitterAuthProvider, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 // Verificar que las variables de entorno de Firebase existan
 const checkFirebaseConfig = () => {
@@ -34,30 +36,32 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
+let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
-let facebookProvider: FacebookAuthProvider | null = null;
-let githubProvider: GithubAuthProvider | null = null;
+let twitterProvider: TwitterAuthProvider | null = null;
 
 // Inicializar Firebase solo si la configuración es válida
 if (checkFirebaseConfig()) {
   try {
-    console.log('✅ [FIREBASE] Inicializando Firebase...');
+    if (import.meta.env.DEV) console.log('✅ [FIREBASE] Inicializando Firebase...');
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
     googleProvider = new GoogleAuthProvider();
-    facebookProvider = new FacebookAuthProvider();
-    githubProvider = new GithubAuthProvider();
-    console.log('✅ [FIREBASE] Firebase inicializado correctamente');
+    twitterProvider = new TwitterAuthProvider();
+    if (import.meta.env.DEV) console.log('✅ [FIREBASE] Firebase inicializado correctamente');
   } catch (error) {
     console.error('❌ [FIREBASE] Error al inicializar Firebase:', error);
   }
 } else {
-  console.warn('⚠️ [FIREBASE] Firebase no se inicializó debido a configuración faltante');
-  console.warn('⚠️ [FIREBASE] La aplicación funcionará en modo limitado sin autenticación');
+  if (import.meta.env.DEV) console.warn('⚠️ [FIREBASE] Firebase no se inicializó debido a configuración faltante');
+  if (import.meta.env.DEV) console.warn('⚠️ [FIREBASE] La aplicación funcionará en modo limitado sin autenticación');
 }
 
 // Exportar servicios (pueden ser null si Firebase no se inicializó)
-export { app, auth, googleProvider, facebookProvider, githubProvider };
+export { app, auth, db, storage, googleProvider, twitterProvider };
 
 // Función para verificar si Firebase está disponible
 export const isFirebaseAvailable = (): boolean => {
@@ -77,7 +81,28 @@ export const translateFirebaseError = (errorCode: string): string => {
     'auth/invalid-credential': 'Credenciales inválidas',
     'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde',
     'auth/account-exists-with-different-credential': 'Ya existe una cuenta con este email usando otro método de inicio de sesión',
+    'auth/unauthorized-domain': 'Error de configuración. Contacta al soporte',
   };
 
   return errorMap[errorCode] || 'Error de autenticación. Intenta de nuevo';
+};
+
+/**
+ * Mensajes de error específicos del botón de X (Twitter).
+ *
+ * Van aparte de `translateFirebaseError` a propósito: ese traductor es
+ * compartido con el login por correo y con Google, y sus textos ya están
+ * ajustados a esos flujos. Mezclarlos cambiaría mensajes de pantallas que
+ * no toca este trabajo.
+ */
+export const translateTwitterError = (errorCode: string): string => {
+  const twitterErrorMap: Record<string, string> = {
+    'auth/popup-closed-by-user': 'Inicio de sesión cancelado.',
+    'auth/account-exists-with-different-credential':
+      'Ya existe una cuenta con este correo usando otro método.',
+    'auth/network-request-failed': 'Error de conexión. Revisa tu internet.',
+    'auth/unauthorized-domain': 'Error de configuración. Contacta al soporte.',
+  };
+
+  return twitterErrorMap[errorCode] || 'Error al iniciar sesión con X. Intenta más tarde.';
 };

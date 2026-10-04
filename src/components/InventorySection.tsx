@@ -16,6 +16,8 @@ import {
   INVENTORY_CATEGORY_LABELS,
   INVENTORY_PRESETS,
   INVENTORY_UNITS,
+  allowsDecimals,
+  formatInventoryQuantity,
   inventoryDisponible,
   inventoryLevelColor,
   isStockBajo,
@@ -24,6 +26,8 @@ import {
   type InventoryMovement,
   type InventoryMovementType,
 } from "../types/inventory";
+import { useScrollLock } from "../hooks/useScrollLock";
+import { backdropVariants, modalVariants } from "../lib/motion";
 
 interface Props {
   items: InventoryItem[];
@@ -201,7 +205,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
     }
     const disp = inventoryDisponible(movementItem);
     if ((form.tipo === 'salida' || form.tipo === 'transferencia') && cantidad > disp) {
-      onShowToast('Stock insuficiente', `Solo hay ${disp} disponibles`);
+      onShowToast('Stock insuficiente', `Solo hay ${formatInventoryQuantity(disp, movementItem.unidad)} ${movementItem.unidad} disponibles`);
       return;
     }
 
@@ -272,12 +276,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
       />
 
       {/* Filtros */}
-      <motion.div
-        className="flex flex-col gap-3"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
           {CATEGORY_ORDER.map((cat) => {
             const active = categoryFilter === cat;
@@ -319,16 +318,11 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
             Solo stock bajo
           </button>
         </div>
-      </motion.div>
+      </div>
 
       {/* Lista agrupada por categoría */}
       {grouped.length === 0 ? (
-        <motion.div
-          className="card p-10 text-center"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
+        <div className="card p-10 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-pane2 text-honey">
             <IconPackage className="h-8 w-8" />
           </div>
@@ -338,7 +332,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
               ? 'Agrega tu primer ítem de inventario con el botón +'
               : 'Ajusta los filtros o la búsqueda'}
           </p>
-        </motion.div>
+        </div>
       ) : (
         grouped.map(({ cat, list }) => (
           <div key={cat} className="space-y-3">
@@ -358,8 +352,6 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                     key={item.id}
                     onClick={() => setDetailItem(item)}
                     className={`card p-4 text-left transition-all hover:border-honey/50 ${bajo ? 'border-coral/40' : ''}`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
                     whileHover={{ y: -3 }}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -371,9 +363,9 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="font-display text-lg font-black leading-none" style={{ color: bajo ? '#e4603f' : '#f0a41c' }}>
-                          {disp}
+                          {formatInventoryQuantity(disp, item.unidad)} <span className="font-mono text-[10px] font-medium text-husk">{item.unidad}</span>
                         </p>
-                        <p className="mt-1 font-mono text-[10px] text-husk">/ {item.cantidadTotal}</p>
+                        <p className="mt-1 font-mono text-[10px] text-husk">/ {formatInventoryQuantity(item.cantidadTotal, item.unidad)}</p>
                       </div>
                     </div>
 
@@ -450,7 +442,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                         onClick={() => applyPreset(p.nombre, p.unidad)}
                         className="rounded-full border border-line bg-ink/50 px-2.5 py-1 text-[11px] font-medium text-husk transition-colors hover:border-honey/60 hover:text-honey"
                       >
-                        {p.nombre}
+                        {p.label ?? p.nombre}
                       </button>
                     ))}
                   </div>
@@ -476,6 +468,8 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                   <input
                     type="number"
                     min={0}
+                    step={allowsDecimals(draft.unidad) ? '0.01' : '1'}
+                    inputMode={allowsDecimals(draft.unidad) ? 'decimal' : 'numeric'}
                     value={draft.cantidadTotal}
                     onChange={(e) => setDraft((d) => ({ ...d, cantidadTotal: e.target.value }))}
                     className={INPUT_CLS}
@@ -485,6 +479,8 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                   <input
                     type="number"
                     min={0}
+                    step={allowsDecimals(draft.unidad) ? '0.01' : '1'}
+                    inputMode={allowsDecimals(draft.unidad) ? 'decimal' : 'numeric'}
                     value={draft.cantidadEnUso}
                     onChange={(e) => setDraft((d) => ({ ...d, cantidadEnUso: e.target.value }))}
                     className={INPUT_CLS}
@@ -510,6 +506,8 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                   <input
                     type="number"
                     min={0}
+                    step={allowsDecimals(draft.unidad) ? '0.01' : '1'}
+                    inputMode={allowsDecimals(draft.unidad) ? 'decimal' : 'numeric'}
                     value={draft.umbralAlerta}
                     onChange={(e) => setDraft((d) => ({ ...d, umbralAlerta: e.target.value }))}
                     className={INPUT_CLS}
@@ -597,30 +595,33 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
 /* ---------- Shell de modal reutilizable ---------- */
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useScrollLock(true);
   return (
     <>
       <motion.div
-        className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        variants={backdropVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm touch-none"
         onClick={onClose}
       />
       <motion.div
-        className="fixed inset-0 z-[70] flex items-end justify-center p-3 sm:items-center sm:p-6"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        variants={backdropVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="fixed inset-0 z-[70] flex items-end justify-center p-3 sm:items-center sm:p-6 touch-none"
       >
         <motion.div
-          className="modal-in card max-h-[92vh] w-full max-w-lg overflow-y-auto p-6 sm:p-7"
-          initial={{ opacity: 0, y: 24, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 24, scale: 0.97 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="card flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden touch-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5 sm:px-7">
             <div>
               <p className="tick-label mb-1">Inventario</p>
               <h3 className="font-display text-2xl font-bold text-cream">{title}</h3>
@@ -636,7 +637,7 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
               <IconX className="h-5 w-5" />
             </motion.button>
           </div>
-          {children}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-7">{children}</div>
         </motion.div>
       </motion.div>
     </>
@@ -686,15 +687,15 @@ function DetailView({
               <p className="text-xs font-mono uppercase tracking-wider text-husk">{item.unidad}</p>
               <p className="mt-0.5 text-husk">
                 <span className="font-display text-3xl font-black" style={{ color: bajo ? '#e4603f' : '#f0a41c' }}>
-                  {disp}
+                  {formatInventoryQuantity(disp, item.unidad)}
                 </span>
-                {' '}disponibles
+                {' '}{item.unidad} disponibles
               </p>
             </div>
             <div className="text-right">
-              <p className="font-mono text-xs text-husk">Total: {item.cantidadTotal}</p>
-              <p className="font-mono text-xs text-husk">En uso: {item.cantidadEnUso}</p>
-              <p className="font-mono text-xs text-husk">Umbral: {item.umbralAlerta}</p>
+              <p className="font-mono text-xs text-husk">Total: {formatInventoryQuantity(item.cantidadTotal, item.unidad)} {item.unidad}</p>
+              <p className="font-mono text-xs text-husk">En uso: {formatInventoryQuantity(item.cantidadEnUso, item.unidad)} {item.unidad}</p>
+              <p className="font-mono text-xs text-husk">Umbral: {formatInventoryQuantity(item.umbralAlerta, item.unidad)} {item.unidad}</p>
             </div>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink">
@@ -817,7 +818,7 @@ function MovementModal({
         <div className="rounded-xl border border-line bg-ink/40 px-4 py-3">
           <p className="text-sm font-semibold text-cream">{item.nombre}</p>
           <p className="font-mono text-[10px] uppercase tracking-wider text-husk">
-            {disp} disponibles de {item.cantidadTotal} {item.unidad}
+            {formatInventoryQuantity(disp, item.unidad)} disponibles de {formatInventoryQuantity(item.cantidadTotal, item.unidad)} {item.unidad}
           </p>
         </div>
 
@@ -833,7 +834,9 @@ function MovementModal({
           <Field label="Cantidad">
             <input
               type="number"
-              min={1}
+              min={0}
+              step={allowsDecimals(item.unidad) ? '0.01' : '1'}
+              inputMode={allowsDecimals(item.unidad) ? 'decimal' : 'numeric'}
               value={cantidad}
               onChange={(e) => setCantidad(e.target.value)}
               placeholder="0"

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconRefresh, IconLayers, IconTrash, IconCheck } from '../ui';
+import { IconRefresh, IconLayers, IconTrash, IconCheck, IconHex } from '../ui';
+import { escapeHtml } from '../utils/sanitize';
 import { loadTransferHistory, clearTransferHistory, saveTransferHistory } from '../services/transfers';
 import type { TransferRecord, TransferType } from '../types/transfer';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants, tIn } from '../lib/motion';
 
 interface Props {
   userId?: string;
@@ -14,16 +17,21 @@ const TYPE_COLORS: Record<TransferType, string> = {
   nucleo_a_colmena: '#f0a41c',
   nucleo_apiario: '#a3bf7f',
   colmena_apiario: '#6fa8dc',
+  fecundador_a_nucleo: '#bd93b8',
+  fecundador_apiario: '#bd93b8',
 };
 
 const TYPE_LABELS: Record<TransferType, string> = {
   nucleo_a_colmena: 'Núcleo → Colmena',
   nucleo_apiario: 'Núcleo entre apiarios',
   colmena_apiario: 'Colmena entre apiarios',
+  fecundador_a_nucleo: 'Fecundador → Núcleo',
+  fecundador_apiario: 'Fecundador entre apiarios',
 };
 
 function TypeIcon({ tipo, className }: { tipo: TransferType; className?: string }) {
   if (tipo === 'nucleo_a_colmena') return <IconRefresh className={className || ''} />;
+  if (tipo === 'fecundador_a_nucleo') return <IconHex className={className || ''} />;
   return <IconLayers className={className || ''} />;
 }
 
@@ -52,6 +60,8 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [singleId, setSingleId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+
+  useScrollLock(!!confirmAction);
 
   useEffect(() => {
     if (!userId) {
@@ -192,7 +202,7 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
       : confirmAction === 'selected'
         ? '¿Eliminar los <strong class="text-cream">{0}</strong> registros seleccionados? Esta acción no afecta colmenas, núcleos ni apiarios.'
         : confirmAction === 'single'
-          ? `¿Eliminar este registro${singleRecord ? ` (<strong class="text-cream">${singleRecord.entidadCodigo}</strong>)` : ''}? Esta acción no afecta colmenas, núcleos ni apiarios.`
+          ? `¿Eliminar este registro${singleRecord ? ` (<strong class="text-cream">${escapeHtml(singleRecord.entidadCodigo)}</strong>)` : ''}? Esta acción no afecta colmenas, núcleos ni apiarios.`
           : '';
 
   const modalCount = confirmAction === 'clear' ? records.length : confirmAction === 'selected' ? selectedCount : 1;
@@ -202,12 +212,7 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
   return (
     <div className="space-y-6">
       {/* Filtros */}
-      <motion.div
-        className="card p-5"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-      >
+      <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <p className="tick-label">Filtros</p>
           {hasFilters && (
@@ -237,6 +242,8 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
               <option value="nucleo_a_colmena">Núcleo → Colmena</option>
               <option value="nucleo_apiario">Núcleo entre apiarios</option>
               <option value="colmena_apiario">Colmena entre apiarios</option>
+              <option value="fecundador_a_nucleo">Fecundador → Núcleo</option>
+              <option value="fecundador_apiario">Fecundador entre apiarios</option>
             </select>
           </div>
           <div>
@@ -270,14 +277,10 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
             </select>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Lista de transferencias */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-      >
+      <div>
         <div className="flex items-center justify-between mb-3">
           <p className="tick-label">Historial ({filtered.length})</p>
           {records.length > 0 && !selectionMode && (
@@ -321,17 +324,14 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
           </div>
         ) : (
           <div className={`space-y-3 ${selectionMode ? 'pb-28' : ''}`}>
-            {filtered.map((r, index) => {
+            {filtered.map((r) => {
               const color = TYPE_COLORS[r.tipo];
-              const isApiarioMove = r.tipo !== 'nucleo_a_colmena';
+              const isApiarioMove = r.tipo !== 'nucleo_a_colmena' && r.tipo !== 'fecundador_a_nucleo';
               const isSelected = selectionMode && selectedIds.includes(r.id);
               return (
-                <motion.div
+                <div
                   key={r.id}
                   className={`card relative p-5 transition-colors ${selectionMode ? 'cursor-pointer' : ''} ${isSelected ? 'border-honey/50 ring-1 ring-honey/40' : ''}`}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
                   onClick={() => selectionMode && handleToggleSelect(r.id)}
                 >
                   {/* Ícono de basura individual (esquina superior derecha) */}
@@ -415,12 +415,12 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
                       )}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
         )}
-      </motion.div>
+      </div>
 
       {/* Barra inferior fija del modo selección */}
       <AnimatePresence>
@@ -429,7 +429,7 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
             initial={{ y: 90, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 90, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            transition={tIn}
             className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-pane2/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-md"
           >
             <div className="mx-auto flex max-w-md flex-wrap items-center justify-between gap-2">
@@ -467,53 +467,42 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
       <AnimatePresence>
         {confirmAction && (
           <motion.div
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             aria-modal="true"
             role="dialog"
           >
             {/* Backdrop - tapa TODA la pantalla */}
             <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm touch-none"
               onClick={() => !isClearing && setConfirmAction(null)}
             />
 
             {/* Modal - tarjeta relative, encima del backdrop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="relative card max-w-md w-full p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20"
-              >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-coral/20">
                 <IconTrash className="h-8 w-8 text-coral" />
-              </motion.div>
+              </div>
 
-              <motion.h3
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-center font-display text-2xl font-bold text-cream mb-2"
-              >
+              <h3 className="text-center font-display text-2xl font-bold text-cream mb-2">
                 {modalTitle}
-              </motion.h3>
+              </h3>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-center mb-6"
-              >
+              <div className="text-center mb-6">
                 <p
                   className="text-husk mb-3"
                   dangerouslySetInnerHTML={{
@@ -525,14 +514,9 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
                     <strong>⚠️ Advertencia:</strong> Esta acción no se puede deshacer.
                   </p>
                 </div>
-              </motion.div>
+              </div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="flex gap-3"
-              >
+              <div className="flex gap-3">
                 <motion.button
                   onClick={() => setConfirmAction(null)}
                   disabled={isClearing}
@@ -565,7 +549,7 @@ export default function TransferHistorySection({ userId, apiaries = [], onShowTo
                     </>
                   )}
                 </motion.button>
-              </motion.div>
+              </div>
             </motion.div>
           </motion.div>
         )}

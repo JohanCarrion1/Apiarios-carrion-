@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { backdropVariants, modalVariants } from '../lib/motion';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export interface Settings {
   location: {
@@ -29,6 +31,8 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const [localSettings, setLocalSettings] = useState(settings);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  useScrollLock(isOpen);
 
   const handleSave = () => {
     onSettingsChange(localSettings);
@@ -86,41 +90,43 @@ export default function SettingsModal({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="card flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden shadow-2xl touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900 border-b border-white/10 p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white">Ajustes</h2>
+        <div className="flex items-center justify-between border-b border-line p-6">
+          <h2 className="font-display text-2xl font-bold text-cream">Ajustes</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-line text-husk transition-colors hover:border-honey/60 hover:text-cream"
           >
             ✕
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-8">
+        <div className="flex-1 space-y-8 overflow-y-auto p-6">
           {/* Ubicación del Apiario */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <h3 className="font-display text-lg font-semibold text-cream mb-4 flex items-center gap-2">
               <span>📍</span>
               Ubicación del Apiario
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-white/60 text-sm mb-2">
+                <label className="block text-husk text-sm mb-2">
                   Nombre de la ubicación
                 </label>
                 <input
@@ -132,13 +138,13 @@ export default function SettingsModal({
                       location: { ...localSettings.location, name: e.target.value },
                     })
                   }
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-amber-500/50"
+                  className="w-full rounded-xl border border-line bg-ink px-4 py-2 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70"
                   placeholder="Ej: Huaraz, Áncash"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-white/60 text-sm mb-2">Latitud</label>
+                  <label className="block text-husk text-sm mb-2">Latitud</label>
                   <input
                     type="number"
                     step="0.0001"
@@ -152,11 +158,11 @@ export default function SettingsModal({
                         },
                       })
                     }
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-amber-500/50"
+                    className="w-full rounded-xl border border-line bg-ink px-4 py-2 text-sm text-cream focus:border-honey/70"
                   />
                 </div>
                 <div>
-                  <label className="block text-white/60 text-sm mb-2">Longitud</label>
+                  <label className="block text-husk text-sm mb-2">Longitud</label>
                   <input
                     type="number"
                     step="0.0001"
@@ -170,14 +176,14 @@ export default function SettingsModal({
                         },
                       })
                     }
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-amber-500/50"
+                    className="w-full rounded-xl border border-line bg-ink px-4 py-2 text-sm text-cream focus:border-honey/70"
                   />
                 </div>
               </div>
               <button
                 onClick={handleGetLocation}
                 disabled={isGettingLocation}
-                className="w-full bg-amber-500/20 border border-amber-500/30 rounded-lg px-4 py-2 text-amber-300 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                className="w-full rounded-lg border border-honey/30 bg-honey/15 px-4 py-2 text-sm text-honey hover:bg-honey/25 transition-colors disabled:opacity-50"
               >
                 {isGettingLocation ? 'Obteniendo ubicación...' : '📍 Usar mi ubicación actual'}
               </button>
@@ -186,7 +192,7 @@ export default function SettingsModal({
 
           {/* Configuración de Fotos */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <h3 className="font-display text-lg font-semibold text-cream mb-4 flex items-center gap-2">
               <span>📷</span>
               Configuración de Fotos
             </h3>
@@ -194,8 +200,8 @@ export default function SettingsModal({
               {/* Toggle de fotos */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-white font-medium">Permitir fotos en inspecciones</p>
-                  <p className="text-white/60 text-sm">Habilitar sistema de fotos</p>
+                  <p className="text-cream font-medium">Permitir fotos en inspecciones</p>
+                  <p className="text-husk text-sm">Habilitar sistema de fotos</p>
                 </div>
                 <button
                   onClick={() =>
@@ -205,12 +211,12 @@ export default function SettingsModal({
                     })
                   }
                   className={`relative w-12 h-6 rounded-full transition-colors ${
-                    localSettings.photos.enabled ? 'bg-amber-500' : 'bg-white/20'
+                    localSettings.photos.enabled ? 'bg-honey' : 'bg-line'
                   }`}
                 >
                   <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                      localSettings.photos.enabled ? 'translate-x-7' : 'translate-x-1'
+                    className={`absolute top-1 w-4 h-4 rounded-full transition-transform ${
+                      localSettings.photos.enabled ? 'translate-x-7 bg-ink' : 'translate-x-1 bg-cream'
                     }`}
                   />
                 </button>
@@ -218,7 +224,7 @@ export default function SettingsModal({
 
               {/* Calidad de compresión */}
               <div>
-                <label className="block text-white/60 text-sm mb-2">
+                <label className="block text-husk text-sm mb-2">
                   Calidad de compresión
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -233,8 +239,8 @@ export default function SettingsModal({
                       }
                       className={`py-2 rounded-lg border transition-colors ${
                         localSettings.photos.quality === quality
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                          ? 'border-honey bg-honey/20 text-honey'
+                          : 'border-line bg-ink/50 text-husk hover:bg-ink'
                       }`}
                     >
                       {quality === 'low' ? 'Baja' : quality === 'medium' ? 'Media' : 'Alta'}
@@ -245,7 +251,7 @@ export default function SettingsModal({
 
               {/* Límite de fotos */}
               <div>
-                <label className="block text-white/60 text-sm mb-2">
+                <label className="block text-husk text-sm mb-2">
                   Límite de fotos por inspección
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -260,8 +266,8 @@ export default function SettingsModal({
                       }
                       className={`py-2 rounded-lg border transition-colors ${
                         localSettings.photos.maxPhotos === max
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                          ? 'border-honey bg-honey/20 text-honey'
+                          : 'border-line bg-ink/50 text-husk hover:bg-ink'
                       }`}
                     >
                       {max} fotos
@@ -274,16 +280,16 @@ export default function SettingsModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-slate-900 border-t border-white/10 p-6 flex gap-3">
+        <div className="flex gap-3 border-t border-line p-6">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors"
+            className="flex-1 rounded-lg border border-line py-3 text-cream text-sm font-medium bg-ink/50 hover:bg-pane2 transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 py-3 rounded-lg bg-amber-500 text-black font-semibold hover:bg-amber-400 transition-colors"
+            className="flex-1 rounded-lg bg-honey py-3 text-ink font-semibold hover:bg-honeysoft transition-colors"
           >
             Guardar Cambios
           </button>

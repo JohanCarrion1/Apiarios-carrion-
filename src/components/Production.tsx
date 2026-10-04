@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, subMonths, isAfter, isBefore, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import type { Hive } from "../types/hive";
 import { loadHarvests, saveHarvests, loadHarvestUnit, saveHarvestUnit, loadAnnualGoal, saveAnnualGoal, loadBasePrice, saveBasePrice } from '../utils/storage';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants } from '../lib/motion';
 
 // Tipos de miel con iconos y colores
 const HONEY_TYPES = [
@@ -38,6 +40,29 @@ interface Props {
 
 export default function Production({ hives, suffix = '' }: Props) {
   const [harvests, setHarvests] = useState<Harvest[]>(() => loadHarvests(suffix));
+  const [showExport, setShowExport] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  // El desplegable de Exportar antes solo abria con :hover, que en tactil nunca
+  // se dispara. Ahora es un toggle por clic y se cierra al pulsar fuera o Escape.
+  useEffect(() => {
+    if (!showExport) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setShowExport(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowExport(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showExport]);
+
   const [showForm, setShowForm] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<Harvest | null>(null);
   const [unit, setUnit] = useState<'kg' | 'lb'>(() => loadHarvestUnit() as 'kg' | 'lb');
@@ -332,23 +357,6 @@ export default function Production({ hives, suffix = '' }: Props) {
         )}
       </motion.div>
 
-      {/* Alertas */}
-      {alerts.length > 0 && (
-        <motion.div
-          className="card p-6 border-coral/50"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
-          <h3 className="font-display text-lg font-bold text-coral mb-3">⚠️ Alertas de Producción</h3>
-          <div className="space-y-2">
-            {alerts.map((alert, idx) => (
-              <p key={idx} className="text-sm text-cream">{alert}</p>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
       {/* Ranking de colmenas */}
       {stats.ranking.length > 0 && (
         <motion.div
@@ -375,88 +383,106 @@ export default function Production({ hives, suffix = '' }: Props) {
         </motion.div>
       )}
 
-      {/* Controles */}
+      {/* Lista de cosechas */}
       <motion.div
-        className="flex flex-wrap gap-3"
+        className="card p-4 sm:p-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.4 }}
       >
-        <motion.button
-          onClick={handleAddHarvest}
-          className="flex items-center gap-2 rounded-xl bg-honey px-4 py-2 text-sm font-semibold text-ink hover:bg-honeysoft"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nueva Cosecha
-        </motion.button>
-
-        <button
-          onClick={() => handleSaveUnit(unit === 'kg' ? 'lb' : 'kg')}
-          className="rounded-xl border border-line px-4 py-2 text-sm font-medium text-husk hover:text-cream hover:border-honey/50"
-        >
-          {unit === 'kg' ? 'kg → lb' : 'lb → kg'}
-        </button>
-
-        <select
-          value={filterHive}
-          onChange={(e) => setFilterHive(e.target.value)}
-          className="rounded-xl border border-line bg-ink/50 px-4 py-2 text-sm text-cream"
-        >
-          <option value="all">Todas las colmenas</option>
-          {hives.map(hive => (
-            <option key={hive.id} value={hive.id}>{hive.code}</option>
-          ))}
-        </select>
-
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="rounded-xl border border-line bg-ink/50 px-4 py-2 text-sm text-cream"
-        >
-          <option value="all">Todos los tipos</option>
-          {HONEY_TYPES.map(type => (
-            <option key={type.id} value={type.id}>{type.icon} {type.name}</option>
-          ))}
-        </select>
-
-        <div className="relative group">
-          <button className="flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-medium text-husk hover:text-cream hover:border-honey/50">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Exportar
-          </button>
-          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-line bg-pane p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-w-[calc(100vw-1.5rem)]">
-            <button
-              onClick={() => handleExportReport('csv')}
-              className="w-full text-left px-3 py-2 rounded-lg text-sm text-cream hover:bg-pane2"
-            >
-              📊 Lista (CSV)
-            </button>
+        {/* Cabecera: identidad de la tabla + accion principal */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-ink text-honey">
+              🍯
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-display text-xl font-bold text-cream">Registro de Cosechas</h3>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-husk">
+                {filteredHarvests.length} cosechas • Total: {stats.totalHoney.toFixed(1)} {displayUnit} • Valor: S/ {stats.totalValue.toFixed(2)}
+              </p>
+            </div>
           </div>
-        </div>
-      </motion.div>
 
-      {/* Lista de cosechas */}
-      <motion.div
-        className="card p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.5 }}
-      >
-        <div className="mb-5 flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-ink text-honey">
-            🍯
-          </span>
-          <div>
-            <h3 className="font-display text-xl font-bold text-cream">Registro de Cosechas</h3>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-husk">
-              {filteredHarvests.length} cosechas • Total: {stats.totalHoney.toFixed(1)} {displayUnit} • Valor: S/ {stats.totalValue.toFixed(2)}
-            </p>
+          <motion.button
+            onClick={handleAddHarvest}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-honey px-4 py-2.5 text-sm font-semibold text-ink hover:bg-honeysoft sm:w-auto"
+            whileTap={{ scale: 0.97 }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nueva Cosecha
+          </motion.button>
+        </div>
+
+        {/* Barra de herramientas: filtros a la izquierda, unidades y export a la derecha */}
+        <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={filterHive}
+              onChange={(e) => setFilterHive(e.target.value)}
+              aria-label="Filtrar por colmena"
+              className="w-full rounded-xl border border-line bg-ink/50 px-3 py-2.5 text-sm text-cream sm:w-auto"
+            >
+              <option value="all">Todas las colmenas</option>
+              {hives.map(hive => (
+                <option key={hive.id} value={hive.id}>{hive.code}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              aria-label="Filtrar por tipo de miel"
+              className="w-full rounded-xl border border-line bg-ink/50 px-3 py-2.5 text-sm text-cream sm:w-auto"
+            >
+              <option value="all">Todos los tipos</option>
+              {HONEY_TYPES.map(type => (
+                <option key={type.id} value={type.id}>{type.icon} {type.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleSaveUnit(unit === 'kg' ? 'lb' : 'kg')}
+              className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-husk hover:border-honey/50 hover:text-cream sm:flex-none"
+            >
+              {unit === 'kg' ? 'kg → lb' : 'lb → kg'}
+            </button>
+
+            <div ref={exportRef} className="relative flex-1 sm:flex-none">
+              <button
+                onClick={() => setShowExport((v) => !v)}
+                aria-expanded={showExport}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-husk hover:border-honey/50 hover:text-cream"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Exportar
+              </button>
+
+              <AnimatePresence>
+                {showExport && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-line bg-pane p-1 shadow-xl"
+                  >
+                    <button
+                      onClick={() => { setShowExport(false); handleExportReport('csv'); }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-cream hover:bg-pane2"
+                    >
+                      📊 Lista (CSV)
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -552,6 +578,23 @@ export default function Production({ hives, suffix = '' }: Props) {
         )}
       </motion.div>
 
+      {/* Alertas de producción — al final, debajo del registro de cosechas */}
+      {alerts.length > 0 && (
+        <motion.div
+          className="card p-6 border-coral/50 mt-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <h3 className="font-display text-lg font-bold text-coral mb-3">⚠️ Alertas de Producción</h3>
+          <div className="space-y-2">
+            {alerts.map((alert, idx) => (
+              <p key={idx} className="text-sm text-cream">{alert}</p>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Formulario */}
       <AnimatePresence>
         {showForm && (
@@ -598,6 +641,8 @@ function HarvestForm({
     conditions: harvest?.conditions || '',
   });
 
+  useScrollLock(true);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.hiveId || formData.honeyKg <= 0) return;
@@ -606,17 +651,19 @@ function HarvestForm({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-6">

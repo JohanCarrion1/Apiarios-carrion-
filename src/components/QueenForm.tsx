@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { backdropVariants, modalVariants } from '../lib/motion';
 import { parseISO } from 'date-fns';
 import type { Hive } from '../types/hive';
 import type { BreedingLot } from '../types/breeding';
@@ -18,6 +19,7 @@ import {
 } from '../types/queen';
 import { IconCrown, IconPlus, IconX } from '../ui';
 import { BREEDING_STATUS_LABELS } from '../types/breeding';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export interface QueenFormData {
   fechaNacimiento: string;
@@ -69,6 +71,8 @@ export default function QueenForm({
   const [notas, setNotas] = useState('');
   const [reason, setReason] = useState<QueenChangeReason>('recambio');
   const [errors, setErrors] = useState<string[]>([]);
+
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
@@ -134,17 +138,19 @@ export default function QueenForm({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-5">

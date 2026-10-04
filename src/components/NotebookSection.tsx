@@ -10,6 +10,9 @@ import { formatHour } from '../utils/formatTime';
 import PhotoUploader from './PhotoUploader';
 import PhotoGallery from './PhotoGallery';
 import type { PhotoData } from '../services/photos';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { backdropVariants, modalVariants } from '../lib/motion';
+import LoadingScreen from './LoadingScreen';
 
 // Estructura REAL de inspección
 interface Inspection {
@@ -307,22 +310,13 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-husk">Cargando inspecciones...</div>
-      </div>
-    );
+    return <LoadingScreen size="sm" label="Cargando inspecciones..." className="flex items-center justify-center py-12" />;
   }
 
   return (
     <div className="space-y-6">
       {/* Estadísticas REALES */}
-      <motion.div
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4">
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Total Inspecciones</p>
           <p className="font-display text-3xl font-black text-cream">{stats.total}</p>
@@ -339,32 +333,22 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
           <p className="text-xs font-mono uppercase tracking-wider text-husk mb-1">Promedio Varroa</p>
           <p className="font-display text-3xl font-black text-cream">{stats.avgVarroa.toFixed(1)}%</p>
         </div>
-      </motion.div>
+      </div>
 
       {/* Alertas REALES */}
       {alerts.length > 0 && (
-        <motion.div
-          className="card p-6 border-coral/50"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
+        <div className="card p-6 border-coral/50">
           <h3 className="font-display text-lg font-bold text-coral mb-3">⚠️ Alertas</h3>
           <div className="space-y-2">
             {alerts.map((alert, idx) => (
               <p key={idx} className="text-sm text-cream">{alert}</p>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Barra de búsqueda y filtros */}
-      <motion.div
-        className="space-y-4"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-      >
+      <div className="space-y-4">
         <div className="relative">
           <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-husk" />
           <input
@@ -426,15 +410,10 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
             Exportar CSV
           </button>
         </div>
-      </motion.div>
+      </div>
 
       {/* Lista de inspecciones */}
-      <motion.div
-        className="card p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-      >
+      <div className="card p-6">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-ink text-honey">
@@ -469,17 +448,11 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
         ) : (
           <>
             <div className="divide-y divide-line">
-              {paginatedTimeline.map((item, index) => {
+              {paginatedTimeline.map((item) => {
                 if (item.kind === 'cuaderno') {
                   const entry = item.data;
                   return (
-                    <motion.div
-                      key={entry.id}
-                      className="py-4 first:pt-0"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
+                    <div key={entry.id} className="py-4 first:pt-0">
                       <div className="flex items-start gap-3">
                         <span className="w-1 shrink-0 self-stretch rounded-full bg-honey" />
                         <div className="flex-1">
@@ -494,20 +467,17 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
                           <p className="text-sm text-cream">{entry.text}</p>
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 }
 
                 const inspection = item.data;
                 const hive = hives.find(h => h.id === inspection.hiveId);
                 return (
-                  <motion.div
+                  <div
                     key={inspection.id}
                     className="py-4 first:pt-0 cursor-pointer hover:bg-pane2/40 transition-colors"
                     onClick={() => setSelectedInspection(inspection)}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
                   >
                     <div className="flex items-start gap-3">
                       <span className="w-1 shrink-0 self-stretch rounded-full bg-honey" />
@@ -547,7 +517,7 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
@@ -564,7 +534,7 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
             )}
           </>
         )}
-      </motion.div>
+      </div>
 
       {/* Modal de detalles */}
       {selectedInspection && (
@@ -615,9 +585,6 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
         className="fixed bottom-24 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-honey text-ink shadow-lg hover:bg-honeysoft"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.5 }}
       >
         <IconPlus className="h-6 w-6" />
       </motion.button>
@@ -639,19 +606,22 @@ function InspectionDetailModal({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  useScrollLock(true);
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-6">
@@ -769,6 +739,8 @@ function InspectionForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [photos, setPhotos] = useState<PhotoData[]>(inspection?.photos || []);
 
+  useScrollLock(true);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validation = validateInspection(formData);
@@ -787,16 +759,18 @@ function InspectionForm({
   if (quickMode) {
     return (
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+        variants={backdropVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.9, y: 20 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.9, y: 20 }}
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
           className="card max-w-md w-full p-6"
           onClick={(e) => e.stopPropagation()}
         >
@@ -889,17 +863,19 @@ function InspectionForm({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="card max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="card max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto touch-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-6">

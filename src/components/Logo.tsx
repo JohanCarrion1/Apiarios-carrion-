@@ -1,9 +1,28 @@
 interface LogoProps {
   variant?: 'full' | 'compact' | 'icon' | 'horizontal' | 'compact-inline';
   className?: string;
+  /** Nombre comercial del cliente (aparece en las variantes con texto). */
+  label?: string;
+  /** URL de un logo personalizado (reemplaza el ícono de abeja si se indica). */
+  logoUrl?: string;
+  /** Lema/tagline bajo el nombre (variante full). */
+  tagline?: string;
 }
 
-export default function Logo({ variant = 'compact', className = '' }: LogoProps) {
+const DEFAULT_LABEL = 'Apiarios Carrión';
+
+/** Divide el nombre en dos líneas equilibradas para el texto del logo. */
+function splitLabelWords(label: string): [string, string] {
+  const words = (label || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [words[0] || '', ''];
+  const midpoint = Math.ceil(words.length / 2);
+  return [words.slice(0, midpoint).join(' '), words.slice(midpoint).join(' ')];
+}
+
+export default function Logo({ variant = 'compact', className = '', label, logoUrl, tagline }: LogoProps) {
+  const companyLabel = (label || DEFAULT_LABEL).trim();
+  const [nameLine1, nameLine2] = splitLabelWords(companyLabel);
+
   if (variant === 'full') {
     return (
       <svg 
@@ -35,9 +54,9 @@ export default function Logo({ variant = 'compact', className = '' }: LogoProps)
           <path strokeWidth="5" d="M80 96 L73 110"/>
           <path strokeWidth="5" d="M87 101 L93 110"/>
         </g>
-        <text x="200" y="172" textAnchor="middle" fill="url(#oro-full)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="36" letterSpacing="6">APIARIOS</text>
-        <text x="200" y="208" textAnchor="middle" fill="url(#oro-full)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="36" letterSpacing="6">CARRIÓN</text>
-        <text x="200" y="236" textAnchor="middle" fill="#B57E1C" fontFamily="Jost, Verdana, sans-serif" fontSize="11" letterSpacing="3">MIEL &amp; PRODUCTOS NATURALES · HUARAZ · PERÚ</text>
+        <text x="200" y="172" textAnchor="middle" fill="url(#oro-full)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="36" letterSpacing="6">{(nameLine1 || companyLabel).toUpperCase()}</text>
+        <text x="200" y="208" textAnchor="middle" fill="url(#oro-full)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="36" letterSpacing="6">{nameLine2.toUpperCase()}</text>
+        <text x="200" y="236" textAnchor="middle" fill="#B57E1C" fontFamily="Jost, Verdana, sans-serif" fontSize="11" letterSpacing="3">{(tagline || 'MIEL & PRODUCTOS NATURALES · HUARAZ · PERÚ').toUpperCase()}</text>
       </svg>
     );
   }
@@ -140,8 +159,8 @@ export default function Logo({ variant = 'compact', className = '' }: LogoProps)
               <stop offset="1" stopColor="#A97A25"/>
             </linearGradient>
           </defs>
-          <text x="0" y="18" fill="url(#oro-horizontal-text)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="18" letterSpacing="3">APIARIOS</text>
-          <text x="0" y="38" fill="url(#oro-horizontal-text)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="18" letterSpacing="3">CARRIÓN</text>
+          <text x="0" y="18" fill="url(#oro-horizontal-text)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="18" letterSpacing="3">{(nameLine1 || companyLabel).toUpperCase()}</text>
+          <text x="0" y="38" fill="url(#oro-horizontal-text)" fontFamily="Cormorant Garamond, Georgia, serif" fontWeight="600" fontSize="18" letterSpacing="3">{nameLine2.toUpperCase()}</text>
         </svg>
       </div>
     );
@@ -151,12 +170,19 @@ export default function Logo({ variant = 'compact', className = '' }: LogoProps)
   if (variant === 'compact-inline') {
     return (
       <div className={`flex flex-row items-center gap-2 ${className}`}>
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          viewBox="0 0 120 120" 
-          className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
-          preserveAspectRatio="xMidYMid meet"
-        >
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt={companyLabel}
+            className="h-8 w-auto max-w-[120px] sm:h-10 sm:max-w-[160px] object-contain flex-shrink-0"
+          />
+        ) : (
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 120 120" 
+            className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
+            preserveAspectRatio="xMidYMid meet"
+          >
           <defs>
             <linearGradient id="oro-compact-inline" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="#F3D78C"/>
@@ -181,9 +207,10 @@ export default function Logo({ variant = 'compact', className = '' }: LogoProps)
             <path strokeWidth="4" d="M67 91 L73 100"/>
           </g>
         </svg>
+        )}
         <div className="flex flex-col leading-tight min-w-0">
           <span className="font-display text-sm sm:text-base font-bold text-cream truncate">
-            Apiarios Carrión
+            {companyLabel}
           </span>
         </div>
       </div>

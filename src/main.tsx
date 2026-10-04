@@ -3,10 +3,15 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
 import { runMigrations } from "./utils/storage";
+import { runCacheRefresh } from "./utils/pwa";
 
 // Migración automática de claves legado a claves versionadas antes de
 // arrancar la app. NUNCA borra la clave vieja (queda como respaldo).
 runMigrations();
+
+// Refresco de caché versionado: una vez por versión publicada descarta el
+// shell antiguo de la PWA instalada (caches + service worker).
+runCacheRefresh();
 
 // Error Boundary para capturar errores de React
 class ErrorBoundary extends React.Component<

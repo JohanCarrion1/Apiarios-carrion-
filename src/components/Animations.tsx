@@ -1,5 +1,6 @@
 import { motion, type Variants } from 'framer-motion';
 import type { ReactNode } from 'react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 // Variantes de animación reutilizables
 export const fadeInUp: Variants = {
@@ -189,6 +190,8 @@ export function AnimatedModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  useScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
@@ -196,7 +199,7 @@ export function AnimatedModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm touch-none"
       onClick={onClose}
     >
       <motion.div

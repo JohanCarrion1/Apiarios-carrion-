@@ -7,8 +7,13 @@ import {
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
-import { auth, googleProvider, facebookProvider, githubProvider, translateFirebaseError, isFirebaseAvailable } from '../lib/firebase';
+import { auth, googleProvider, twitterProvider, translateFirebaseError, translateTwitterError, isFirebaseAvailable } from '../lib/firebase';
 import { getCurrentUserId, migrateOldData } from '../utils/storage';
+import { clearAllLastViews } from '../utils/lastView';
+import { isAllowedAdmin } from '../lib/adminSession';
+import { setupAdminAccess } from '../lib/adminAccess';
+import { ensureUserProfile } from '../services/profileService';
+import { enableFirestoreSync, getHydrationPromise } from '../services/firestoreSync';
 
 interface AuthContextType {
   user: User | null;
@@ -18,8 +23,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  loginWithFacebook: () => Promise<void>;
-  loginWithGithub: () => Promise<void>;
+  loginWithTwitter: () => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -34,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Detectar sesión activa al recargar y actualizar el UID
   useEffect(() => {
-    console.log('🟡 [AUTH] useEffect de onAuthStateChanged montado');
+    if (import.meta.env.DEV) console.log('🟡 [AUTH] useEffect de onAuthStateChanged montado');
     
     if (!auth) {
       console.warn('⚠️ [AUTH] Firebase no está disponible, usando modo sin autenticación');
@@ -43,35 +47,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('🔐 [AUTH] onAuthStateChanged disparado:', user ? user.uid : 'null');
-      console.log('🔐 [AUTH] Actualizando estado user...');
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] onAuthStateChanged disparado:', user ? user.uid : 'null');
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Actualizando estado user...');
       setUser(user);
-      console.log('🔐 [AUTH] Estado user actualizado');
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Estado user actualizado');
       
-      // Ejecutar migración de datos si es necesario
-      if (user) {
-        migrateOldData();
-        console.log('✅ [AUTH] UID establecido para usuario:', user.uid);
-      } else {
-        console.log('🚪 [AUTH] Usuario cerró sesión');
+      // Conectar la lista de admins de la tienda (Firestore config/admins)
+      // al usuario que acaba de autenticarse. Se re-consulta al cambiar de
+      // sesión para reflejar altas/bajas sin recargar manualmente.
+      setupAdminAccess(user ? { uid: user.uid, email: user.email } : null);
+      
+// Ejecutar migración de datos si es necesario
+        if (user) {
+          migrateOldData();
+          // Habilitar el puente storage → Firestore (si aún no está registrado).
+          enableFirestoreSync();
+          // Crear/actualizar el perfil users/{uid} (rol, lastLogin, apiario).
+          void ensureUserProfile(user);
+          // Hidratar Firestore → caché local para este usuario (sin bloquear).
+          void getHydrationPromise(user.uid);
+          if (import.meta.env.DEV) console.log('✅ [AUTH] UID establecido para usuario:', user.uid);
+        } else {
+        if (import.meta.env.DEV) console.log('🚪 [AUTH] Usuario cerró sesión');
       }
       
-      console.log('🔐 [AUTH] Actualizando loading a false...');
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Actualizando loading a false...');
       setLoading(false);
-      console.log('🔐 [AUTH] Loading actualizado a false');
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Loading actualizado a false');
     });
 
-    console.log('🟡 [AUTH] Listener de onAuthStateChanged registrado');
+    if (import.meta.env.DEV) console.log('🟡 [AUTH] Listener de onAuthStateChanged registrado');
 
     return () => {
-      console.log('🟡 [AUTH] useEffect limpiado, desuscribiendo listener');
+      if (import.meta.env.DEV) console.log('🟡 [AUTH] useEffect limpiado, desuscribiendo listener');
       unsubscribe();
     };
   }, []);
 
   // Login con email y contraseña
   const login = async (email: string, password: string) => {
-    console.log('🟡 [AUTH] login() iniciado');
+    if (import.meta.env.DEV) console.log('🟡 [AUTH] login() iniciado');
     if (!auth) {
       const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
       setError(errorMsg);
@@ -79,9 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       setError(null);
-      console.log('🟡 [AUTH] Llamando a signInWithEmailAndPassword...');
+      if (import.meta.env.DEV) console.log('🟡 [AUTH] Llamando a signInWithEmailAndPassword...');
       const result = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ [AUTH] signInWithEmailAndPassword completado:', result.user.uid);
+      if (import.meta.env.DEV) console.log('✅ [AUTH] signInWithEmailAndPassword completado:', result.user.uid);
     } catch (error: any) {
       console.error('❌ [AUTH] Error en login:', error.code, error.message);
       const errorMessage = translateFirebaseError(error.code);
@@ -116,43 +131,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       setError(null);
-      await signInWithPopup(auth, googleProvider);
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Intentando login con Google...');
+      const result = await signInWithPopup(auth, googleProvider);
+      const googleUser = result.user;
+      if (import.meta.env.DEV) console.log('📧 [AUTH] Email del usuario:', googleUser.email);
+      if (import.meta.env.DEV) console.log('✅ [AUTH] ¿Es admin?', isAllowedAdmin(googleUser.email));
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Google login completado para:', googleUser.uid);
     } catch (error: any) {
+      console.error('❌ [AUTH] Error en login con Google:', error.code, error.message);
       const errorMessage = translateFirebaseError(error.code);
       setError(errorMessage);
       throw new Error(errorMessage);
     }
   };
 
-  // Login con Facebook
-  const loginWithFacebook = async () => {
-    if (!auth || !facebookProvider) {
+  // Login con X (Twitter)
+  //
+  // El popup se abre siempre por `signInWithPopup`. X no admite playground con
+  // proveedores OAuth sin el dominio autorizado, así que en desarrollo hace
+  // falta un dominio real configurado en Authentication → Authorized domains.
+  const loginWithTwitter = async () => {
+    if (!auth || !twitterProvider) {
       const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
     try {
       setError(null);
-      await signInWithPopup(auth, facebookProvider);
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Intentando login con X (Twitter)...');
+      const result = await signInWithPopup(auth, twitterProvider);
+      if (import.meta.env.DEV) console.log('🔐 [AUTH] Login con X completado para:', result.user.uid);
     } catch (error: any) {
-      const errorMessage = translateFirebaseError(error.code);
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Login con GitHub
-  const loginWithGithub = async () => {
-    if (!auth || !githubProvider) {
-      const errorMsg = 'Firebase no está configurado. Por favor configura las variables de entorno.';
-      setError(errorMsg);
-      throw new Error(errorMsg);
-    }
-    try {
-      setError(null);
-      await signInWithPopup(auth, githubProvider);
-    } catch (error: any) {
-      const errorMessage = translateFirebaseError(error.code);
+      // Los errores de X van a su propio traductor: "popup cerrado" y
+      // "cuenta ya existe" significan algo distinto aquí y el texto genérico
+      // de Firebase confunde ("Error de autenticación. Intenta de nuevo").
+      console.error('❌ [AUTH] Error en login con X:', error.code, error.message);
+      const errorMessage = translateTwitterError(error.code);
       setError(errorMessage);
       throw new Error(errorMessage);
     }
@@ -167,7 +181,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       setError(null);
+      const uid = user?.uid;
       await signOut(auth);
+      // Al cerrar sesión se borran las preferencias de última vista para que
+      // /seleccionar se muestre normal en el próximo inicio de sesión.
+      if (uid) clearAllLastViews(uid);
     } catch (error: any) {
       const errorMessage = translateFirebaseError(error.code);
       setError(errorMessage);
@@ -188,8 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         loginWithGoogle,
-        loginWithFacebook,
-        loginWithGithub,
+        loginWithTwitter,
         logout,
         clearError,
       }}

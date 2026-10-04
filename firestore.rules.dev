@@ -1,0 +1,22 @@
+// ============================================================
+// REGLAS DEV TEMPORALES — SOLO PARA PRUEBAS EN LOCALHOST
+// ============================================================
+// Permisos TOTALES en toda la base de datos. NO usar en producción:
+// expone todos los datos. Al terminar, volver a firestore.rules.
+//
+// Despliegue (desde tu terminal):
+//   1) En firebase.json → "firestore": { "rules": "firestore.rules.dev" }
+//   2) firebase deploy --only firestore:rules
+//
+// Revertir:
+//   1) En firebase.json → "rules": "firestore.rules"
+//   2) firebase deploy --only firestore:rules
+// ============================================================
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

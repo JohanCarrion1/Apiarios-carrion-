@@ -12,6 +12,41 @@ import { STORE_SEED_PRODUCTS } from '../utils/storeSeed';
 import { getCurrentUserId } from '../utils/storage';
 import { normalizeProductImageUrl } from './cloudinary';
 
+/**
+ * Sube el catálogo a Firestore en segundo plano.
+ *
+ * Se importa dinámicamente a propósito: `firestoreSync` importa este módulo
+ * para hidratar el catálogo, así que una importación estática cerraría un ciclo.
+ * Al ser una escritura, además no debe bloquear ni tirar abajo la UI: si falla
+ * (sin sesión, sin permisos, offline) el catálogo sigue guardado en local y se
+ * avisa por consola. El error NO se propaga al llamador.
+ */
+const pushToCloud = (products: StoreProduct[]): void => {
+  // Barrera: si el catálogo es EXACTAMENTE el semilla, no se sube. Significa que
+  // el admin no ha cambiado nada, y que en realidad lo que se tiene delante es el
+  // catálogo de arranque (con las 4 imágenes viejas hardcodeadas) en lugar del
+  // de Firestore: subirlo pisaría el catálogo real. La comparación es por
+  // id + imageUrl, que es lo único que distingue una semilla de su versión
+  // editada de forma relevante para este riesgo.
+  const esSemilla =
+    products.length === STORE_SEED_PRODUCTS.length &&
+    products.every((p, i) => {
+      const seed = STORE_SEED_PRODUCTS[i];
+      return seed && p.id === seed.id && (p.imageUrl || '') === (seed.imageUrl || '');
+    });
+  if (esSemilla) {
+    console.warn(
+      '[PRODUCTS] Catálogo idéntico al semilla: no se sube (evita pisar el catálogo de Firestore).'
+    );
+    return;
+  }
+  void import('../services/productsSync')
+    .then((m) => m.pushProductsToFirestore(products))
+    .catch((error) => {
+      console.error('[PRODUCTS] No se pudo subir el catálogo a Firestore:', error);
+    });
+};
+
 /** Clave única del catálogo: compatida por admin y tienda. */
 export const STORAGE_KEY = 'apiarios_carrion_products_v1';
 
@@ -302,6 +337,7 @@ export const update = (id: string, updates: Partial<StoreProduct>): StoreProduct
   const saved = saveAll(all);
   const persisted = saved.find((p) => p.id === id) ?? updated;
   console.log(`✅ Después de guardar: Imagen guardada: ${truncateImage(persisted.imageUrl)}`);
+  pushToCloud(saved);
   return persisted;
 };
 
@@ -321,6 +357,7 @@ export const add = (product: StoreProduct): StoreProduct => {
   const saved = saveAll(next);
   const persisted = saved.find((p) => p.id === nuevo.id) ?? nuevo;
   console.log(`✅ Después de guardar: Imagen guardada: ${truncateImage(persisted.imageUrl)}`);
+  pushToCloud(saved);
   return persisted;
 };
 
@@ -328,15 +365,22 @@ export const add = (product: StoreProduct): StoreProduct => {
 export const deleteProduct = (id: string): StoreProduct[] => {
   const all = getAll().filter((p) => p.id !== id);
   console.log(`🗑️ [PRODUCTS] Eliminado producto: ${id} → quedan ${all.length}`);
-  return saveAll(all);
+  const saved = saveAll(all);
+  // El borrado va explícito: si solo se subiera la lista restante, el producto
+  // se quedaría en Firestore y reaparecería en el próximo arranque.
+  void import('../services/productsSync')
+    .then((m) => m.deleteProductFromFirestore(id))
+    .catch((error) => console.error('[PRODUCTS] No se pudo borrar en Firestore:', error));
+  return saved;
 };
 
 /** Resetea el catálogo a los 22 productos semilla (con confirmación del llamador). */
 export const reset = (): StoreProduct[] => {
   const seeded = SEED_PRODUCTS.map((p) => ({ ...p }));
   console.log(`♻️ [PRODUCTS] Reset a semilla: ${seeded.length} productos`);
-  saveAll(seeded);
-  return seeded;
+  const saved = saveAll(seeded);
+  pushToCloud(saved);
+  return saved;
 };
 
 /** Suscribirse a cambios del catálogo ('products-changed'). Devuelve unsubscribe. */

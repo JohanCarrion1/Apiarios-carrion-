@@ -73,6 +73,10 @@ import {
   loadData,
   saveData,
 } from '../utils/storage';
+import { getAll as getLocalProducts, saveAll as saveLocalProducts } from '../lib/productsService';
+import { pullProductsFromFirestore, pushProductsToFirestore } from './productsSync';
+import { STORE_SEED_PRODUCTS } from '../utils/storeSeed';
+import { normalizeStoreProduct } from '../types/store';
 
 const APIARIOS_COLLECTION = 'apiarios';
 const APIARIO_DATA_COLLECTION = 'apiarioData';
@@ -441,6 +445,12 @@ const hydrateApiaryEntities = async (userId: string, apiaryId: string): Promise<
 const hydrateUserData = async (userId: string): Promise<void> => {
   if (!canSync(userId)) return;
 
+  // --- catálogo de la tienda ---
+  // Va primero y sincrónico con el resto: es lo que estaba roto. El catálogo
+  // vivía solo en localStorage, así que lo que el admin subía en un navegador
+  // no llegaba a producción, que arrancaba con las semillas.
+  await hydrateProducts();
+
   // --- apiarios ---
   const remoteSnap = await getDocs(
     query(collection(db!, APIARIOS_COLLECTION), where('userId', '==', userId))
@@ -487,6 +497,56 @@ const hydrateUserData = async (userId: string): Promise<void> => {
     if (Array.isArray(th) && th.length) {
       await updateUserDataDoc(userId, { transferHistory: th });
     }
+  }
+};
+
+/**
+ * Hidrata el catálogo de la tienda: Firestore -> caché local.
+ *
+ * Tres casos:
+ *  1. Firestore tiene catálogo -> es la fuente de verdad y se vuelca en la caché
+ *     local. Solo si cambia de verdad, para no reescribir localStorage (y no
+ *     disparar 'products-changed') en cada arranque.
+ *  2. Firestore vacío pero el local tiene catálogo -> se sube el local. Es la
+ *     migración: la primera vez que se abre la app con la colección recién
+ *     creada.
+ *  3. Local intacto (solo semillas) -> NO se sube nada. Sin este caso, el
+ *     primer usuario que abriera la app en producción sembraría 22 productos de
+ *     los que 18 no tienen imagen, pisando el catálogo que el admin hubiera
+ *     configurado. Las semillas no son un catálogo; son un placeholder.
+ */
+const hydrateProducts = async (): Promise<void> => {
+  const remoto = await pullProductsFromFirestore();
+
+  if (remoto) {
+    const local = getLocalProducts();
+    const mismo =
+      local.length === remoto.length &&
+      local.every((p, i) => JSON.stringify(p) === JSON.stringify(remoto[i]));
+    if (!mismo) {
+      saveLocalProducts(remoto.map(normalizeStoreProduct));
+      console.log(`🛰️ [FIRESTORE] Catálogo hidratado: ${remoto.length} productos`);
+    }
+    return;
+  }
+
+  const local = getLocalProducts();
+  if (local.length === 0) return;
+
+  // ¿Es el catálogo real o solo las semillas sin tocar?
+  const esSoloSemilla =
+    local.length === STORE_SEED_PRODUCTS.length &&
+    local.every((p, i) => p.id === STORE_SEED_PRODUCTS[i].id);
+  if (esSoloSemilla) {
+    console.log(
+      '🌱 [FIRESTORE] Catálogo vacío en Firestore y local sin editar: no se siembran las semillas.'
+    );
+    return;
+  }
+
+  const subidos = await pushProductsToFirestore(local);
+  if (subidos > 0) {
+    console.log(`🛰️ [FIRESTORE] Catálogo local subido a Firestore: ${subidos} productos`);
   }
 };
 

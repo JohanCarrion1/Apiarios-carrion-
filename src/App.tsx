@@ -363,7 +363,14 @@ export default function App() {
                 path="/tienda"
                 element={
                   <ProtectedRoute>
-                    <RouteFade><Lazy><Store /></Lazy></RouteFade>
+                    {/* DataHydrationGate también aquí (no solo en el dashboard):
+                        sin él, el catálogo se leería de localStorage antes de que
+                        llegue de Firestore y la tienda pintaría un instante las
+                        semillas —que llevan las 4 imágenes viejas hardcodeadas—
+                        antes de corregirse. */}
+                    <DataHydrationGate>
+                      <RouteFade><Lazy><Store /></Lazy></RouteFade>
+                    </DataHydrationGate>
                   </ProtectedRoute>
                 }
               />
@@ -371,7 +378,13 @@ export default function App() {
                 path="/tienda/admin"
                 element={
                   <ProtectedRoute>
-                    <RouteFade><Lazy><AdminStore /></Lazy></RouteFade>
+                    {/* CRÍTICO: sin este gate, AdminStore monta antes de que
+                        termine la hidratación y `update()` del panel empujaría
+                        a Firestore el catálogo semilla completo, pisando el
+                        catálogo real (y las URLs de imagen ya subidas). */}
+                    <DataHydrationGate>
+                      <RouteFade><Lazy><AdminStore /></Lazy></RouteFade>
+                    </DataHydrationGate>
                   </ProtectedRoute>
                 }
               />

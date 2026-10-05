@@ -470,6 +470,67 @@ body {
   height: 0;
 }
 
+/* ---------- Botón de menú hamburguesa (☰) del dashboard ----------
+   Estilos 100% explícitos para que se vea IDÉNTICO en Chrome, Brave, Firefox y
+   Safari. Motivo del problema: `<button>` conserva `appearance: auto` en la hoja
+   del navegador, así que Blink/WebKit/Gecko pintan su control nativo (fondo
+   `ButtonFace` y borde del UA) por encima de cualquier clase que no lo anule, y
+   WebKit además aplica su propio `-webkit-appearance`. Aquí se fija una a una
+   cada propiedad que el UA o el reset podían pisar, incluyendo `appearance` con
+   su prefijo `-webkit-`. El relleno del header es oscuro, así que un fondo
+   nativo claro/oscuro no controlado es justo lo que producía el icono
+   ilegible en unos navegadores y no en otros. */
+.menu-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-image: none;
+  color: var(--color-honey);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Hover explícito: mismo relleno y borde en cualquier motor. */
+.menu-btn:hover {
+  background-color: var(--color-pane2);
+  border-color: var(--color-line2);
+}
+
+/* Safari/WebKit dibuja el anillo de foco con su forma por defecto; se
+   normaliza al contorno estándar para que no cambie entre navegadores. */
+.menu-btn:focus-visible {
+  outline: 2px solid var(--color-honey);
+  outline-offset: 2px;
+}
+
+/* Las tres barras: dorado fijo (`--color-honey`, el mismo del botón "Volver al
+   inicio"), sin depender de `currentColor` ni de la herencia de `color`. */
+.menu-btn__bar {
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 2px;
+  background-color: var(--color-honey);
+  border-radius: 1px;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* ---------- data viz ---------- */
 .bar {
   transform: scaleY(0);

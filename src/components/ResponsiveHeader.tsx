@@ -154,51 +154,14 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSecti
             <Logo variant="compact-inline" label={BRANDING.nombreEmpresa} />
           </motion.button>
 
-          {/* Desktop Navigation (secciones del dashboard, todos los roles).
-              min-w-0 + flex-1 + overflow-x-auto: el nav NUNCA invade el
-              cluster de la derecha (logo + Volver a inicio + campana + foto +
-              hamburguesa). Antes, de 1024px a ~1500px las 11 secciones se
-              pintaban por debajo de ese cluster, que se renderiza después, y
-              `body { overflow-x: hidden }` recortaba el resto: era imposible
-              abrir el menú, leer notificaciones, cerrar sesión o volver a
-              inicio en pantallas de portátil habituales. */}
-          <nav
-            className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-hide lg:flex"
-            aria-label="Secciones del dashboard"
-          >
-            {menuItems.map((item, index) => {
-              const isActive = activeSection === item.id;
-              return (
-                <motion.button
-                  key={item.id}
-                  onClick={() => onNavigate(item.id)}
-                  className={`shrink-0 whitespace-nowrap px-2.5 py-2 text-sm font-medium transition-colors rounded-lg xl:px-3 ${
-                    isActive
-                      ? 'bg-honey/20 text-honey border border-honey/30'
-                      : 'text-husk hover:text-cream hover:bg-pane2'
-                  }`}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  <span className="flex items-center gap-1.5">
-                    {item.label}
-                    {item.id === 'inventario' && inventoryAlertsCount > 0 && (
-                      <span className="rounded-full bg-coral px-1.5 py-0.5 text-[10px] font-bold text-ink">
-                        {inventoryAlertsCount}
-                      </span>
-                    )}
-                  </span>
-                </motion.button>
-              );
-            })}
-          </nav>
+          {/* La barra horizontal de secciones se eliminó: era redundante con el
+              menú lateral (☰), que ya lista las mismas secciones en el mismo
+              orden y además mantiene el badge de alertas de inventario. Al
+              quitarla, este cluster recupera la derecha con `ml-auto`: el `flex-1`
+              que lo empujaba estaba en el <nav>. */}
 
           {/* Botón "Volver a inicio" (SIEMPRE visible para todos) + Campana + Foto + Hamburguesa */}
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {onHome && (
               <motion.button
                 onClick={onHome}
@@ -249,26 +212,33 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSecti
               </div>
             )}
 
+            {/* El color dorado y todos los estilos explícitos viven en
+                `.menu-btn` / `.menu-btn__bar` (index.css): las barras eran
+                `bg-cream` y el botón no fijaba `appearance`, `background-color`
+                ni `border`, así que cada motor pintaba su control nativo. Se
+                mantiene el mismo tamaño (40x40), el mismo gap y las mismas
+                animaciones de apertura/cierre. */}
             <motion.button
+              type="button"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex flex-col gap-1.5 p-2 rounded-lg hover:bg-pane2 transition-colors"
+              className="menu-btn"
               whileTap={{ scale: 0.9 }}
               aria-label={isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
               aria-expanded={isMenuOpen}
               aria-haspopup="dialog"
             >
               <motion.span
-                className="w-6 h-0.5 bg-cream block"
+                className="menu-btn__bar"
                 animate={isMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
                 transition={{ duration: 0.3 }}
               />
               <motion.span
-                className="w-6 h-0.5 bg-cream block"
+                className="menu-btn__bar"
                 animate={isMenuOpen ? { opacity: 0 } : { opacity: 1 }}
                 transition={{ duration: 0.3 }}
               />
               <motion.span
-                className="w-6 h-0.5 bg-cream block"
+                className="menu-btn__bar"
                 animate={isMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }}
                 transition={{ duration: 0.3 }}
               />

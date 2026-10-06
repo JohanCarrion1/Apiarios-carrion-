@@ -1,4 +1,4 @@
-import { useState, useMemo, type CSSProperties } from 'react';
+import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -78,13 +78,27 @@ export default function FecundadoresSection({
 
   useScrollLock(!!promoteId || !!deleteId);
 
-  // Chunks fijos por capacidad: móvil (<768px) filas impares/pares 6/5, desktop 7/6
+  // Columnas por fila, igual que los media queries de `.map-panal` en index.css:
+  //   móvil            < 768px  -> 6/5
+  //   escritorio/tablet >= 768px -> 9/8
+  // Dos tramos y no tres: el corte intermedio de tablet (768-1024px -> 7)
+  // hacía que cualquier ventana estrecha se quedara en 7 celdas y pareciera
+  // un fallo. Ambos cortes usan exactamente 768 para que CSS y JS cuenten
+  // siempre lo mismo.
+  // Las filas impares llevan siempre una celda menos: eso es lo que produce el
+  // desplazamiento de media celda del panal, y se mantiene en los dos tramos.
+  // Si el CSS cuenta 9 celdas y el JS agrupa 6, la rejilla queda más estrecha
+  // que el hueco reservado y aparecen huecos a los lados.
   const getCols = () => {
-    const w = typeof window !== 'undefined' ? window.innerWidth : 768;
-    return w < 768 ? { even: 6, odd: 5 } as const : { even: 7, odd: 6 } as const;
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    if (w < 768) return { even: 6, odd: 5 } as const;
+    return { even: 9, odd: 8 } as const;
   };
   const [cols, setCols] = useState(getCols);
-  useMemo(() => {
+  // useEffect, no useMemo: con useMemo el valor de retorno (la función de
+  // limpieza) se descarta, así que el listener de 'resize' nunca se daba de
+  // baja y se acumulaba uno por cada montaje del componente.
+  useEffect(() => {
     const onResize = () => setCols(getCols());
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -395,7 +409,7 @@ export default function FecundadoresSection({
           {/* Mapa hexagonal compacto (baby nucs · hexágonos al 70%) */}
           <div
             className="card map-panal map-fecundadores relative overflow-visible"
-            style={{ padding: 16 }}
+            style={{ padding: 10 }}
           >
             <div className="mapa-hex-container">
               {visibleFecundadores.length === 0 && (
@@ -422,7 +436,7 @@ export default function FecundadoresSection({
                 </div>
               ))}
             </div>
-            <p className="relative mt-6 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-husk">
+            <p className="relative mt-3 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-husk">
               Toca un hexágono para ver el detalle del baby nuc
             </p>
           </div>

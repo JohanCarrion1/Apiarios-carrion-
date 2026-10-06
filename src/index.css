@@ -55,77 +55,93 @@ body {
 }
 
 /* ---------- panal compacto (colmenas / núcleos / fecundadores) ----------
-   REGLA DE ORO: --hex-w fluido con min(): 7 hexágonos (desktop) / 6 (móvil)
-   por fila caben SIEMPRE sin desborde. --hex-h SIEMPRE derivado de un ancho
-   válido: calc(var(--hex-w) * 1.1547). */
+   Dos tramos de columnas, iguales a los que devuelve `getCols()`:
+
+     móvil      < 768px   -> 6 por fila   (celdas grandes, cómodo al dedo)
+     escrito/ tablet >=768 -> 9 por fila
+
+   Hubo un tercer tramo (tablet 768-1024px -> 7) que se eliminó a propósito:
+   el corte en 1025px hacía que cualquier ventana estrecha de 768 a 1024px
+   (ventana no maximizada, pantalla dividida, zoom del navegador o escala del
+   sistema) se quedara en 7 celdas, y se veía como un fallo. Con dos tramos
+   el cómputo de escritorio depende solo de si la ventana es estrecha o no,
+   que es la distinción que de verdad importa.
+
+   En los dos tramos las filas impares llevan una celda menos, que es lo que
+   genera el desplazamiento de media celda (`.fila:nth-child(even)`).
+
+   REGLA DE ORO: `--hex-h` SIEMPRE derivado de un ancho válido
+   (calc(var(--hex-w) * 1.1547)), así la proporción del hexágono se mantiene
+   aunque cambie el tramo.
+
+   El ancho sale de las celdas + huecos dentro del espacio REALMENTE
+   disponible. Hay dos motivos por los que no es 100vw:
+
+   1. Hay que descontar el `padding-x` del <main> (`--hex-shell`).
+   2. El <main> está limitado a `max-w-6xl` (1152px), así que por encima de
+      ese ancho el hueco deja de crecer. Usar 100vw a secas haría crecer la
+      celda sin límite hasta que la fila se saliera del recuadro, que la
+      recorta con `overflow-x: clip`. De ahí el `min(100vw, 1152px)`.
+
+   El tope de celda baja de 116 a 104 px, que es lo que mantiene la fila de 9
+   celdas (1000px) dentro de los 1084px de contenido del recuadro.
+
+   IMPORTANTE: `--hex-count` tiene que coincidir con el `getCols()` de
+   HiveComb.tsx y FecundadoresSection.tsx. Si el CSS cuenta 8 celdas y el JS
+   agrupa 6, la rejilla queda más estrecha que el hueco reservado. */
 .map-panal {
-  --hex-gap: 8px;
-  --hex-w: min(116px, calc((100vw - (6 * var(--hex-gap))) / 7));
+  /* Por defecto, móvil (<768px): 6 por fila y hueco fino. */
+  --hex-count: 6;
+  --hex-gaps: 5; /* --hex-count - 1 */
+  --hex-gap: 3px;
+  --hex-pad: 6px;
+  /* Espacio que NO puede usar la rejilla: 32px del px-4 del <main> + 12px
+     del padding propio del recuadro (6 por lado). */
+  --hex-shell: 44px;
+  --hex-w: min(104px, calc((min(100vw, 1152px) - var(--hex-shell) - (var(--hex-gaps) * var(--hex-gap))) / var(--hex-count)));
   --hex-h: calc(var(--hex-w) * 1.1547);
   overflow-x: clip;
 }
-/* ---------- gap por breakpoint móvil (solo el radio de separación; el ancho es fluido) ---------- */
-/* móvil pequeño */
-@media (max-width: 380px) {
+/* A partir de `sm` el <main> pasa de px-4 a px-6: 48px en vez de 32px. */
+@media (min-width: 640px) and (max-width: 767px) {
   .map-panal {
-    --hex-gap: 3px;
+    --hex-shell: 60px;
   }
 }
-/* móvil estándar */
-@media (min-width: 381px) and (max-width: 430px) {
-  .map-panal {
-    --hex-gap: 4px;
-  }
-}
-/* móvil grande / phablet */
-@media (min-width: 431px) and (max-width: 767px) {
-  .map-panal {
-    --hex-gap: 4px;
-  }
-}
-/* tablet y desktop: mantener el patrón 7/6 actual sin regresión */
+/* Escritorio y tablet >=768px: 9 por fila, sin full-bleed, hueco cómodo.
+   El mismo umbral que getCols() (768) para que CSS y JS cuenten siempre lo
+   mismo: si usan cortes distintos aparece una franja donde cambian de
+   coincidir. */
 @media (min-width: 768px) {
   .map-panal {
+    --hex-count: 9;
+    --hex-gaps: 8;
     --hex-gap: 8px;
+    --hex-pad: 10px;
+    --hex-shell: 68px;
   }
 }
 
 /* ---------- móvil: contenedor + texto proporcional ---------- */
 @media (max-width: 767px) {
-  /* Padding interno 8px + full-bleed (recupera el px-4 del <main>):
-     el hexágono se encoge con min() hasta caber 6 por fila en cualquier ancho ✓ */
+  /* SIN full-bleed: el recuadro respeta el px-4 del <main>, así que quedan
+     16px de aire a cada lado contra el borde del teléfono (22px en total
+     contando los 6px de --hex-pad). Antes había un `margin-inline: -16px`
+     que cancelaba ese padding y pegaba la rejilla al contenedor. */
   .map-panal {
-    padding: 8px !important;
-    margin-inline: -16px;
+    padding: var(--hex-pad) !important;
   }
 
-  /* <=380px: código 9px · sub 7px */
+  /* El texto acompaña al ancho de la celda con un suelo legible, en vez de
+     un valor fijo por breakpoint: en móvil las celdas llegan hasta 104px (a
+     767px ya hay 6 por fila) y un 11px fijo se veía diminuto dentro de
+     ellas. El suelo conserva los 11px/8px que se veían bien en 320-430px. */
   .hex-content .hex-code {
-    font-size: 9px !important;
+    font-size: max(11px, calc(var(--hex-w) * 0.19)) !important;
     font-weight: 700 !important;
   }
   .hex-content .hex-meta {
-    font-size: 7px !important;
-  }
-}
-/* 381-430px: código 10px · sub 8px */
-@media (min-width: 381px) and (max-width: 430px) {
-  .hex-content .hex-code {
-    font-size: 10px !important;
-    font-weight: 700 !important;
-  }
-  .hex-content .hex-meta {
-    font-size: 8px !important;
-  }
-}
-/* 431-767px: código 11px · sub 8px */
-@media (min-width: 431px) and (max-width: 767px) {
-  .hex-content .hex-code {
-    font-size: 11px !important;
-    font-weight: 700 !important;
-  }
-  .hex-content .hex-meta {
-    font-size: 8px !important;
+    font-size: max(8px, calc(var(--hex-w) * 0.13)) !important;
   }
 }
 
@@ -172,6 +188,16 @@ body {
   opacity: 0;
   animation: hex-fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   animation-delay: var(--hex-row-delay, 0ms);
+  /* Al cruzar un breakpoint cambian --hex-w y --hex-h, así que sin esto la
+     celda saltaba de tamaño. Solo width/height y font-size: el `transform`
+     lo controla framer-motion (whileHover/whileTap) y no se toca aquí para no
+     pelearse con él. El alto se anima solo porque --hex-h deriva de --hex-w. */
+  transition: width 180ms ease, height 180ms ease;
+}
+/* El texto de la celda acompaña al cambio de tamaño con la misma transición. */
+.hex-content .hex-code,
+.hex-content .hex-meta {
+  transition: font-size 180ms ease;
 }
 /* Entrada limpia del panal (one-shot CSS, NO se repite al re-renderizar):
    las filas suben ligeramente en cascada y las celdas hacen fade-in.
@@ -186,6 +212,13 @@ body {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+  /* El redimensionado entre breakpoints también es una animación: sin esto,
+     quien pidió menos movimiento igual vería las celdas estirarse. */
+  .hex-cell,
+  .hex-content .hex-code,
+  .hex-content .hex-meta {
+    transition: none;
   }
 }
 /* Fundido de entrada al cambiar de ruta (RouteFade).

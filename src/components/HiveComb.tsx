@@ -69,16 +69,22 @@ export default function HiveComb({
   helpText = 'Toca una celda para ver detalles de la colmena',
   entitySingular = 'colmena',
 }: Props) {
-  // Chunks fijos por capacidad: móvil (<768px) filas impares/pares 6/5, desktop 7/6
+  // Columnas por fila, igual que los media queries de `.map-panal` en index.css:
+  //   móvil            < 768px  -> 6/5
+  //   escritorio/tablet >= 768px -> 9/8
+  // Dos tramos y no tres: el corte intermedio de tablet (768-1024px -> 7)
+  // hacía que cualquier ventana estrecha se quedara en 7 celdas y pareciera
+  // un fallo. Ambos cortes usan exactamente 768 para que CSS y JS cuenten
+  // siempre lo mismo.
+  // Las filas impares llevan siempre una celda menos: eso es lo que produce el
+  // desplazamiento de media celda del panal, y se mantiene en los dos tramos.
+  // Si el CSS cuenta 9 celdas y el JS agrupa 6, la rejilla queda más estrecha
+  // que el hueco reservado y aparecen huecos a los lados.
   const getCols = () => {
-    if (typeof window === 'undefined') return { even: 6, odd: 5 } as const;
+    if (typeof window === 'undefined') return { even: 9, odd: 8 } as const;
     const w = window.innerWidth;
-    // 7 columnas necesitan ~900 px reales. Entre 768 y ~940 la rejilla se
-    // salía del contenedor y los hexágonos de los extremos quedaban cortados
-    // (el contenedor tiene overflow oculto), así que se baja a 6/5 antes.
     if (w < 768) return { even: 6, odd: 5 } as const;
-    if (w < 1000) return { even: 6, odd: 5 } as const;
-    return { even: 7, odd: 6 } as const;
+    return { even: 9, odd: 8 } as const;
   };
   const [cols, setCols] = useState(getCols);
   // useEffect, no useMemo: con useMemo el valor de retorno (la función de
@@ -259,10 +265,11 @@ export default function HiveComb({
         })}
       </motion.div>
 
-      {/* Mapa hexagonal compacto (panal: filas 7/6 alternadas, solape vertical) */}
+      {/* Mapa hexagonal compacto (panal: 6/5 móvil, 9/8 tablet y escritorio,
+          con offset en las filas pares y solape vertical) */}
       <div
         className="card map-panal relative overflow-visible"
-        style={{ padding: 16 }}
+        style={{ padding: 10 }}
       >
         {/* Botón flotante de agregar - Eliminado: el "+" vive en el encabezado de sección */}
 
@@ -270,7 +277,7 @@ export default function HiveComb({
         <div className="mapa-hex-container">
           {visibleHives.length === 0 && (
             <motion.div 
-              className="text-center py-16"
+              className="text-center py-10"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
@@ -305,7 +312,7 @@ export default function HiveComb({
         </div>
 
         <motion.p 
-          className="relative mt-6 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-husk"
+          className="relative mt-3 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-husk"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}

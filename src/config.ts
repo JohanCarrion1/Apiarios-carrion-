@@ -15,6 +15,12 @@ export const CONTACT_EMAIL: string = env.VITE_CONTACT_EMAIL?.trim() ?? '';
 /** Email del responsable del tratamiento (páginas legales). */
 export const LEGAL_CONTACT_EMAIL: string = env.VITE_LEGAL_CONTACT_EMAIL?.trim() ?? '';
 
+/** RUC del titular, mostrado en la Política de Privacidad. Vacío = se omite. */
+export const LEGAL_RUC: string = env.VITE_LEGAL_RUC?.trim() ?? '';
+
+/** Domicilio fiscal declarado, mostrado en las páginas legales. Vacío = se omite. */
+export const LEGAL_ADDRESS: string = env.VITE_LEGAL_ADDRESS?.trim() ?? '';
+
 /** Número de WhatsApp para pedidos (código país + número, sin '+'). */
 export const WHATSAPP_NUMBER: string = env.VITE_WHATSAPP_NUMBER?.trim() ?? '';
 

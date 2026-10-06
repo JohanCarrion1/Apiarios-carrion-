@@ -58,6 +58,13 @@ import { isEmailAdmin } from '../lib/adminAccess';
 import { CONTACT_EMAIL, WHATSAPP_NUMBER, WHATSAPP_LABEL } from '../config';
 import { sanitizeText, sanitizeUrl } from '../utils/sanitize';
 import StoreFooter from './StoreFooter';
+import {
+  CifrasApiario,
+  SabiasQue,
+  Testimonios,
+  Garantias,
+  PreguntasFrecuentes,
+} from './store/StoreExtras';
 import PagoYapeModal from './PagoYapeModal';
 
 /* Versión del catálogo semilla (3 macro-categorías + material biológico).
@@ -1473,6 +1480,9 @@ export default function Store() {
                 />
               </section>
 
+              {/* Cifras del apiario (contadores al entrar en viewport) */}
+              <CifrasApiario />
+
               {/* 1 — Propuestas de valor */}
               <section className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -1494,6 +1504,9 @@ export default function Store() {
                   ))}
                 </div>
               </section>
+
+              {/* Rotativo «Sabías que» sobre la miel */}
+              <SabiasQue />
 
               {/* 2 — Del panal a tu mesa */}
               <section className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
@@ -1555,6 +1568,15 @@ export default function Store() {
                   </p>
                 </div>
               </section>
+
+              {/* Testimonios de clientes (carrusel con arrastre) */}
+              <Testimonios />
+
+              {/* Franja de garantías (envío, llegada, pago…) */}
+              <Garantias />
+
+              {/* Preguntas frecuentes (acordeón) */}
+              <PreguntasFrecuentes />
 
               {/* 4 — CTA final */}
               <section className="mx-auto max-w-6xl px-4 py-14 sm:py-20">

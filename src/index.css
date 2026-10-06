@@ -531,6 +531,65 @@ body {
   appearance: none;
 }
 
+/* ---------- Casillas del paso 1 de /seleccionar ----------
+   Igual que `.menu-btn`: el checkbox nativo se dibuja distinto en cada
+   navegador y con `accent-color` el check queda con el color del sistema, no
+   con el de la marca. Se rehace entero para que el estado marcado sea el mismo
+   en Chrome, Brave, Firefox y Safari. El input real se conserva (lo necesitan
+   el teclado y los lectores de pantalla) y solo se le quita la pintura. */
+.terms-check {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  margin: 0;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-line2);
+  border-radius: 6px;
+  background-color: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.terms-check:hover:not(:disabled) {
+  border-color: var(--color-honey);
+}
+
+/* El check se dibuja con ::after (rotación de una "L"), sin glyph ni
+   content de texto, para que no dependa de la fuente del sistema. */
+.terms-check::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--color-ink);
+  border-width: 0 2.5px 2.5px 0;
+  border-radius: 1px;
+  opacity: 0;
+  transform: rotate(45deg) scale(0.6);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.terms-check:checked {
+  background-color: var(--color-honey);
+  border-color: var(--color-honey);
+}
+
+.terms-check:checked::after {
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
+}
+
+.terms-check:focus-visible {
+  outline: 2px solid var(--color-honey);
+  outline-offset: 2px;
+}
+
 /* ---------- data viz ---------- */
 .bar {
   transform: scaleY(0);

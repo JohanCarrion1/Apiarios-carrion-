@@ -6,11 +6,15 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#1a1410",
-  "theme_color": "#f59e0b",
+  "background_color": "#131009",
+  "theme_color": "#131009",
   "orientation": "portrait",
   "lang": "es",
-  "categories": ["productivity", "utilities", "weather"],
+  "categories": [
+    "productivity",
+    "utilities",
+    "weather"
+  ],
   "icons": [
     {
       "src": "/icon-192x192.png",

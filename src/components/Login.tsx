@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 import { clearAdminSession } from '../lib/adminSession';
@@ -13,7 +13,17 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  /* Aviso de consentimiento (solo al CREAR cuenta): al registrarse el
+     usuario acepta las políticas, así que se pide acknowledgement
+     explícito en vez de esconderlo tras un banner que se puede cerrar
+     sin leer. Al iniciar sesión sobre una cuenta ya existente no se
+     bloquea el acceso: exigirlo dejaría fuera a los usuarios
+     existentes cada vez que la política se actualiza. */
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [loading, setLoading] = useState(false);
+  /* Aviso local: el `error` de AuthContext no es escribible desde aquí, y
+     este fallo (no marcar la casilla) no viene de Firebase. */
+  const [avisoLegal, setAvisoLegal] = useState<string | null>(null);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
   // Lista viva de administradores (Firestore config/admins).
@@ -110,6 +120,17 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    /* Guard de consentimiento. El botón va en `disabled`, pero eso no basta:
+       pulsar Enter dentro del campo de email dispara el submit del formulario
+       aunque el botón esté deshabilitado, así que una cuenta se creaba sin
+       haber marcado la casilla. */
+    if (isRegistering && !aceptaTerminos) {
+      setAvisoLegal('Debes aceptar los Términos y la Política de Privacidad para crear la cuenta.');
+      return;
+    }
+    setAvisoLegal(null);
+
     console.log('🔵 [LOGIN] handleSubmit iniciado');
     console.log('🔵 [LOGIN] Viewport:', window.innerWidth, 'x', window.innerHeight);
     console.log('🔵 [LOGIN] Email:', email);
@@ -221,6 +242,19 @@ export default function Login() {
               Miel & Productos Naturales • Huaraz
             </motion.p>
           </div>
+
+          {/* Aviso de consentimiento (no viene de Firebase) */}
+          {avisoLegal && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              role="alert"
+              className="mb-6 rounded-xl border border-honey/40 bg-honey/10 p-4 text-sm text-honey"
+            >
+              {avisoLegal}
+            </motion.div>
+          )}
 
           {/* Error message */}
           {error && (
@@ -351,9 +385,39 @@ export default function Login() {
               </div>
             </div>
 
+            {/* Consentimiento obligatorio solo al crear cuenta. */}
+            {isRegistering && (
+              <motion.label
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mb-4 flex cursor-pointer items-start gap-3 rounded-xl border border-honey/20 bg-honey/5 p-3.5"
+              >
+                <input
+                  type="checkbox"
+                  checked={aceptaTerminos}
+                  onChange={(e) => {
+                    setAceptaTerminos(e.target.checked);
+                    if (e.target.checked) setAvisoLegal(null);
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-honey"
+                />
+                <span className="text-xs leading-relaxed text-husk">
+                  He leído y acepto la{' '}
+                  <Link to="/terminos" className="font-semibold text-honey underline-offset-2 hover:underline">
+                    Política de Términos
+                  </Link>{' '}
+                  y la{' '}
+                  <Link to="/privacidad" className="font-semibold text-honey underline-offset-2 hover:underline">
+                    Política de Privacidad
+                  </Link>
+                  .
+                </span>
+              </motion.label>
+            )}
+
             <motion.button
               type="submit"
-              disabled={loading || loadingProvider !== null}
+              disabled={loading || loadingProvider !== null || (isRegistering && !aceptaTerminos)}
               className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(240,164,28,.4)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               whileHover={{ scale: loading || loadingProvider ? 1 : 1.02 }}
               whileTap={{ scale: loading || loadingProvider ? 1 : 0.98 }}
@@ -378,6 +442,7 @@ export default function Login() {
             <button
               onClick={() => {
                 setIsRegistering(!isRegistering);
+                setAceptaTerminos(false);
                 clearError();
               }}
               className="text-sm text-husk hover:text-honey transition-colors"
@@ -385,6 +450,23 @@ export default function Login() {
               {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Crear cuenta nueva'}
             </button>
           </div>
+
+          {/* Aviso legal permanente: alcanzable incluso sin sesión. */}
+          <p className="mt-5 text-center text-[11px] leading-relaxed text-husk/70">
+            Al continuar aceptas nuestros{' '}
+            <Link to="/terminos" className="text-husk underline underline-offset-2 transition-colors hover:text-honey">
+              Términos
+            </Link>
+            , la{' '}
+            <Link to="/privacidad" className="text-husk underline underline-offset-2 transition-colors hover:text-honey">
+              Política de Privacidad
+            </Link>{' '}
+            y el uso de{' '}
+            <Link to="/cookies" className="text-husk underline underline-offset-2 transition-colors hover:text-honey">
+              cookies
+            </Link>
+            .
+          </p>
         </div>
       </motion.div>
     </div>

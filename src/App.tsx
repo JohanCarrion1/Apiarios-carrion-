@@ -1981,7 +1981,7 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
 
               Sin frames muertos: la sección saliente se desmonta de
               INSTANTÁNEO (sectionVariants.exit, duration 0) y la entrante
-              entra a la vez con fade + 8px y curva Apple. Antes la saliente
+              entra a la vez con fade + 8px sobre un spring (SPRING_UI). Antes la saliente
               tardaba 160ms en irse mientras la entrante aún no había
               montado, y con mode="wait" eso además dejaba <main> sin ninguna
               sección durante el hueco: de ahí el parpadeo negro.

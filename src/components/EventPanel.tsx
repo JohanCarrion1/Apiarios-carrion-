@@ -69,16 +69,13 @@ export default function EventPanel({
   onEditEvent,
   onDeleteEvent,
 }: EventPanelProps) {
-  if (!selectedDate) return null;
-
-  useScrollLock(true);
-
-  const dayEvents = events.filter(event => {
-    const eventDate = new Date(event.date);
-    return eventDate.toDateString() === selectedDate.toDateString();
-  });
-
-  const dateLabel = formatDateLabel(selectedDate);
+  /* Los hooks van SIEMPRE antes del early return. Con el `return` encima,
+     cuando `selectedDate` pasaba de valor a null el número de hooks cambiaba
+     respecto al render anterior, React desmontaba el componente y el
+     `cleanup` de useScrollLock no llegaba a garantizarse: el `overflow:
+     hidden` que aplicaba sobre <html> podía quedar pegado y dejar la página
+     sin scroll de forma permanente. */
+  useScrollLock(!!selectedDate);
 
   // Soporte para tecla Escape
   useEffect(() => {
@@ -90,7 +87,16 @@ export default function EventPanel({
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
-  
+
+  if (!selectedDate) return null;
+
+  const dayEvents = events.filter(event => {
+    const eventDate = new Date(event.date);
+    return eventDate.toDateString() === selectedDate.toDateString();
+  });
+
+  const dateLabel = formatDateLabel(selectedDate);
+
   return (
     <AnimatePresence>
       {/* Overlay para cerrar al hacer click fuera */}

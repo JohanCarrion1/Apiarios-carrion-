@@ -330,7 +330,15 @@ export default function SelectionScreen() {
   };
 
   return (
-    <div className="relative flex min-h-dvh w-full items-center justify-center overflow-y-auto overflow-x-hidden bg-ink">
+    /* Altura MÍNIMA del viewport, nunca fija: el elemento crece con el
+       contenido y el scroll lo lleva el DOCUMENTO. Por eso aquí NO va
+       `overflow-y-auto` —no sería más que un scroller que no llega a existir
+       porque la caja no tiene altura limitada—, y por eso tampoco va
+       `items-center`: al crecer el contenedor, el centrado vertical lo resuelve
+       el hijo con `m-auto`, que se colapsa a 0 cuando el contenido no cabe y
+       deja el tope siempre alcanzable. `overflow-x-hidden` es solo para el eje
+       horizontal. */
+    <div className="relative flex min-h-dvh w-full justify-center overflow-x-hidden bg-ink">
       {/* Fondo con patrón hexagonal */}
       <div className="absolute inset-0">
         <svg
@@ -413,11 +421,12 @@ export default function SelectionScreen() {
         )}
       </AnimatePresence>
 
-      {/* Selección de módulos. Se centra vertical y horizontalmente: el
-          `py-10` deja aire para que el bloque no se pegue a los bordes en
-          pantallas cortas, y `mx-auto` + `max-w-4xl` lo mantiene centrado en
-          desktop. */}
-      <div className="relative z-10 mx-auto flex w-full max-w-4xl items-center justify-center px-4 py-10 sm:py-14">
+      {/* Selección de módulos. `m-auto` (no `mx-auto`) es el que centra en
+          vertical sin sacrificar el scroll: con el bloque centrado desde el
+          padre, el scroll se quedaba sin tope superior. `py-10` deja aire
+          para que no se pegue a los bordes en pantallas cortas, y `max-w-4xl`
+          lo mantiene centrado en desktop. */}
+      <div className="relative z-10 m-auto flex w-full max-w-4xl items-center justify-center px-4 py-10 sm:py-14">
         <div className="w-full">
           {/* Header */}
           <div className="text-center mb-12">

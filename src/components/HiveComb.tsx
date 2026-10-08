@@ -9,6 +9,7 @@ import {
   type EntityType,
 } from "../types/hive";
 import { IconAlert, IconCrown } from '../ui';
+import ShowMoreButton from './ShowMoreButton';
 
 interface Props {
   hives: Hive[];
@@ -18,6 +19,12 @@ interface Props {
   onFilter: (f: HiveStatus | "todas" | "transferidas" | "polinizacion") => void;
   query: string;
   entityType?: EntityType;
+  /**
+   * Celdas que se pintan por bloque. La rejilla monta de golpe todas las
+   * colmenas de la lista; con listas largas eso son cientos de `motion.div`.
+   * Ver `ShowMoreButton`. Pon `Infinity` para desactivar la paginación.
+   */
+  pageSize?: number;
   /** Códigos de colmena asignados a contratos de polinización activos. */
   polinizacionCodes?: string[];
   favorites?: string[];
@@ -53,6 +60,7 @@ export default function HiveComb({
   onFilter, 
   query, 
   entityType = 'colmena',
+  pageSize = 24,
   polinizacionCodes = [],
   favorites = [],
   onToggleFavorite,
@@ -131,18 +139,32 @@ export default function HiveComb({
   // desde App) la rejilla seguía mostrando las celdas del conjunto anterior.
   const visibleHives = useMemo(() => hives.filter((h) => !isDim(h)), [hives, isDim]);
 
+  // Paginación de render: solo se montan las primeras `visibleCount` celdas.
+  // La lista filtrada completa (`visibleHives`) sigue alimentando los chips y
+  // el total; lo que se recorta es el DOM. Se reinicia a la primera página
+  // cuando cambia el conjunto filtrado (filtro, búsqueda o entidad).
+  const [visibleCount, setVisibleCount] = useState(pageSize);
+  useEffect(() => {
+    setVisibleCount(pageSize);
+  }, [visibleHives, pageSize]);
+
+  const shownHives = useMemo(
+    () => (visibleCount >= visibleHives.length ? visibleHives : visibleHives.slice(0, visibleCount)),
+    [visibleHives, visibleCount]
+  );
+
   // Agrupar hexágonos en filas alternadas: impares `even`, pares `odd` (izquierda a derecha)
   const rows = useMemo(() => {
     const { even, odd } = cols;
     const out: Hive[][] = [];
     let i = 0;
-    while (i < visibleHives.length) {
+    while (i < shownHives.length) {
       const n = out.length % 2 === 0 ? even : odd;
-      out.push(visibleHives.slice(i, i + n));
+      out.push(shownHives.slice(i, i + n));
       i += n;
     }
     return out;
-  }, [visibleHives, cols]);
+  }, [shownHives, cols]);
 
   const renderHex = (hive: Hive) => {
     const selected = hive.id === selectedId;
@@ -310,6 +332,12 @@ export default function HiveComb({
             </div>
           ))}
         </div>
+
+        <ShowMoreButton
+          shown={shownHives.length}
+          total={visibleHives.length}
+          onClick={() => setVisibleCount((c) => c + pageSize)}
+        />
 
         <motion.p 
           className="relative mt-3 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-husk"

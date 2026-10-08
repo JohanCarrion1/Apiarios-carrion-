@@ -169,6 +169,8 @@ export default function PhotoUploader({
                 <img
                   src={photo.data}
                   alt="Foto de inspección"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
                   onClick={() => setLightboxPhoto(photo)}
                 />

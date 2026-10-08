@@ -20,7 +20,7 @@ import {
 import type { Hive, Inspection, Task } from '../types/hive';
 import { STATUS_COLORS } from '../types/hive';
 import { MONTHS } from '../data';
-import { getCurrentUserId, loadHives, loadHarvests } from '../utils/storage';
+import { getCurrentUserId, loadHives, loadHarvests, loadApiaries } from '../utils/storage';
 
 interface Harvest {
   id: string;
@@ -351,13 +351,10 @@ export default function StatsSection({
   // ============ 5. EFICIENCIA POR APIARIO ============
   const apiaryEfficiency = useMemo(() => {
     const userId = getCurrentUserId();
-    let apiaries: any[] = [];
-    try {
-      const raw = localStorage.getItem(`apiarios_${userId}`);
-      apiaries = raw ? JSON.parse(raw) : [];
-    } catch {
-      apiaries = [];
-    }
+    // La lista real vive en la entidad versionada 'apiaries' (por usuario).
+    // Antes se leía la clave legada `apiarios_{uid}`, que ya no escribe nadie:
+    // el bloque veía siempre 0 apiarios y "Eficiencia por apiario" salía vacío.
+    const apiaries = loadApiaries(userId);
     if (apiaries.length <= 1) return [];
 
     return apiaries

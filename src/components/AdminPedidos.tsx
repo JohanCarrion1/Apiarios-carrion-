@@ -392,6 +392,8 @@ export default function AdminPedidos() {
                       <img
                         src={detalle.comprobantePago?.url || ''}
                         alt="Comprobante de pago"
+                        loading="lazy"
+                        decoding="async"
                         className="h-44 w-full object-cover transition-transform group-hover:scale-105"
                       />
                       <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">

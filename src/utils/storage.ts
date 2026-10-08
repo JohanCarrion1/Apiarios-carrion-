@@ -37,6 +37,83 @@ const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV === tru
 // evitar que un useEffect de montaje borre datos existentes).
 const sessionReadKeys = new Set<string>();
 
+// Hidratación en curso (Firestore → caché local).
+//
+// Mientras la hidratación está volcando, una clave que todavía no existe en
+// local NO significa "el usuario lo borró": significa "aún no ha llegado del
+// servidor". Sin este flag, un arranque con caché parcial montaría la app,
+// escribiría `[]` en esas claves y la guardia anti-borrado no la salvaría
+// porque `existing` sería `undefined` → se subiría una vaciación falsa a
+// Firestore y se pisaría el dato bueno del servidor.
+//
+// Con el flag activo esas escrituras vacías de claves aún no leídas se
+// bloquean hasta que la hidratación termine. Después, una vaciación real
+// (el usuario borró todo) vuelve a permitirse con normalidad.
+let hydrationInProgress = false;
+
+// Claves que la app escribió MIENTRAS la hidratación estaba en curso.
+//
+// Servir para que `hydrateEntity` no pise con su instantánea (leída del
+// servidor antes de que el usuario tocara nada) un valor que el usuario acaba
+// de cambiar en los pocos segundos que tarda en bajar todo. El dato del
+// usuario ya está en localStorage y —si la escritura no llevaba `sync: false`—
+// también en Firestore, así que sobrescribirlo con lo leído haría que el
+// cambio desapareciera de la pantalla nada más aplicarse.
+const writesDuringHydration = new Set<string>();
+
+export const setHydrationInProgress = (value: boolean): void => {
+  hydrationInProgress = value;
+  if (!value) writesDuringHydration.clear();
+};
+
+/**
+ * ¿Se escribió esta clave desde que empezó la hidratación actual?
+ *
+ * Acepta el mismo `DataOpts` que `saveData`; la clave se resuelve con
+ * `entityKey`, así que da igual si quien escribió usó el sufijo heredado
+ * (`_uid_apiaryId`) o el par `userId + apiaryId`.
+ */
+export const wasWrittenDuringHydration = (key: string, opts: DataOpts = {}): boolean =>
+  writesDuringHydration.has(
+    entityKey(key, { userId: opts.userId, apiaryId: opts.apiaryId, suffix: opts.suffix })
+  );
+
+// ------------------------------------------------------------
+// TTL de la caché de hidratación (evita re-leer Firestore sin necesidad)
+// ------------------------------------------------------------
+// Marca de tiempo de la última hidratación COMPLETA de un usuario. Si la
+// caché local se hidrató hace menos de `HYDRATION_TTL_MS`, `hydrateUserData`
+// se salta la consulta a Firestore y sirve lo que ya hay en localStorage. En
+// picos de tráfico (10k usuarios concurrentes) esto elimina una avalancha de
+// lecturas repetidas al recargar/entrar varias veces en pocos minutos: la
+// ventana de 5 min acota lo desactualizado que puede quedar un cambio hecho en
+// otro dispositivo, y `rehydrateUserData` (sincronizar ahora) siempre fuerza.
+export const HYDRATION_TTL_MS = 5 * 60 * 1000;
+
+const hydrationStampKey = (userId: string): string =>
+  `${STORAGE_VERSION}_user_${userId}_hydratedAt`;
+
+/** Timestamp (ms) de la última hidratación completa, o 0 si no hay marca. */
+export const loadHydratedAt = (userId: string): number => {
+  try {
+    const raw = localStorage.getItem(hydrationStampKey(userId));
+    if (raw == null) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+};
+
+/** Registra que acaba de completarse una hidratación (para el TTL). */
+export const saveHydratedAt = (userId: string, ts: number = Date.now()): void => {
+  try {
+    localStorage.setItem(hydrationStampKey(userId), String(ts));
+  } catch {
+    /* sin espacio: el TTL simplemente no aplica */
+  }
+};
+
 // ------------------------------------------------------------
 // Utilidades
 // ------------------------------------------------------------
@@ -244,12 +321,19 @@ export const SYNC_ENTITIES = new Set([
   'queenHistory',
   'fecundadores',
   'cuadernoEntries',
+  'cuadernoInspections',
   'inventory',
   'transferHistory',
+  'notifications',
+  'settings',
+  'harvestUnit',
+  'annualGoal',
+  'basePrice',
   'events',
   'recurringTasks',
   'flowering',
   'eventTemplates',
+  'treatments',
 ]);
 
 export interface StoreSyncEvent {
@@ -350,6 +434,12 @@ export interface DataOpts {
   userId?: string;
   apiaryId?: string;
   force?: boolean;
+  /**
+   * false → guarda en localStorage pero NO notifica a Firestore. Se usa
+   * durante la hidratación (remoto → local) y antes de que termine, para no
+   * reescribir el servidor con el estado local viejo de esta sesión.
+   */
+  sync?: boolean;
 }
 
 /**
@@ -370,26 +460,55 @@ const writeToKey = <T>(storageKey: string, data: T, entity: string, force = fals
   // Guardia anti-borrado: si esta clave NO se ha leído aún en esta sesión y
   // ya existe contenido no vacío, NO permitir escribir un valor vacío
   // (protege contra useEffects de inicialización que reinician con []).
+  //
+  // Segundo caso: mientras la hidratación sigue en curso, una clave que ni
+  // siquiera existe en local también se considera protegida. Es el hueco que
+  // deja el primer caso (`existing === undefined` lo deja pasar): la app puede
+  // montar con caché parcial y vaciar claves que Firestore todavía no ha
+  // entregado.
   if (!force && !sessionReadKeys.has(storageKey)) {
     const existingRaw = localStorage.getItem(storageKey);
     const existing = safeParse(existingRaw);
-    if (existing !== undefined && !isEmptyValue(existing) && isEmptyValue(data)) {
+    const protegida =
+      (existing !== undefined && !isEmptyValue(existing) && isEmptyValue(data)) ||
+      (hydrationInProgress && existing === undefined && isEmptyValue(data));
+    if (protegida) {
       console.warn(
-        `[STORAGE] ⛔ Escritura vacía bloqueada sobre datos existentes en '${storageKey}' (se preservan los datos del usuario)`
+        `[STORAGE] ⛔ Escritura vacía bloqueada sobre '${storageKey}'` +
+          `${hydrationInProgress && existing === undefined ? ' (hidratación en curso)' : ''}` +
+          ` (se preservan los datos del usuario)`
       );
       return false;
     }
   }
 
-  // Backup rotativo de la versión anterior ANTES de sobrescribir
+  // Sin cambios → no se reescribe ni se notifica a Firestore. Sin este corte,
+  // cada arranque la hidratación (remoto → local) y los efectos de montaje
+  // re-suben una docena de documentos con exactamente el mismo contenido:
+  // tráfico y cuota gratuitos, y cada escritura redundante es una oportunidad
+  // más de pisar por accidente los datos de otro dispositivo.
   const previousRaw = localStorage.getItem(storageKey);
-  if (previousRaw != null && previousRaw !== newRaw) {
+  if (previousRaw === newRaw) {
+    // Se marca como leída: el contenido ya está ahí y conocido, y así la
+    // guardia anti-borrado no bloqueará después una vaciación legítima.
+    sessionReadKeys.add(storageKey);
+    if (isDev) {
+      console.log(`[STORAGE] skip ${entity}: sin cambios`);
+    }
+    return false;
+  }
+
+  // Backup rotativo de la versión anterior ANTES de sobrescribir
+  if (previousRaw != null) {
     createBackup(storageKey, previousRaw);
   }
 
   try {
     localStorage.setItem(storageKey, newRaw);
     sessionReadKeys.add(storageKey);
+    // Escritura real durante la hidratación → `hydrateEntity` no debe pisarla
+    // con su instantánea anterior.
+    if (hydrationInProgress) writesDuringHydration.add(storageKey);
     if (isDev) {
       console.log(`[STORAGE] save ${entity}${storageKey.includes(`_backup_`) ? '' : ''}: ${countRecords(data)} registros`);
     } else {
@@ -413,7 +532,7 @@ export const saveData = <T>(key: string, data: T, opts: DataOpts = {}): void => 
     suffix: opts.suffix,
   });
   const ok = writeToKey(storageKey, data, key, opts.force);
-  if (ok) {
+  if (ok && opts.sync !== false) {
     notifySync(key, Array.isArray(data) ? data : [data], opts);
   }
 };
@@ -461,6 +580,12 @@ export const loadNuclei = (suffix: string = ''): any[] =>
 // Inspecciones (por apiario)
 export const saveInspections = (inspections: any[], suffix: string = '') => saveData('inspections', inspections, { suffix });
 export const loadInspections = (suffix: string = '') => loadData('inspections', [] as any[], { suffix });
+/* Diario de campo de la pestaña Cuaderno (por apiario). Entidad PROPIA: el
+   esquema del Cuaderno (hora, temperatura, comportamiento, observaciones…)
+   no es el de 'inspections' (parte de colmena: cría, miel, varroa…), así que
+   no comparten clave ni esquema. */
+export const saveCuadernoInspections = (inspections: any[], suffix: string = '') => saveData('cuadernoInspections', inspections, { suffix });
+export const loadCuadernoInspections = (suffix: string = '') => loadData('cuadernoInspections', [] as any[], { suffix });
 
 // Tareas (por apiario)
 export const saveTasks = (tasks: any[], suffix: string = '') => saveData('tasks', tasks, { suffix });
@@ -485,6 +610,12 @@ export const loadRecurringTasks = (suffix: string = ''): any[] => loadData('recu
 // Calendario de floración (por apiario)
 export const saveFloweringEntries = (entries: any[], suffix: string = '') => saveData('flowering', entries, { suffix });
 export const loadFloweringEntries = (suffix: string = ''): any[] => loadData('flowering', [] as any[], { suffix });
+
+// Tratamientos sanitarios (por apiario)
+export const saveTreatments = (treatments: any[], userId: string, apiaryId: string): void =>
+  saveData('treatments', treatments, { userId, apiaryId });
+export const loadTreatments = (userId: string, apiaryId: string): any[] =>
+  loadData('treatments', [] as any[], { userId, apiaryId });
 
 // Entidades del calendario que se migraron de "por usuario" a "por apiario".
 // Antes vivían en una clave sin apiario (`..._events`) y por eso nunca se
@@ -536,8 +667,9 @@ export const migrateLegacyCalendarScope = (userId: string, apiaryId: string): vo
 export const saveReminders = (reminders: any[]) => saveData('reminders', reminders);
 export const loadReminders = () => loadData('reminders', [] as any[]);
 
-// Notificaciones (por usuario)
-export const saveNotifications = (notifications: any[]) => saveData('notifications', notifications);
+// Notificaciones (por usuario). Tope de 50: la campanita es una cola de
+// avisos, no un histórico, y así el documento de userData nunca engorda.
+export const saveNotifications = (notifications: any[]) => saveData('notifications', notifications.slice(0, 50));
 export const loadNotifications = () => loadData('notifications', [] as any[]);
 
 // Favoritos de colmenas (por usuario)
@@ -895,8 +1027,8 @@ export const loadLanguage = (): string => {
 };
 
 // Configuración general (por usuario, con respaldo legado global)
-export const saveSettings = (settings: any): void => {
-  saveData('settings', settings);
+export const saveSettings = (settings: any, opts: DataOpts = {}): void => {
+  saveData('settings', settings, opts);
 };
 export const loadSettings = (): any => {
   const uid = getCurrentUserId();

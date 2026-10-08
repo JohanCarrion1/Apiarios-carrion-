@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { loadSettings, saveSettings } from '../utils/storage';
+import { onFirestoreHydrated } from '../services/firestoreSync';
 
 interface Settings {
   theme: 'dark' | 'light' | 'auto';
@@ -84,30 +85,51 @@ const defaultSettings: Settings = {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<Settings>(() => {
-    const saved = loadSettings();
-    if (!saved || Object.keys(saved).length === 0) return defaultSettings;
-    try {
-      return {
-        ...defaultSettings,
-        ...saved,
-        notifications: {
-          ...defaultSettings.notifications,
-          ...(saved.notifications || {}),
-          kinds: {
-            ...defaultSettings.notifications.kinds,
-            ...(saved.notifications?.kinds || {}),
-          },
+/**
+ * Fusiona lo guardado con los defaults: los campos que una versión anterior no
+ * tenía (o un guardado a medias) no se quedan undefined.
+ */
+const mergeSettings = (saved: any): Settings => {
+  if (!saved || Object.keys(saved).length === 0) return defaultSettings;
+  try {
+    return {
+      ...defaultSettings,
+      ...saved,
+      notifications: {
+        ...defaultSettings.notifications,
+        ...(saved.notifications || {}),
+        kinds: {
+          ...defaultSettings.notifications.kinds,
+          ...(saved.notifications?.kinds || {}),
         },
-      };
-    } catch {
-      return defaultSettings;
-    }
-  });
+      },
+    };
+  } catch {
+    return defaultSettings;
+  }
+};
+
+export function SettingsProvider({ children }: { children: ReactNode }) {
+  const [settings, setSettings] = useState<Settings>(() => mergeSettings(loadSettings()));
+
+  // Hidratación de Firestore → caché local. Hasta que no termina, los ajustes
+  // se guardan SOLO en local: si se subieran desde el arranque, el guardado de
+  // este dispositivo pisaría los del servidor (otro navegador/otro día) antes
+  // de que la hidratación llegara a leerlos. Cuando termina, se marca "armado"
+  // — a partir de ahí cada cambio sube — y se recarga el estado por si trajo
+  // valores de otra sesión.
+  const hydratedRef = useRef(false);
+  useEffect(
+    () =>
+      onFirestoreHydrated(() => {
+        hydratedRef.current = true;
+        setSettings(mergeSettings(loadSettings()));
+      }),
+    []
+  );
 
   useEffect(() => {
-    saveSettings(settings);
+    saveSettings(settings, { sync: hydratedRef.current });
     
     // Aplicar tema
     const root = document.documentElement;

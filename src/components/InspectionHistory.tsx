@@ -278,6 +278,8 @@ export default function InspectionHistory({
                                       <img
                                         src={getOptimizedImageUrl(photo.data)}
                                         alt="Foto de inspección"
+                                        loading="lazy"
+                                        decoding="async"
                                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                                       />
                                       <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/30" />
@@ -353,6 +355,8 @@ export default function InspectionHistory({
                         <img
                           src={getOptimizedImageUrl(photo.data)}
                           alt="Foto sin inspección"
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                         />
                         <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/30" />

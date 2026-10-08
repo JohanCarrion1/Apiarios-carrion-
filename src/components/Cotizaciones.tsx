@@ -238,7 +238,7 @@ function PickerModal({
                         >
                           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-pane text-2xl">
                             {p.imageUrl && p.imageUrl !== 'data:,' ? (
-                              <img src={p.imageUrl} alt={p.nombre} loading="lazy" className="h-full w-full object-cover" />
+                              <img src={p.imageUrl} alt={p.nombre} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                             ) : (
                               catEmoji(p.categoria)
                             )}
@@ -660,6 +660,7 @@ export default function Cotizaciones() {
                             src={p.imageUrl}
                             alt={p.nombre}
                             loading="lazy"
+                            decoding="async"
                             className="h-full w-full object-cover"
                           />
                         ) : (

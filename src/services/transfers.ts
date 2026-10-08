@@ -25,7 +25,8 @@ import {
   saveFecundadores,
   loadCuadernoEntries,
   saveCuadernoEntries,
-  getTransferHistoryKey,
+  loadData,
+  saveData,
 } from '../utils/storage';
 import { sortByEntityCode } from '../utils/entityCode';
 
@@ -38,8 +39,7 @@ const registerId = (): string => uid();
 
 export const loadTransferHistory = (userId: string): TransferRecord[] => {
   try {
-    const item = localStorage.getItem(getTransferHistoryKey(userId));
-    const records = item ? (JSON.parse(item) as TransferRecord[]) : [];
+    const records = loadData<TransferRecord[]>('transferHistory', [], { userId });
     return [...records].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   } catch (error) {
     console.error('[TRANSFERS] Error al leer historial de transferencias:', error);
@@ -50,13 +50,13 @@ export const loadTransferHistory = (userId: string): TransferRecord[] => {
 export const saveTransferHistory = (userId: string, records: TransferRecord[]): void => {
   try {
     const sorted = [...records].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-    const key = getTransferHistoryKey(userId);
-    const previousRaw = localStorage.getItem(key);
-    if (previousRaw != null && previousRaw !== JSON.stringify(sorted)) {
-      localStorage.setItem(`${key}__backup_${new Date().toISOString().replace(/[:.]/g, '-')}`, previousRaw);
-      localStorage.setItem(`${key}__backup_latest`, previousRaw);
-    }
-    localStorage.setItem(key, JSON.stringify(sorted));
+    // saveData hace lo que hacía este bloque a mano (backup rotativo +
+    // localStorage) PERO además emite notifySync, que sube el historial a
+    // Firestore (userData/{userId}.transferHistory). Antes se escribía con
+    // localStorage.setItem directo y las altas y borrados NUNCA llegaban al
+    // servidor: solo la primera hidratación subía el historial, y solo si el
+    // documento userData todavía no existía.
+    saveData('transferHistory', sorted, { userId });
   } catch (error) {
     console.error('[TRANSFERS] Error al guardar historial de transferencias:', error);
     throw error;

@@ -14,6 +14,7 @@ import {
 } from '../lib/motion';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { useScrollToTopOnMount } from '../hooks/useScrollToTopOnMount';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import StoreImage from './StoreImage';
 import { normalizeProductImageUrl } from '../lib/cloudinary';
 import OriginalBackground from './OriginalBackground';
@@ -969,6 +970,9 @@ export default function Store() {
   }, [userId]);
 
   const [query, setQuery] = useState('');
+  // Texto diferido 200 ms para el filtrado del catálogo: el input responde al
+  // instante y el filtro no se re-ejecuta en cada tecla.
+  const debouncedQuery = useDebouncedValue(query, 200);
   // Se guarda el ID, no el producto: así el modal de detalle refleja siempre
   // el catálogo actual (si el admin edita o desactiva el producto mientras está
   // abierto, antes seguía mostrando y cobrando un snapshot viejo).
@@ -1022,7 +1026,9 @@ export default function Store() {
 
   // La tienda debe cargar SIN errores incluso con localStorage lleno:
   //  - productsService ya limpia los base64 automáticamente (PRODUCTS_QUOTA_EVENT).
-  //  - Como red de seguridad, el botón "Limpiar caché" libera todo y recarga.
+  //  - Como red de seguridad, el botón "Limpiar caché" borra la caché del
+  //    catálogo (claves "_products") y recarga. Antes hacía localStorage.clear(),
+  //    que de paso borraba ajustes, notificaciones y datos de la app.
   useEffect(() => {
     const onQuota = () => setStorageAlert(true);
     window.addEventListener(productsService.PRODUCTS_QUOTA_EVENT, onQuota);
@@ -1031,7 +1037,7 @@ export default function Store() {
 
   const handleLimpiarCache = () => {
     try {
-      localStorage.clear();
+      productsService.clearProductsCache();
     } catch {
       /* noop */
     }
@@ -1156,7 +1162,7 @@ export default function Store() {
   };
 
   const filtered = useMemo(() => {
-    const q = normalize(query.trim());
+    const q = normalize(debouncedQuery.trim());
     // La categoría y la subcategoría activas se aplican SIEMPRE, también con
     // texto en el buscador: antes el `return` de la búsqueda iba antes de los
     // filtros, así que buscar "miel" con "Herramientas" marcado mostraba
@@ -1175,13 +1181,13 @@ export default function Store() {
       );
     });
     return sortProducts(result);
-  }, [products, query, macro, sub]);
+  }, [products, debouncedQuery, macro, sub]);
 
   // Conteos de los chips: reflejan búsqueda + subcategoría (no el filtro de
   // macro, obviously), para que el número de una tarjeta coincida con las
   // tarjetas que se ven al pulsarla.
   const macroCounts = useMemo(() => {
-    const q = normalize(query.trim());
+    const q = normalize(debouncedQuery.trim());
     return STORE_MACROS.map((m) => ({
       emoji: m.emoji,
       nombre: m.nombre,
@@ -1199,7 +1205,7 @@ export default function Store() {
         );
       }).length,
     }));
-  }, [products, query, sub]);
+  }, [products, debouncedQuery, sub]);
 
   // Subcategorías que existen de verdad en el catálogo. La taxonomía declara
   // "Libros y Manuales", pero la semilla no trae ningún producto de esa

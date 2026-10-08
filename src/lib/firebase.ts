@@ -1,6 +1,12 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, TwitterAuthProvider, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore,
+} from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 // Verificar que las variables de entorno de Firebase existan
@@ -47,7 +53,19 @@ if (checkFirebaseConfig()) {
     if (import.meta.env.DEV) console.log('✅ [FIREBASE] Inicializando Firebase...');
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    // Caché persistente (IndexedDB): las escrituras hechas sin conexión o con
+    // la app en segundo plano quedan encoladas y se envían al volver, en lugar
+    // de perderse al recargar. El gestor multi-pestaña evita que dos pestañas
+    // peleen por la misma caché. Si el navegador no la admite (modo privado,
+    // IndexedDB bloqueado) se cae a la caché en memoria de siempre.
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
+    } catch (error) {
+      console.warn('⚠️ [FIRESTORE] Caché persistente no disponible; se usa caché en memoria', error);
+      db = getFirestore(app);
+    }
     storage = getStorage(app);
     googleProvider = new GoogleAuthProvider();
     twitterProvider = new TwitterAuthProvider();

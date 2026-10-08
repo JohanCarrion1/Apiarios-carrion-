@@ -7,6 +7,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-apiar-reglas \"node --test tests/rules/*.test.mjs\"",
+    "test:scroll": "node --test tests/scrollLock.test.mjs",
+    "test:motion": "node --test tests/motionSection.test.mjs",
     "bootstrap:admins": "node scripts/bootstrap-admins.mjs",
     "migrate:products": "node scripts/migrate-products-to-firestore.mjs"
   },

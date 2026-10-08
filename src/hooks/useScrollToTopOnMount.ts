@@ -24,7 +24,7 @@
 // siguiente. A partir de ahí la rueda funciona con normalidad.
 
 import { useLayoutEffect } from 'react';
-import { scrollLocksActivos } from './useScrollLock';
+import { barrerLockesHuerfanos } from './scrollLockCore';
 
 export function useScrollToTopOnMount(): void {
   useLayoutEffect(() => {
@@ -36,23 +36,12 @@ export function useScrollToTopOnMount(): void {
     alTope();
     const raf = requestAnimationFrame(alTope);
 
-    // Barrido de bloqueos huérfanos.
-    //
-    // El scroll de estas pantallas lo lleva el DOCUMENTO (las raíces usan
-    // min-height, nunca height fija), así que un `overflow: hidden` inline
-    // que quede suelto en <html>/<body> lo deja congelado aunque el contenido
-    // desborde la altura de la pantalla: es exactamente el síntoma de "no
-    // puedo bajar". El caso conocido es el modal de términos del post-login,
-    // que bloquea el fondo mientras está abierto.
-    //
-    // Solo se barre cuando el contador de `useScrollLock` está a 0, es decir
-    // cuando NADIE tiene el bloqueo pedido en ese momento: si un overlay está
-    // legítimamente abierto, esta rutina no lo toca.
-    if (scrollLocksActivos() === 0) {
-      html.style.overflow = '';
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    }
+    // Barrido de bloqueos huérfanos (ver `barrerLockesHuerfanos`): barre el
+    // `overflow: hidden` que haya suelto en <html>/<body> solo cuando nadie
+    // tiene el bloqueo pedido, así nunca pisa a un modal abierto. Sin esto,
+    // un overlay desmontado sin cleanup dejaba el documento con el scroll
+    // congelado y la pantalla no se bajaba aunque el contenido desbordara.
+    barrerLockesHuerfanos();
 
     const scrollRestorationPrevio =
       'scrollRestoration' in window.history ? window.history.scrollRestoration : null;

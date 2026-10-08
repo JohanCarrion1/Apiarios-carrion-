@@ -107,6 +107,33 @@ export interface Inspection {
   hasSupers?: boolean; // ¿Tiene sobre-nido / alza?
 }
 
+/**
+ * Tratamiento sanitario aplicado a una colmena/núcleo (o a todo el apiario).
+ * `waitingDays` es el PERÍODO DE ESPERA: días que deben pasar tras el fin del
+ * tratamiento para poder cosechar con seguridad.
+ */
+export interface Treatment {
+  id: string;
+  hiveId: string; // id de colmena/núcleo, o 'apiario' para todo el apiario
+  product: string;
+  dose?: string;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD (si falta, se toma el propio inicio)
+  waitingDays: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface TreatmentDraft {
+  hiveId: string;
+  product: string;
+  dose?: string;
+  startDate: string;
+  endDate?: string;
+  waitingDays: number;
+  notes?: string;
+}
+
 export interface Task {
   id: string;
   title: string;

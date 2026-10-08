@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { backdropVariants, modalVariants } from '../lib/motion';
-import { STATUS_COLORS, HIVE_STATUS_LABELS, type Hive, type Equipamiento, getEquipamiento, type Inspection, isNucleus, hiveHasQueen } from "../types/hive";
+import { STATUS_COLORS, HIVE_STATUS_LABELS, type Hive, type Equipamiento, getEquipamiento, type Inspection, type Treatment, isNucleus, hiveHasQueen } from "../types/hive";
 import { useScrollLock } from '../hooks/useScrollLock';
 import type { Queen, QueenChange } from '../types/queen';
+import { QUEEN_CHANGE_REASON_LABELS } from '../types/queen';
+import { treatmentStatus, TREATMENT_STATUS_LABELS } from '../utils/treatments';
 import type { BreedingLot } from '../types/breeding';
 // Queen imports removed — queen info block removed from detail; only badge remains in header
 import { IconCrown, IconPlus, IconNote, IconX, IconRefresh, IconLayers } from "../ui";
@@ -42,6 +44,8 @@ interface Props {
   onConvertNucleus?: (hive: Hive) => void;
   onTransfer?: (hive: Hive, destApiaryId: string, motivo: string, fecha: string) => boolean;
   closing?: boolean;
+  harvests?: { id: string; hiveId: string; date: string; honeyKg: number; type?: string }[];
+  treatments?: Treatment[];
 }
 
 function daysAgo(date: string): string {
@@ -82,6 +86,8 @@ export default function HiveDetail({
   onConvertNucleus,
   onTransfer,
   closing = false,
+  harvests = [],
+  treatments = [],
 }: Props) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -146,6 +152,54 @@ export default function HiveDetail({
     const alzas = Math.max(0, Math.min(20, equip.alzas + delta));
     saveEquip({ ...equip, alzas });
   };
+
+  // Línea de tiempo: inspecciones, cosechas, tratamientos y cambios de reina
+  const timelineItems = useMemo(() => {
+    const items: { id: string; date: string; icon: string; title: string; sub?: string }[] = [];
+    inspections.forEach((i) =>
+      items.push({
+        id: `ti_${i.id}`,
+        date: i.date,
+        icon: '🔍',
+        title: 'Inspección',
+        sub: `varroa ${i.varroa}% · cría ${i.brood} · miel ${i.honey}${i.note ? ` · ${i.note}` : ''}`,
+      })
+    );
+    harvests.forEach((h) => {
+      if (h.hiveId !== hive.id) return;
+      items.push({
+        id: `th_${h.id}`,
+        date: h.date,
+        icon: '🍯',
+        title: 'Cosecha',
+        sub: `${h.honeyKg} kg${h.type ? ` · ${h.type}` : ''}`,
+      });
+    });
+    treatments.forEach((t) => {
+      if (t.hiveId !== hive.id && t.hiveId !== 'apiario') return;
+      const status = treatmentStatus(t);
+      items.push({
+        id: `tt_${t.id}`,
+        date: t.startDate,
+        icon: '💊',
+        title: `Tratamiento: ${t.product}`,
+        sub: `${TREATMENT_STATUS_LABELS[status]} · espera ${t.waitingDays} d${t.dose ? ` · ${t.dose}` : ''}`,
+      });
+    });
+    queenHistory.forEach((q) => {
+      if (q.hiveId !== hive.id) return;
+      items.push({
+        id: `tq_${q.id}`,
+        date: q.fecha,
+        icon: '👑',
+        title: QUEEN_CHANGE_REASON_LABELS[q.razon] || 'Cambio de reina',
+        sub: q.nota,
+      });
+    });
+    return items
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 30);
+  }, [inspections, harvests, treatments, queenHistory, hive.id]);
 
   // Reina — badge informativo en el encabezado; registro vía botón de acciones
   /* queen detail variables removed */
@@ -422,6 +476,30 @@ export default function HiveDetail({
                 }
                 onRegisterInspection={() => onInspect(hive.id)}
               />
+            </div>
+          )}
+
+          {/* Línea de tiempo: qué ha pasado en esta colmena */}
+          {timelineItems.length > 0 && (
+            <div>
+              <p className="tick-label mb-2">📅 Línea de tiempo</p>
+              <div className="space-y-1.5">
+                {timelineItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-3 rounded-lg border border-line bg-ink/50 px-3 py-2"
+                  >
+                    <span className="w-20 shrink-0 pt-0.5 font-mono text-[10px] text-husk">
+                      {item.date.slice(0, 10)}
+                    </span>
+                    <span className="shrink-0 text-sm">{item.icon}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-cream">{item.title}</p>
+                      {item.sub && <p className="line-clamp-2 text-[11px] text-husk">{item.sub}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

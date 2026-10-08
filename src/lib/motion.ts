@@ -78,26 +78,16 @@ export const sheetVariants: Variants = {
    ζ = damping / (2·√(stiffness·mass))   → razón de amortiguamiento
    overshoot ≈ exp(-πζ/√(1-ζ²))          → cuánto se pasa del punto de reposo
 
-   300/30/1 → ζ=0.866, overshoot 0.43 %, asentamiento (2 %) ≈ 307 ms
    400/30/0.6 → ζ=0.968, overshoot 0.00 %, asentamiento ≈ 212 ms
 
-   El overshoot del 0.43 % es imperceptible, así que estos resortes se pueden
-   usar también sobre bloques de contenido grandes sin que se lean como un
-   temblor: el riesgo viene de springs muy blandos (stiffness < 200), que sí
-   producen un rebote visible sobre una superficie alta.
+   Al ser tan amortiguado se puede usar también sobre bloques de contenido
+   grandes sin que se lea como un temblor. El riesgo está en los springs
+   blandos (stiffness < 200), que sí producen un rebote visible sobre una
+   superficie alta: no se relajan sin volver a medir.
    --------------------------------------------------------------------------- */
 
-/* Entrada de sección del dashboard (y 8→0 + fade). */
-export const SPRING_UI = {
-  type: 'spring',
-  stiffness: 300,
-  damping: 30,
-  mass: 1,
-} as const;
-
-/* Pulsación del menú lateral. Más rígido y con menos masa: asentamiento 212 ms
-   frente a 307 ms, que es lo que hace que el micro-feedback responda en el mismo
-   frame en que se levanta el dedo. */
+/* Pulsación del menú lateral: asentamiento 212 ms, que es lo que hace que el
+   micro-feedback responda en el mismo frame en que se levanta el dedo. */
 export const SPRING_TAP = {
   type: 'spring',
   stiffness: 400,
@@ -108,27 +98,3 @@ export const SPRING_TAP = {
 /* Escala de la pulsación. iOS usa ~0.96 en listas y barras; bajar más (0.9) se
    percibe como "salta" y desconecta el dedo del elemento. */
 export const TAP_SCALE = 0.96;
-
-/* ---------------------------------------------------------------------------
-   Cambio de sección del dashboard (pestañas del menú lateral) — estilo iOS.
-
-   ENTRADA: desplazamiento vertical mínimo (8px) + fade, con SPRING_UI.
-   8px es el punto: se lee como "la vista entra" sin parecer un salto de página.
-
-   SALIDA: instantánea (duration 0). Esto es lo que elimina el tiempo muerto.
-   Una salida animada implica frames en los que la sección saliente sigue ahí y
-   la entrante aún no ha aparecido; al irse sola, el cambio es un corte limpio,
-   como el push de una app nativa.
-
-   RESTRICCIÓN: solo se animan `opacity` y `y`. Nada de `scale` en este
-   contenedor, porque un `scale` en el ancestro crea containing block y los
-   modales `position: fixed` de las secciones (crear colmena, resumen, ficha)
-   dejarían de centrarse en el viewport mientras dura la transición.
-   --------------------------------------------------------------------------- */
-export const DUR_SECTION_OUT = 0;
-
-export const sectionVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: SPRING_UI },
-  exit: { opacity: 0, transition: { duration: DUR_SECTION_OUT } },
-};

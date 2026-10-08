@@ -24,7 +24,7 @@ import {
 import { es } from 'date-fns/locale';
 import type { CalendarEvent, CalendarViewType, EventTemplate, RecurrenceType } from '../types/calendar';
 import { EVENT_COLORS, EVENT_LABELS, RECURRING_EVENT_COLOR } from '../types/calendar';
-import type { Hive } from '../types/hive';
+import type { Hive, Treatment, TreatmentDraft } from '../types/hive';
 import type { BreedingLot } from '../types/breeding';
 import type { RecurringTask, RecurringTaskDraft, FloweringEntry, FloweringEntryDraft } from '../types/reminders';
 import { FLOWERING_COLORS, REMINDER_ICONS, REMINDER_COLORS } from '../types/reminders';
@@ -32,6 +32,8 @@ import { computeReminders, generateRecurringTaskInstances, floweringEventsForPer
 import EventForm from './EventForm';
 import RecurringTaskForm from './RecurringTaskForm';
 import FloweringForm from './FloweringForm';
+import TreatmentForm from './TreatmentForm';
+import { treatmentStatus, daysUntilSafeHarvest } from '../utils/treatments';
 import { useSettings } from '../context/SettingsContext';
 import { formatHour, formatHourFromTime } from '../utils/formatTime';
 
@@ -75,6 +77,10 @@ interface CalendarSectionProps {
   onFloweringEntriesChange: (entries: FloweringEntry[]) => void;
   eventTemplates: EventTemplate[];
   onEventTemplatesChange: Dispatch<SetStateAction<EventTemplate[]>>;
+  treatments: Treatment[];
+  onTreatmentsChange: Dispatch<SetStateAction<Treatment[]>>;
+  /** Colmenas + núcleos para el formulario de tratamientos (si falta, se usan hives). */
+  colonies?: Hive[];
   breedingLots?: BreedingLot[];
   apiaries?: { id: string; name: string }[];
   apiaryName?: string;
@@ -90,6 +96,9 @@ export default function CalendarSection({
   onFloweringEntriesChange,
   eventTemplates: templates,
   onEventTemplatesChange: setTemplates,
+  treatments,
+  onTreatmentsChange,
+  colonies = [],
   breedingLots = [],
   apiaries = [],
   apiaryName = '',
@@ -107,6 +116,10 @@ export default function CalendarSection({
   const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('detailed');
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [showFloweringForm, setShowFloweringForm] = useState(false);
+  const [showTreatmentForm, setShowTreatmentForm] = useState(false);
+
+  /** Colmenas y núcleos disponibles (para elegir en qué se aplica el tratamiento). */
+  const colonyList = colonies.length > 0 ? colonies : hives;
 
   const notificationCfg = settings.notifications;
   const alertDaysBefore =
@@ -442,6 +455,45 @@ export default function CalendarSection({
     onFloweringEntriesChange(floweringEntries.map(e =>
       e.id === entryId ? { ...e, active: !e.active } : e
     ));
+  };
+
+  // Handlers de tratamientos sanitarios
+  const handleSaveTreatment = (draft: TreatmentDraft) => {
+    const treatment: Treatment = {
+      id: uid(),
+      ...draft,
+      createdAt: new Date().toISOString(),
+    };
+    onTreatmentsChange([...treatments, treatment]);
+    // También se refleja en el calendario; su id está ligado al tratamiento
+    // para que al borrarlo se borre el evento también.
+    const hive = colonyList.find(h => h.id === draft.hiveId);
+    onEventsChange(prev => [
+      ...prev,
+      {
+        id: `treat_${treatment.id}`,
+        type: 'treatment',
+        title: `Tratamiento: ${draft.product}`,
+        description: [
+          hive ? `Colmena ${hive.code}` : 'Todo el apiario',
+          draft.dose ? `Dosis: ${draft.dose}` : '',
+          `Período de espera: ${draft.waitingDays} días`,
+          draft.notes || '',
+        ].filter(Boolean).join(' · '),
+        date: new Date(`${draft.startDate}T00:00:00`).toISOString(),
+        hiveId: draft.hiveId !== 'apiario' ? draft.hiveId : undefined,
+        priority: 'medium',
+        completed: false,
+        createdAt: new Date().toISOString(),
+        color: EVENT_COLORS.treatment,
+      },
+    ]);
+    setShowTreatmentForm(false);
+  };
+
+  const handleDeleteTreatment = (treatmentId: string) => {
+    onTreatmentsChange(treatments.filter(t => t.id !== treatmentId));
+    onEventsChange(prev => prev.filter(e => e.id !== `treat_${treatmentId}`));
   };
 
   // Compartir evento
@@ -1135,6 +1187,67 @@ ${event.description ? `📋 ${event.description}` : ''}`;
         </div>
       </div>
 
+      {/* Tratamientos sanitarios (período de espera antes de cosechar) */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-lg font-bold text-cream">💊 Tratamientos</h3>
+          <button
+            onClick={() => setShowTreatmentForm(true)}
+            className="rounded-lg bg-honey px-3 py-1.5 text-xs font-semibold text-ink hover:bg-honeysoft transition-colors"
+          >
+            + Registrar
+          </button>
+        </div>
+        {treatments.length === 0 ? (
+          <p className="text-sm text-husk py-4 text-center">
+            Registra tratamientos de varroa con su período de espera para saber cuándo puedes cosechar.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {treatments.map(t => {
+              const status = treatmentStatus(t);
+              const daysLeft = daysUntilSafeHarvest(t);
+              const hive = colonyList.find(h => h.id === t.hiveId);
+              const badgeClass =
+                status === 'seguro'
+                  ? 'border-sage/40 bg-sage/15 text-sage'
+                  : status === 'curso'
+                    ? 'border-honey/40 bg-honey/15 text-honey'
+                    : 'border-line bg-ink/60 text-husk';
+              return (
+                <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg bg-ink/50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-cream truncate">
+                      {t.product} · {hive ? hive.code : 'Todo el apiario'}
+                    </p>
+                    <p className="text-xs text-husk truncate">
+                      {format(new Date(`${t.startDate}T00:00:00`), 'dd/MM/yyyy')} →{' '}
+                      {t.endDate ? format(new Date(`${t.endDate}T00:00:00`), 'dd/MM/yyyy') : '—'} ·
+                      espera {t.waitingDays} d{t.dose ? ` · ${t.dose}` : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeClass}`}
+                    title={status === 'seguro' ? 'Ya se puede cosechar' : 'Aún no se puede cosechar'}
+                  >
+                    {status === 'seguro'
+                      ? '✅ seguro'
+                      : `⏳ ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}`}
+                  </span>
+                  <button
+                    onClick={() => handleDeleteTreatment(t.id)}
+                    className="text-husk hover:text-coral p-1 transition-colors"
+                    title="Eliminar"
+                  >
+                    🗑
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Panel de eventos del día seleccionado */}
       {selectedDate && viewType === 'month' && (
         <div className="card p-6">
@@ -1230,6 +1343,17 @@ ${event.description ? `📋 ${event.description}` : ''}`;
             defaultApiaryName={apiaryName}
             onClose={() => setShowFloweringForm(false)}
             onSave={handleSaveFlowering}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Formulario de tratamiento */}
+      <AnimatePresence>
+        {showTreatmentForm && (
+          <TreatmentForm
+            colonies={colonyList.map(h => ({ id: h.id, label: h.code }))}
+            onClose={() => setShowTreatmentForm(false)}
+            onSave={handleSaveTreatment}
           />
         )}
       </AnimatePresence>

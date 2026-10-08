@@ -427,6 +427,8 @@ export default function PagoYapeModal({
                         <img
                           src={previewUrl}
                           alt="Vista previa del comprobante"
+                          loading="lazy"
+                          decoding="async"
                           className="h-24 w-24 rounded-lg border border-line object-cover"
                         />
                         <div className="min-w-0 flex-1">

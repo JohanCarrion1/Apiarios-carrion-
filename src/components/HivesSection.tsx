@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import type { Hive, Inspection, HiveStatus, Equipamiento } from "../types/hive";
+import type { Hive, Inspection, HiveStatus, Equipamiento, Treatment } from "../types/hive";
 import type { Queen, QueenChange } from '../types/queen';
 import type { BreedingLot } from '../types/breeding';
 import type { Fecundador } from '../types/fecundador';
@@ -10,6 +10,7 @@ import FecundadoresSection from './FecundadoresSection';
 import { IconPlus } from '../ui';
 import type { PhotoData } from '../services/photos';
 import { useClosingPanel } from '../hooks/useClosingPanel';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 interface HivesSectionProps {
   hives: Hive[];
@@ -35,6 +36,8 @@ interface HivesSectionProps {
   queens?: Queen[];
   queenHistory?: QueenChange[];
   inspections?: Inspection[];
+  harvests?: { id: string; hiveId: string; date: string; honeyKg: number; type?: string }[];
+  treatments?: Treatment[];
   nextHiveCode?: string;
   onRegisterQueen?: (hive: Hive) => void;
   onEditQueen?: (queen: Queen) => void;
@@ -87,6 +90,8 @@ export default function HivesSection({
   queens = [],
   queenHistory = [],
   inspections,
+  harvests = [],
+  treatments = [],
   nextHiveCode,
   onRegisterQueen,
   onEditQueen,
@@ -157,12 +162,18 @@ export default function HivesSection({
     beginCloseNucleus(selectedNucleusId, () => onSelectNucleus(''));
   };
 
+  // El texto del buscador se difiere 200 ms: el input sigue respondiendo al
+  // instante, pero el filtrado (y el reinicio de la página del panal) no se
+  // recalcula en cada tecla. Ver `useDebouncedValue`.
+  const debouncedSearchHives = useDebouncedValue(searchQueryHives, 200);
+  const debouncedSearchNuclei = useDebouncedValue(searchQueryNuclei, 200);
+
   // Filtrar colmenas
   const filteredHives = useMemo(() => {
     let result = [...hives];
     
-    if (searchQueryHives.trim()) {
-      const query = searchQueryHives.toLowerCase();
+    if (debouncedSearchHives.trim()) {
+      const query = debouncedSearchHives.toLowerCase();
       result = result.filter(h => 
         h.code.toLowerCase().includes(query) ||
         (h.name && h.name.toLowerCase().includes(query))
@@ -170,14 +181,14 @@ export default function HivesSection({
     }
     
     return result;
-  }, [hives, searchQueryHives]);
+  }, [hives, debouncedSearchHives]);
 
   // Filtrar núcleos
   const filteredNuclei = useMemo(() => {
     let result = [...nuclei];
     
-    if (searchQueryNuclei.trim()) {
-      const query = searchQueryNuclei.toLowerCase();
+    if (debouncedSearchNuclei.trim()) {
+      const query = debouncedSearchNuclei.toLowerCase();
       result = result.filter(h => 
         h.code.toLowerCase().includes(query) ||
         (h.name && h.name.toLowerCase().includes(query))
@@ -185,7 +196,7 @@ export default function HivesSection({
     }
     
     return result;
-  }, [nuclei, searchQueryNuclei]);
+  }, [nuclei, debouncedSearchNuclei]);
 
   const selectedHive = hives.find(h => h.id === selectedHiveId);
   const selectedNucleus = nuclei.find(h => h.id === selectedNucleusId);
@@ -301,6 +312,8 @@ export default function HivesSection({
               closing={closingHiveId === selectedHive.id}
               onClose={handleCloseHive}
               inspections={(inspections || []).filter(i => i.hiveId === selectedHive.id)}
+              harvests={harvests}
+              treatments={treatments}
               totalHives={hives.length}
               onInspect={onInspectHive}
               onEdit={onEditHive}
@@ -406,6 +419,8 @@ export default function HivesSection({
               closing={closingNucleusId === selectedNucleus.id}
               onClose={handleCloseNucleus}
               inspections={(inspections || []).filter(i => i.hiveId === selectedNucleus.id)}
+              harvests={harvests}
+              treatments={treatments}
               totalHives={nuclei.length}
               onInspect={onInspectNucleus}
               onEdit={onEditNucleus}

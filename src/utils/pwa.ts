@@ -5,7 +5,7 @@
 
 // BUMPEÁ esta versión en cada deploy para forzar que la PWA instalada
 // descarte el shell antiguo (caches + service worker) una sola vez.
-export const PWA_CACHE_VERSION = '2026.10.06-v3';
+export const PWA_CACHE_VERSION = '2026.10.08-v1';
 
 const SEEN_VERSION_KEY = 'ac_pwa_seen_version';
 

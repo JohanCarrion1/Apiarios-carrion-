@@ -130,7 +130,7 @@ export default function FecundadorDetail({
           que sí son fluidos. Equivale al contenedor de HiveDetail. */}
       <div
         key={fecundador.id}
-        className={`card relative w-full p-4 max-h-[90vh] overflow-y-auto ${animClass}`}
+        className={`card relative w-full p-4 overflow-hidden ${animClass}`}
       >
         {/* Encabezado: badge de estado + REV arriba a la derecha */}
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -306,7 +306,7 @@ export default function FecundadorDetail({
         {/* Historial */}
         <div>
           <p className="tick-label mb-1.5">Historial</p>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <div className="space-y-2">
             {fecundador.historial
               .slice()
               .reverse()

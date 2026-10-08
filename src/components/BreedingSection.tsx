@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { differenceInDays, parseISO, format, subMonths, isAfter } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Hive } from '../types/hive';
-import type { BreedingLot } from '../types/breeding';
+import type { BreedingLot, BreedingStatus } from '../types/breeding';
 import { BREEDING_STATUS_LABELS, BREEDING_STATUS_COLORS, BREEDING_TYPE_LABELS } from '../types/breeding';
 import type { Queen } from '../types/queen';
 import { IconPlus, IconQueen, IconTrash } from '../ui';
@@ -32,6 +32,23 @@ const STATUS_FLOW: BreedingLot['estado'][] = ['enRealeras', 'enjauladas', 'nacid
 
 const formatDate = (iso: string) => format(parseISO(iso), 'd MMM yyyy', { locale: es });
 
+/* Tarjeta de KPI del resumen. Va fuera del componente para que React no
+   desmonte y remonte los nodos en cada render. */
+function Kpi({ label, value, sub, tone = 'text-cream' }: {
+  label: string;
+  value: string | number;
+  sub: string;
+  tone?: string;
+}) {
+  return (
+    <div className="card p-4">
+      <p className="tick-label">{label}</p>
+      <p className={`mt-1 font-display text-2xl font-bold ${tone}`}>{value}</p>
+      <p className="mt-0.5 text-[11px] text-husk">{sub}</p>
+    </div>
+  );
+}
+
 export default function BreedingSection({
   hives, nuclei, breedingLots, onUpdateLots,
   onAddCalendarEvent, onDeleteCalendarEvent, onAddCuadernoEntry, onShowToast,
@@ -46,6 +63,8 @@ export default function BreedingSection({
   const [confirmDeleteLotId, setConfirmDeleteLotId] = useState<string | null>(null);
   const [assignLotId, setAssignLotId] = useState<string | null>(null);
   const [assignHiveId, setAssignHiveId] = useState<string>('');
+  const [filtroEstado, setFiltroEstado] = useState<BreedingStatus | 'todas' | 'alerta'>('todas');
+  const [orden, setOrden] = useState<'recientes' | 'hitos' | 'aceptacion'>('recientes');
   const allColonies = [...hives, ...nuclei];
 
   // Al reabrir un detalle se cancela cualquier cierre pendiente.
@@ -95,20 +114,30 @@ export default function BreedingSection({
 
   const today = new Date();
 
+  /* Un lote aceptado SIN reina asignada sigue siendo trabajo pendiente: se
+     queda en la lista activa (y por eso sale del historial) hasta que se le
+     asigne una reina. Antes desaparecía de la lista en cuanto pasaba a
+     "aceptadas" y el botón de asignar, que vive en esta misma tarjeta, nunca
+     llegaba a pintarse: solo se podía asignar desde el detalle. */
+  const pendingAssign = useCallback(
+    (l: BreedingLot) => l.estado === 'aceptadas' && !queens.some(q => q.loteId === l.id),
+    [queens],
+  );
+
   const activeLots = useMemo(() =>
     breedingLots
-      .filter(l => l.estado !== 'perdidas' && l.estado !== 'aceptadas')
+      .filter(l => l.estado !== 'perdidas' && (l.estado !== 'aceptadas' || pendingAssign(l)))
       .sort((a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()),
-    [breedingLots],
+    [breedingLots, pendingAssign],
   );
 
   const historyLots = useMemo(() => {
     const threeMonthsAgo = subMonths(today, 3);
     return breedingLots
-      .filter(l => (l.estado === 'perdidas' || l.estado === 'aceptadas'))
+      .filter(l => (l.estado === 'perdidas' || (l.estado === 'aceptadas' && !pendingAssign(l))))
       .filter(l => isAfter(parseISO(l.fechaInicio), threeMonthsAgo))
       .sort((a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime());
-  }, [breedingLots, today]);
+  }, [breedingLots, pendingAssign, today]);
 
   const fecundandoCount = breedingLots.filter(l => l.estado === 'fecundando').length;
 
@@ -162,6 +191,87 @@ export default function BreedingSection({
     if (daysUntilEnjaulado === 1) return { color: 'bg-orange-400/15 border-orange-400/40 text-orange-400', text: 'Enjaulado mañana' };
     return null;
   };
+
+  /* ------------------------------------------------------------------
+     Resumen de la pestaña: qué necesita ojo ahora mismo.
+     ------------------------------------------------------------------ */
+  const needsAttention = (lot: BreedingLot) => {
+    const daysElapsed = differenceInDays(today, parseISO(lot.fechaInicio));
+    return (
+      getLotAlert(lot) !== null ||
+      (!lot.acceptance && daysElapsed >= 3) ||
+      pendingAssign(lot)
+    );
+  };
+
+  const reinasCriadas = queens.filter(q => q.loteId);
+  const reinasActivas = reinasCriadas.filter(q => q.estado === 'activa').length;
+  const alertasCount = activeLots.filter(needsAttention).length;
+  const medidosCount = breedingLots.filter(l => l.acceptance).length;
+
+  /* Próximos hitos del ciclo (enjaulado y nacimiento) de los lotes vivos,
+     ordenados: lo atrasado aparece primero porque es lo que toca resolver. */
+  const proximosHitos = useMemo(() => {
+    const hitos: { lotId: string; fecha: string; etiqueta: string }[] = [];
+    for (const lot of activeLots) {
+      if (lot.estado === 'enRealeras') {
+        hitos.push({ lotId: lot.id, fecha: lot.fechaEnjauladoEstimada, etiqueta: 'Enjaulado' });
+      }
+      if (lot.estado === 'enRealeras' || lot.estado === 'enjauladas') {
+        hitos.push({ lotId: lot.id, fecha: lot.fechaNacimientoEstimada, etiqueta: 'Nacimiento' });
+      }
+    }
+    return hitos.sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 4);
+  }, [activeLots]);
+
+  const hitoRelativo = (iso: string) => {
+    const dias = differenceInDays(parseISO(iso), today);
+    if (dias < 0) return { txt: `Atrasado ${Math.abs(dias)} d`, urgente: true };
+    if (dias === 0) return { txt: 'Hoy', urgente: true };
+    if (dias === 1) return { txt: 'Mañana', urgente: true };
+    return { txt: `En ${dias} días`, urgente: false };
+  };
+
+  /* Siguiente hito pendiente de un lote, para ordenar la lista. '9999…' deja
+     al final los que ya no tienen hito (fecundando / aceptadas). */
+  const nextHitoIso = (lot: BreedingLot) => {
+    const pendientes: string[] = [];
+    if (lot.estado === 'enRealeras') pendientes.push(lot.fechaEnjauladoEstimada);
+    if (lot.estado === 'enRealeras' || lot.estado === 'enjauladas') pendientes.push(lot.fechaNacimientoEstimada);
+    const porVenir = pendientes.filter(f => !isAfter(today, parseISO(f)));
+    return porVenir.sort()[0] ?? '9999-12-31';
+  };
+
+  /* Comparativa Traslarve vs Nicot: sin registro no hay media, y eso se
+     muestra como '—' en vez de un 0% que confunde. */
+  const porTipo = useMemo(() => (['Traslarve', 'Nicot'] as const).map((tipo) => {
+    const lots = breedingLots.filter(l => l.tipo === tipo);
+    const conRegistro = lots.filter(l => l.acceptance);
+    const avg = conRegistro.length
+      ? Math.round(conRegistro.reduce((acc, l) => acc + (l.acceptance?.percentage ?? 0), 0) / conRegistro.length)
+      : null;
+    return { tipo, total: lots.length, avg };
+  }), [breedingLots]);
+
+  const estadosPresentes = STATUS_FLOW.filter(s => activeLots.some(l => l.estado === s));
+
+  /* Lista filtrada y ordenada que se pinta debajo. El orden por "próximos
+     hitos" pone primero lo que toca; "mejor aceptación" sirve para comparar
+     lotes ya cerrados sin abrir el detalle de cada uno. */
+  const visibleLots = useMemo(() => {
+    let list = activeLots;
+    if (filtroEstado === 'alerta') list = list.filter(needsAttention);
+    else if (filtroEstado !== 'todas') list = list.filter(l => l.estado === filtroEstado);
+    if (orden === 'recientes') return list;
+    const arr = [...list];
+    if (orden === 'aceptacion') {
+      arr.sort((a, b) => (b.acceptance?.percentage ?? -1) - (a.acceptance?.percentage ?? -1));
+    } else {
+      arr.sort((a, b) => nextHitoIso(a).localeCompare(nextHitoIso(b)));
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLots, filtroEstado, orden]);
 
   const handleCreate = (draft: Omit<BreedingLot, 'id' | 'fechaCreacion' | 'estado' | 'estadoHistorial'>) => {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -250,8 +360,117 @@ export default function BreedingSection({
         <h2 className="font-display text-3xl font-bold tracking-tight text-cream sm:text-4xl">Cría de Reinas</h2>
         <p className="mt-1 font-mono text-xs text-husk">
           {activeLots.length} lotes activos{fecundandoCount > 0 ? ` · ${fecundandoCount} en fecundación` : ''}
-          {avgAcceptance !== null ? ` · Promedio de aceptación: ${avgAcceptance}%` : ''}
+          {alertasCount > 0 ? ` · ${alertasCount} requieren atención` : ''}
         </p>
+      </div>
+
+      {/* Resumen: lo que importa de un vistazo */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi label="Lotes activos" value={activeLots.length} sub={`${historyLots.length} en historial`} />
+        <Kpi
+          label="Aceptación media"
+          value={avgAcceptance !== null ? `${avgAcceptance}%` : '—'}
+          sub={avgAcceptance !== null ? `sobre ${medidosCount} registro${medidosCount !== 1 ? 's' : ''}` : 'sin registros todavía'}
+        />
+        <Kpi
+          label="Reinas de cría"
+          value={reinasCriadas.length}
+          sub={reinasCriadas.length ? `${reinasActivas} activas hoy` : 'aún sin asignar'}
+        />
+        <Kpi
+          label="Requiere atención"
+          value={alertasCount}
+          sub={alertasCount ? 'en la lista de abajo' : 'todo al día'}
+          tone={alertasCount > 0 ? 'text-coral' : 'text-sage'}
+        />
+      </div>
+
+      {/* Agenda y comparativa por método */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="card p-4">
+          <p className="tick-label mb-3">Próximos hitos</p>
+          {proximosHitos.length === 0 ? (
+            <p className="text-xs text-husk">Sin enjaulados ni nacimientos programados.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {proximosHitos.map((hito, idx) => {
+                const rel = hitoRelativo(hito.fecha);
+                return (
+                  <button
+                    key={`${hito.lotId}-${hito.etiqueta}-${idx}`}
+                    type="button"
+                    onClick={() => openDetail(hito.lotId)}
+                    className="flex w-full items-center gap-3 rounded-lg border border-line px-3 py-2 text-left transition-colors hover:border-honey/50"
+                  >
+                    <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-mono font-semibold ${rel.urgente ? 'border-coral/40 bg-coral/15 text-coral' : 'border-honey/30 bg-honey/10 text-honey'}`}>
+                      {rel.txt}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-cream">
+                      {hito.etiqueta} · {getLotLabel(hito.lotId)}
+                    </span>
+                    <span className="hidden shrink-0 font-mono text-[10px] text-husk sm:block">
+                      {formatDate(hito.fecha)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="card p-4">
+          <p className="tick-label mb-3">Rendimiento por método</p>
+          <div className="space-y-1.5">
+            {porTipo.map((t) => (
+              <div key={t.tipo} className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm text-cream">{BREEDING_TYPE_LABELS[t.tipo]}</p>
+                  <p className="font-mono text-[11px] text-husk">
+                    {t.total} lote{t.total !== 1 ? 's' : ''}{t.avg === null ? ' · sin datos' : ''}
+                  </p>
+                </div>
+                <span className={`font-display text-xl font-bold ${t.avg === null ? 'text-husk' : t.avg >= 70 ? 'text-sage' : t.avg >= 40 ? 'text-honey' : 'text-coral'}`}>
+                  {t.avg === null ? '—' : `${t.avg}%`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Filtro por estado y orden de la lista */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { id: 'todas' as const, label: 'Todos', n: activeLots.length },
+          ...(alertasCount > 0 ? [{ id: 'alerta' as const, label: 'Con alerta', n: alertasCount }] : []),
+          ...estadosPresentes.map(s => ({
+            id: s,
+            label: BREEDING_STATUS_LABELS[s],
+            n: activeLots.filter(l => l.estado === s).length,
+          })),
+        ].map((chip) => {
+          const activo = filtroEstado === chip.id;
+          return (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={() => setFiltroEstado(chip.id)}
+              className={`rounded-full border px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-wider transition-colors ${activo ? 'border-honey/60 bg-honey/15 text-honey' : 'border-line text-husk hover:text-cream'}`}
+            >
+              {chip.label} <span className="opacity-60">{chip.n}</span>
+            </button>
+          );
+        })}
+        <select
+          value={orden}
+          onChange={(e) => setOrden(e.target.value as typeof orden)}
+          className="ml-auto rounded-lg border border-line bg-ink px-3 py-1.5 text-[11px] font-semibold text-cream focus:border-honey/70"
+          aria-label="Ordenar lotes"
+        >
+          <option value="recientes">Más recientes</option>
+          <option value="hitos">Próximo hito</option>
+          <option value="aceptacion">Mejor aceptación</option>
+        </select>
       </div>
 
       {/* Lista de lotes activos */}
@@ -261,11 +480,23 @@ export default function BreedingSection({
           <p className="text-husk text-lg">No hay lotes de cría activos</p>
           <p className="text-xs text-husk/60 mt-2">Crea tu primer lote con el botón +</p>
         </div>
+      ) : visibleLots.length === 0 ? (
+        <div className="card p-8 text-center">
+          <p className="text-husk">Ningún lote coincide con el filtro</p>
+          <button
+            type="button"
+            onClick={() => setFiltroEstado('todas')}
+            className="mt-3 rounded-xl border border-line px-4 py-2 text-sm text-husk transition-colors hover:bg-ink/50"
+          >
+            Ver todos
+          </button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {activeLots.map((lot, idx) => {
+          {visibleLots.map((lot, idx) => {
             const daysElapsed = differenceInDays(today, parseISO(lot.fechaInicio));
             const alert = getLotAlert(lot);
+            const cicloIdx = STATUS_FLOW.indexOf(lot.estado);
             return (
               <motion.div
                 key={lot.id}
@@ -275,7 +506,13 @@ export default function BreedingSection({
                 transition={{ delay: idx * 0.04 }}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1 min-w-0">
+                  {/* Toda la zona de datos abre el detalle (como en el
+                      historial); los botones de la derecha cortan la
+                      propagación justo al lado. */}
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => openDetail(lot.id)}
+                  >
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span
                         className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-widest"
@@ -292,9 +529,14 @@ export default function BreedingSection({
                         </span>
                       )}
                       {!lot.acceptance && daysElapsed >= 3 && (
-                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono font-semibold border bg-orange-400/15 border-orange-400/40 text-orange-400">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openDetail(lot.id); }}
+                          title="Registrar la aceptación desde el detalle del lote"
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono font-semibold border bg-orange-400/15 border-orange-400/40 text-orange-400 hover:bg-orange-400/25"
+                        >
                           Revisar aceptación
-                        </span>
+                        </button>
                       )}
                     </div>
                     <p className="font-semibold text-cream text-sm">
@@ -303,6 +545,26 @@ export default function BreedingSection({
                     <p className="text-xs text-husk mt-0.5">
                       {formatDate(lot.fechaInicio)} · {daysElapsed} días transcurridos · {lot.cantidadPortacupulas} portacúpulas
                     </p>
+                    {/* Progreso del ciclo: en qué paso va el lote sin tener
+                        que entrar al detalle. */}
+                    {cicloIdx >= 0 && (
+                      <div className="mt-3">
+                        <div className="flex items-center gap-1">
+                          {STATUS_FLOW.map((s, i) => (
+                            <span
+                              key={s}
+                              title={BREEDING_STATUS_LABELS[s]}
+                              className={`h-1.5 flex-1 rounded-full ${i <= cicloIdx ? '' : 'bg-line'}`}
+                              style={i <= cicloIdx ? { backgroundColor: BREEDING_STATUS_COLORS[lot.estado] } : undefined}
+                            />
+                          ))}
+                        </div>
+                        <p className="mt-1 font-mono text-[10px] text-husk">
+                          Paso {cicloIdx + 1} de {STATUS_FLOW.length} · {BREEDING_STATUS_LABELS[lot.estado]}
+                          {pendingAssign(lot) ? ' · pendiente de asignar reina' : ''}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     {/* Cambiar estado */}

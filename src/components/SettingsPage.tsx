@@ -4,6 +4,7 @@ import { useTranslation } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { clearUserData, exportUserData, importUserData, loadHives } from '../utils/storage';
+import { requestPushPermission, isPushSupported } from '../utils/pushNotify';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 interface SettingsPageProps {
@@ -573,9 +574,24 @@ export default function SettingsPage({ onClose }: SettingsPageProps) {
                       key={value}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() =>
-                        updateSettings({ notifications: { ...settings.notifications, delivery: value } })
-                      }
+                      onClick={async () => {
+                        // Elegir "Push (PWA)" pide permiso al navegador en ese
+                        // mismo clic (gesto de usuario). Si se deniega, se
+                        // vuelve a "Solo visual" para no prometer lo que no hay.
+                        if (value === 'push') {
+                          const perm = await requestPushPermission();
+                          if (perm !== 'granted') {
+                            updateSettings({ notifications: { ...settings.notifications, delivery: 'visual' } });
+                            if (!isPushSupported()) {
+                              alert(t('push.unsupported'));
+                            } else {
+                              alert(t('push.denied'));
+                            }
+                            return;
+                          }
+                        }
+                        updateSettings({ notifications: { ...settings.notifications, delivery: value } });
+                      }}
                       className={`p-3 rounded-lg border-2 transition-all ${
                         settings.notifications.delivery === value
                           ? 'border-honey bg-honey/10'

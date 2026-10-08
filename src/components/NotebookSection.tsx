@@ -5,7 +5,7 @@ import { es } from "date-fns/locale";
 import type { Hive } from "../types/hive";
 import type { CuadernoEntry } from "../types/breeding";
 import { IconClipboard, IconSearch, IconPlus, IconX } from "../ui";
-import { loadInspections, saveInspections } from '../utils/storage';
+import { loadInspections, loadCuadernoInspections, saveCuadernoInspections } from '../utils/storage';
 import { formatHour } from '../utils/formatTime';
 import PhotoUploader from './PhotoUploader';
 import PhotoGallery from './PhotoGallery';
@@ -84,30 +84,33 @@ const INSPECTION_TEMPLATES = [
   },
 ];
 
-// Funciones REALES de almacenamiento
-const saveInspection = (inspection: Inspection) => {
-  const inspections: Inspection[] = loadInspections();
+// Funciones REALES de almacenamiento. Escriben en `cuadernoInspections`
+// (entidad propia, por apiario), que sí sube a Firestore: antes usaban
+// `inspections` SIN apiario y el sync la descartaba, así que todo lo que se
+// registraba en este cuaderno se perdía al cambiar de navegador.
+const saveInspection = (inspection: Inspection, suffix: string) => {
+  const inspections: Inspection[] = loadCuadernoInspections(suffix);
   inspections.push(inspection);
-  saveInspections(inspections);
+  saveCuadernoInspections(inspections, suffix);
 };
 
-const getInspections = (): Inspection[] => {
-  return loadInspections();
+const getInspections = (suffix: string): Inspection[] => {
+  return loadCuadernoInspections(suffix);
 };
 
-const updateInspection = (id: string, updates: Partial<Inspection>) => {
-  const inspections = getInspections();
+const updateInspection = (id: string, updates: Partial<Inspection>, suffix: string) => {
+  const inspections = getInspections(suffix);
   const updated = inspections.map(i => 
     i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i
   );
-  saveInspections(updated);
+  saveCuadernoInspections(updated, suffix);
   return updated;
 };
 
-const deleteInspection = (id: string) => {
-  const inspections = getInspections();
+const deleteInspection = (id: string, suffix: string) => {
+  const inspections = getInspections(suffix);
   const filtered = inspections.filter(i => i.id !== id);
-  saveInspections(filtered);
+  saveCuadernoInspections(filtered, suffix);
   return filtered;
 };
 
@@ -130,9 +133,11 @@ const validateInspection = (data: Partial<Inspection>) => {
 interface Props {
   hives: Hive[];
   cuadernoEntries?: CuadernoEntry[];
+  /** Sufijo de apiario (`_uid_apiaryId`): deja que el Cuaderno suba a Firestore. */
+  storageSuffix?: string;
 }
 
-export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) {
+export default function NotebookSection({ hives, cuadernoEntries = [], storageSuffix = "" }: Props) {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -150,10 +155,21 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
 
   // Cargar datos REALES al montar
   useEffect(() => {
-    const data = getInspections();
+    // Migración no destructiva: lo que este cuaderno guardaba antes en la
+    // clave 'inspections' SIN apiario (y que por tanto nunca subía a
+    // Firestore) se copia aquí, a la entidad propia con sufijo. La clave
+    // vieja queda intacta y se reutiliza por id para no duplicar nada.
+    const legacy = loadInspections();
+    if (legacy.length > 0) {
+      const actuales = loadCuadernoInspections(storageSuffix);
+      const ids = new Set(actuales.map(i => i.id));
+      const nuevas = legacy.filter(i => !ids.has(i.id));
+      if (nuevas.length > 0) saveCuadernoInspections([...actuales, ...nuevas], storageSuffix);
+    }
+    const data = getInspections(storageSuffix);
     setInspections(data);
     setLoading(false);
-  }, []);
+  }, [storageSuffix]);
 
   // Estadísticas REALES
   const stats = useMemo(() => {
@@ -267,18 +283,18 @@ export default function NotebookSection({ hives, cuadernoEntries = [] }: Props) 
       updatedAt: new Date().toISOString(),
     } as Inspection;
     
-    saveInspection(inspection);
+    saveInspection(inspection, storageSuffix);
     setInspections([inspection, ...inspections]);
   };
 
   const handleUpdate = (id: string, updates: Partial<Inspection>) => {
-    const updated = updateInspection(id, updates);
+    const updated = updateInspection(id, updates, storageSuffix);
     setInspections(updated);
   };
 
   const handleDelete = (id: string) => {
     if (!confirm('¿Eliminar esta inspección?')) return;
-    const updated = deleteInspection(id);
+    const updated = deleteInspection(id, storageSuffix);
     setInspections(updated);
   };
 

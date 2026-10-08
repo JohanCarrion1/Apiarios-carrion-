@@ -185,7 +185,7 @@ const InspectionPhotoUploader = forwardRef<
               animate={{ opacity: 1, scale: 1 }}
               className="group relative aspect-square overflow-hidden rounded-lg"
             >
-              <img src={getOptimizedImageUrl(url)} alt="Foto subida" className="h-full w-full object-cover" />
+              <img src={getOptimizedImageUrl(url)} alt="Foto subida" loading="lazy" decoding="async" className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => removeUploaded(url)}
@@ -211,7 +211,7 @@ const InspectionPhotoUploader = forwardRef<
               exit={{ opacity: 0, scale: 0.8 }}
               className="relative aspect-square overflow-hidden rounded-lg border-2 border-honey/60"
             >
-              <img src={p.previewUrl} alt="Vista previa" className="h-full w-full object-cover" />
+              <img src={p.previewUrl} alt="Vista previa" loading="lazy" decoding="async" className="h-full w-full object-cover" />
               <span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center font-mono text-[9px] uppercase tracking-wider text-honey">
                 Pendiente
               </span>

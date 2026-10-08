@@ -107,6 +107,8 @@ export default function ProductImageUploader({
           <img
             src={displayed}
             alt="Vista previa"
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover object-center"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';

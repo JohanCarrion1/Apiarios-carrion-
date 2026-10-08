@@ -60,6 +60,33 @@ export const PRODUCTS_QUOTA_EVENT = 'products-quota-warning';
 /** Clave legada del catálogo global del panel admin (migración one-shot). */
 const LEGACY_ADMIN_KEY = 'panal_v1_admin_products';
 
+/**
+ * Borra SOLO la caché del catálogo: clave principal, clave legada del admin y
+ * claves versionadas por usuario (con sus backups) — todo lo que contenga
+ * `_products`. Se vuelve a leer de Firestore al recargar.
+ *
+ * Antes el botón "Limpiar caché" hacía `localStorage.clear()`, que de paso
+ * borraba ajustes, notificaciones, datos de las colmenas y la sesión de admin.
+ */
+export const clearProductsCache = (): void => {
+  const doomed: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key === STORAGE_KEY || key === LEGACY_ADMIN_KEY || key.includes('_products'))) {
+      doomed.push(key);
+    }
+  }
+  for (const key of doomed) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* noop */
+    }
+  }
+  console.log(`🧹 [PRODUCTS] Caché del catálogo limpiada (${doomed.length} claves)`);
+  window.dispatchEvent(new CustomEvent(PRODUCTS_CHANGED_EVENT, { detail: { products: [] } }));
+};
+
 /** Los 22 productos iniciales con sus imágenes por defecto. */
 export const SEED_PRODUCTS: StoreProduct[] = STORE_SEED_PRODUCTS.map((p) => ({ ...p }));
 

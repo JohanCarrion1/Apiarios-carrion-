@@ -36,6 +36,7 @@ export default function StoreImage({ src, alt, emoji, className = '', imgClassNa
           src={optimized}
           alt={alt}
           loading="lazy"
+          decoding="async"
           onError={() => setFailed(true)}
           className={`h-full w-full object-cover object-center ${imgClassName}`}
         />

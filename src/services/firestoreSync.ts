@@ -31,6 +31,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseAvailable } from '../lib/firebase';
@@ -38,40 +39,34 @@ import {
   setSyncHandler,
   SYNC_ENTITIES,
   StoreSyncEvent,
+  setHydrationInProgress,
+  wasWrittenDuringHydration,
   loadApiaries,
   saveApiaries,
   loadHives,
-  saveHives,
   loadNuclei,
-  saveNuclei,
   loadInspections,
-  saveInspections,
   loadTasks,
-  saveTasks,
   loadHarvests,
-  saveHarvests,
   loadBreedingLots,
-  saveBreedingLots,
   loadQueens,
-  saveQueens,
   loadQueenHistory,
-  saveQueenHistory,
   loadFecundadores,
-  saveFecundadores,
   loadCuadernoEntries,
-  saveCuadernoEntries,
+  loadCuadernoInspections,
   loadEvents,
-  saveEvents,
   loadEventTemplates,
-  saveEventTemplates,
   loadRecurringTasks,
-  saveRecurringTasks,
   loadFloweringEntries,
-  saveFloweringEntries,
+  loadTreatments,
   loadInventory,
-  saveInventory,
+  loadNotifications,
+  loadSettings,
   loadData,
   saveData,
+  loadHydratedAt,
+  saveHydratedAt,
+  HYDRATION_TTL_MS,
 } from '../utils/storage';
 import { getAll as getLocalProducts, saveAll as saveLocalProducts } from '../lib/productsService';
 import { pullProductsFromFirestore, pushProductsToFirestore } from './productsSync';
@@ -94,15 +89,50 @@ const APIARY_ENTITIES = [
   'queenHistory',
   'fecundadores',
   'cuadernoEntries',
+  'cuadernoInspections',
   'events',
   'recurringTasks',
   'flowering',
   'eventTemplates',
+  'treatments',
 ] as const;
 
 type ApiaryEntity = (typeof APIARY_ENTITIES)[number];
 
+/** Campos de ARRAY en el documento userData/{uid} (se guardan tal cual). */
+const USER_ARRAY_ENTITIES = new Set(['inventory', 'transferHistory', 'notifications']);
+/** Campos OBJETO/ESCALAR en userData/{uid} (llegan envueltos en [valor]). */
+const USER_DOC_ENTITIES = new Set(['settings', 'harvestUnit', 'annualGoal', 'basePrice']);
+
 const suffixFor = (userId: string, apiaryId: string): string => `_${userId}_${apiaryId}`;
+
+// ------------------------------------------------------------
+// ÍNDICES DE FIRESTORE (por qué NO hay índices compuestos que crear)
+// ------------------------------------------------------------
+// Índices usados hoy (todos son de UN SOLO campo, que Firestore crea solo):
+//
+//   apiarios            where('userId', '==', uid)            → índice simple userId
+//   apiarioData/{id}    getDoc por id (aa_{apiaryId}_{entity}) → no usa índice
+//   userData/{uid}      getDoc por id                          → no usa índice
+//   users/{uid}         getDoc por id                          → no usa índice
+//   products            getDocs colección completa             → no usa índice
+//
+// El modelo guarda las entidades de cada apiario como un ARRAY dentro de un
+// único documento (`apiarioData/{apiaryId}_{entity}` → `items: [...]`), no como
+// colección con un documento por colmena. Por eso NO se puede consultar
+// `where('status','==','healthy').orderBy(...)` a nivel de colmena: no existe
+// una colección `hives` con esos campos, y crear un índice compuesto sobre
+// `apiarioData` no aporta nada porque la lectura es por id, no por consulta.
+//
+// Si en el futuro se migrara a una colección plana `hives/{hiveId}` (cambio de
+// ARQUITECTURA, fuera del alcance actual) para permitir paginación real con
+// `limit()`/`startAfter()`, entonces sí harían falta estos compuestos:
+//   hives    userId ASC, status ASC, lastInspection DESC
+//   hives    userId ASC, apiaryId ASC, updatedAt DESC
+//   nuclei   userId ASC, status ASC, updatedAt DESC
+//   fecundadores userId ASC, queenState ASC, updatedAt DESC
+// Mientras el modelo siga siendo el array-en-documento, la paginación es de
+// render (ver `ShowMoreButton`) y no requiere ningún índice nuevo.
 
 // Guardas de sesión (evita escribir con uid 'anonymous' o sin Firebase)
 const canSync = (userId?: string): boolean => {
@@ -115,45 +145,33 @@ const entityDoc = (apiaryId: string, entity: ApiaryEntity) =>
   doc(db!, APIARIO_DATA_COLLECTION, `${apiaryId}_${entity}`);
 
 // ------------------------------------------------------------
-// Escritura en caché local (cada entidad con su wrapper real)
+// Escritura en caché local (Firestore → local, SIN eco al servidor)
 // ------------------------------------------------------------
+/**
+ * Vuelca en la caché local lo que acaba de llegar de Firestore.
+ *
+ * Una sola `saveData` para las 16 entidades en lugar de un switch con su
+ * wrapper: `entityKey` acepta tanto el sufijo heredado (`_uid_apiaryId`) como
+ * el par `userId + apiaryId` —`buildEntityKey` dedupe el uid—, así que ambas
+ * formas resuelven la misma clave y un punto de entrada basta.
+ *
+ * `sync: false` es imprescindible y es la mitad del motivo de este helper.
+ * Esto es una LECTURA remota → local: notificarla reescribiría en Firestore el
+ * dato que acabamos de descargar. En el primer arranque de un dispositivo
+ * nuevo eso son 16 subidas pegadas a las 16 bajadas, duplicando el tráfico
+ * justo en la fase que más bandwidth necesita (móvil / 3G) y ensuciando la
+ * cola de reintentos con escrituras que no cambian nada.
+ *
+ * La migración local → servidor no se toca: la sigue haciendo `hydrateEntity`
+ * con `upsertApiaryEntity` cuando lo remoto está vacío y lo local tiene datos.
+ */
 const saveToLocal = (
   entity: ApiaryEntity,
   items: unknown[],
   userId: string,
   apiaryId?: string
 ): void => {
-  const suffix = apiaryId ? suffixFor(userId, apiaryId) : undefined;
-  switch (entity) {
-    case 'hives':
-      return void saveHives(items, suffix || '');
-    case 'nuclei':
-      return void saveNuclei(items, suffix || '');
-    case 'inspections':
-      return void saveInspections(items, suffix || '');
-    case 'tasks':
-      return void saveTasks(items, suffix || '');
-    case 'harvests':
-      return void saveHarvests(items, suffix || '');
-    case 'breeding':
-      return void saveBreedingLots(items, userId, apiaryId || '');
-    case 'queens':
-      return void saveQueens(items, userId, apiaryId || '');
-    case 'queenHistory':
-      return void saveQueenHistory(items, userId, apiaryId || '');
-    case 'fecundadores':
-      return void saveFecundadores(items, userId, apiaryId || '');
-    case 'cuadernoEntries':
-      return void saveCuadernoEntries(items, userId, apiaryId || '');
-    case 'events':
-      return void saveEvents(items, suffix || '');
-    case 'recurringTasks':
-      return void saveRecurringTasks(items, suffix || '');
-    case 'flowering':
-      return void saveFloweringEntries(items, suffix || '');
-    case 'eventTemplates':
-      return void saveEventTemplates(items, suffix || '');
-  }
+  void saveData(entity, items, { userId, apiaryId, sync: false });
 };
 
 const loadFromLocal = (
@@ -183,6 +201,8 @@ const loadFromLocal = (
       return loadFecundadores(userId, apiaryId);
     case 'cuadernoEntries':
       return loadCuadernoEntries(userId, apiaryId);
+    case 'cuadernoInspections':
+      return loadCuadernoInspections(suffix);
     case 'events':
       return loadEvents(suffix);
     case 'recurringTasks':
@@ -191,6 +211,8 @@ const loadFromLocal = (
       return loadFloweringEntries(suffix);
     case 'eventTemplates':
       return loadEventTemplates(suffix);
+    case 'treatments':
+      return loadTreatments(userId, apiaryId);
   }
 };
 
@@ -215,12 +237,17 @@ const upsertApiaryEntity = async (
 };
 
 const deleteApiaryEntities = async (apiaryId: string): Promise<void> => {
+  if (!db) return;
+  // Batch: las 16 entidades de un apiario se borran en UN commit en vez de 16
+  // viajes secuenciales. Reduce operaciones de escritura y cuesta de red.
+  const batch = writeBatch(db);
   for (const entity of APIARY_ENTITIES) {
-    try {
-      await deleteDoc(entityDoc(apiaryId, entity));
-    } catch {
-      /* ignore */
-    }
+    batch.delete(entityDoc(apiaryId, entity));
+  }
+  try {
+    await batch.commit();
+  } catch {
+    /* ignore */
   }
 };
 
@@ -272,25 +299,25 @@ export const updateColonyStatus = async (
   await updateDoc(ref, patch);
 };
 
-const upsertApiary = async (apiary: any): Promise<void> => {
-  if (!canSync(apiary?.userId)) return;
-  const { userId, ...fields } = apiary;
-  await setDoc(doc(db!, APIARIOS_COLLECTION, apiary.id), {
-    userId,
-    ...fields,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
-};
-
 /** Reconcilia la lista de apiarios del usuario con Firestore. */
 const reconcileUserApiaries = async (userId: string, list: any[]): Promise<void> => {
   if (!canSync(userId)) return;
   const items = Array.isArray(list) ? list : [];
-  // Upsert de los apiarios actuales
+  // Upsert de los apiarios actuales en UN batch (antes: un setDoc por apiario,
+  // en serie). `merge: true` no pisa campos extra de documentos existentes.
+  const batch = writeBatch(db!);
+  let pending = 0;
   for (const apiary of items) {
     if (!apiary || !apiary.id) continue;
-    await upsertApiary({ ...apiary, userId });
+    const { userId: _owner, ...fields } = apiary;
+    batch.set(
+      doc(db!, APIARIOS_COLLECTION, apiary.id),
+      { userId, ...fields, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+    pending += 1;
   }
+  if (pending > 0) await batch.commit();
   // Eliminar apiarios que ya no existen en la lista (y sus datos ligados)
   const snap = await getDocs(query(collection(db!, APIARIOS_COLLECTION), where('userId', '==', userId)));
   const existingIds = items.map((a) => a && a.id).filter(Boolean);
@@ -311,7 +338,7 @@ const reconcileUserApiaries = async (userId: string, list: any[]): Promise<void>
 
 const updateUserDataDoc = async (
   userId: string,
-  partial: { inventory?: unknown[]; transferHistory?: unknown[] }
+  partial: Record<string, unknown>
 ): Promise<void> => {
   if (!canSync(userId)) return;
   await setDoc(
@@ -337,12 +364,15 @@ export const handleSyncEvent = async (evt: StoreSyncEvent): Promise<void> => {
     return;
   }
 
-  if (entity === 'inventory' || entity === 'transferHistory') {
-    const partial =
-      entity === 'inventory'
-        ? { inventory: removed ? [] : (items as unknown[]) }
-        : { transferHistory: removed ? [] : (items as unknown[]) };
-    await updateUserDataDoc(userId, partial);
+  if (USER_ARRAY_ENTITIES.has(entity)) {
+    await updateUserDataDoc(userId, { [entity]: removed ? [] : items });
+    return;
+  }
+
+  // Campos objeto/escalar de userData: notifySync normaliza a array, así que
+  // el valor real viaja en items[0] (o llega vacío al borrar la clave).
+  if (USER_DOC_ENTITIES.has(entity)) {
+    await updateUserDataDoc(userId, { [entity]: removed ? null : (items[0] ?? null) });
     return;
   }
 
@@ -381,7 +411,14 @@ export const hydrateEntity = async (
   const snap = await getDoc(entityDoc(apiaryId, entity));
   const remote = snap.data();
   if (remote && Array.isArray(remote.items)) {
-    saveToLocal(entity, remote.items as unknown[], userId, apiaryId);
+    // Si la app escribió esta clave mientras nuestra petición estaba en vuelo,
+    // el valor local es del usuario y más nuevo que esta instantánea: no se
+    // pisa. La ventana existe desde que el gate dejó de bloquear el montaje
+    // con caché local; sin esta comprobación, un cambio hecho en los primeros
+    // segundos desaparecería en cuanto bajara lo remoto.
+    if (!wasWrittenDuringHydration(entity, { userId, apiaryId })) {
+      saveToLocal(entity, remote.items as unknown[], userId, apiaryId);
+    }
   } else {
     const local = loadFromLocal(entity, userId, apiaryId);
     if (Array.isArray(local) && local.length > 0) {
@@ -433,70 +470,251 @@ export const getEntityHydrationPromise = (
 /**
  * Hidrata un conjunto de entidades de un apiario, EN PARALELO.
  *
- * Antes era un `for` con `await`: 14 entidades x N apiarios salían como
- * 14N viajes de ida y vuelta en serie. Con 3 apiarios son 42 round-trips
+ * Antes era un `for` con `await`: 16 entidades x N apiarios salían como
+ * 15N viajes de ida y vuelta en serie. Con 3 apiarios son 45 round-trips
  * encadenados, y eso es justo el "Sincronizando datos…" que bloqueaba la app.
- * Ahora es una sola profundidad de red: 14N peticiones simultáneas.
+ * Ahora es una sola profundidad de red: 15N peticiones simultáneas.
  */
 const hydrateApiaryEntities = async (userId: string, apiaryId: string): Promise<void> => {
   await Promise.all(APIARY_ENTITIES.map((entity) => getEntityHydrationPromise(userId, apiaryId, entity)));
 };
 
-const hydrateUserData = async (userId: string): Promise<void> => {
-  if (!canSync(userId)) return;
+/**
+ * Aplica a la caché local los campos del documento userData/{uid} — ajustes,
+ * notificaciones, inventario, historial de transferencias y config de cosecha
+ * — y, si el servidor todavía no tiene un campo, sube el valor local
+ * (migración one-shot por campo).
+ *
+ * El vuelco remoto → local se hace con `sync: false`: es una lectura, no un
+ * cambio del usuario, y notificar de vuelta solo reescribiría en el servidor
+ * el valor que acabamos de leer de él.
+ */
+const hydrateUserFields = async (
+  userId: string,
+  data: Record<string, unknown> | undefined
+): Promise<void> => {
+  const push: Record<string, unknown> = {};
+  const remote = (key: string): unknown => data?.[key];
 
-  // --- catálogo de la tienda ---
-  // Va primero y sincrónico con el resto: es lo que estaba roto. El catálogo
-  // vivía solo en localStorage, así que lo que el admin subía en un navegador
-  // no llegaba a producción, que arrancaba con las semillas.
-  await hydrateProducts();
-
-  // --- apiarios ---
-  const remoteSnap = await getDocs(
-    query(collection(db!, APIARIOS_COLLECTION), where('userId', '==', userId))
-  );
-  const remoteApiaries = remoteSnap.docs
-    .map((d) => d.data() as any)
-    .filter((a) => a && a.id);
-  const localApiaries = loadApiaries(userId) as any[];
-  const remoteIds = new Set(remoteApiaries.map((a) => a.id));
-  const onlyLocal = localApiaries.filter((a) => a && a.id && !remoteIds.has(a.id));
-
-  if (remoteApiaries.length > 0) {
-    upsertApiariosLocal(remoteApiaries, userId);
-  } else if (onlyLocal.length > 0) {
-    // Migración: el usuario ya tenía apiarios en localStorage que aún no
-    // existen en Firestore → subirlos (no se pierde nada).
-    await reconcileUserApiaries(userId, onlyLocal);
-    console.log(`🛰️ [FIRESTORE] Migrados ${onlyLocal.length} apiarios del usuario ${userId}`);
+  const settings = remote('settings');
+  if (
+    settings &&
+    typeof settings === 'object' &&
+    !Array.isArray(settings) &&
+    Object.keys(settings as object).length > 0
+  ) {
+    saveData('settings', settings, { userId, sync: false });
+  } else {
+    const local = loadSettings();
+    if (local && Object.keys(local).length > 0) push.settings = local;
   }
 
-  // --- entidades por apiario (unión de remotos y locales) ---
-  const allApiaryIds = Array.from(
-    new Set([...remoteApiaries.map((a) => a.id), ...onlyLocal.map((a) => a.id)])
-  );
-  // En paralelo: cada apiario ya hidrata sus 14 entidades a la vez, y ahora
-  // además los apiarios no se esperan entre sí. Antes eran dos bucles `await`
-  // anidados, o sea 14 x N viajes en serie.
-  await Promise.all(allApiaryIds.map((apiaryId) => hydrateApiaryEntities(userId, apiaryId)));
-
-  // --- userData (inventory / transferHistory) ---
-  const userDoc = await getDoc(doc(db!, USER_DATA_COLLECTION, userId));
-  if (userDoc.exists()) {
-    const data = userDoc.data();
-    if (data && Array.isArray(data.inventory)) saveInventory(data.inventory, userId);
-    if (data && Array.isArray(data.transferHistory)) {
-      saveData('transferHistory', data.transferHistory, { userId });
-    }
+  const notifications = remote('notifications');
+  if (Array.isArray(notifications)) {
+    saveData('notifications', notifications, { userId, sync: false });
   } else {
-    const inv = loadInventory(userId);
-    const th = loadData('transferHistory', [] as unknown[], { userId }) as unknown[];
-    if (Array.isArray(inv) && inv.length) {
-      await updateUserDataDoc(userId, { inventory: inv });
+    const local = loadNotifications();
+    if (local.length > 0) push.notifications = local;
+  }
+
+  const inventory = remote('inventory');
+  if (Array.isArray(inventory)) {
+    saveData('inventory', inventory, { userId, sync: false });
+  } else {
+    const local = loadInventory(userId);
+    if (local.length > 0) push.inventory = local;
+  }
+
+  const transferHistory = remote('transferHistory');
+  if (Array.isArray(transferHistory)) {
+    saveData('transferHistory', transferHistory, { userId, sync: false });
+  } else {
+    const local = loadData('transferHistory', [] as unknown[], { userId });
+    if (local.length > 0) push.transferHistory = local;
+  }
+
+  const unit = remote('harvestUnit');
+  if (typeof unit === 'string' && unit.length > 0) {
+    saveData('harvestUnit', unit, { userId, sync: false });
+  } else {
+    const local = loadData<string | null>('harvestUnit', null, { userId });
+    if (local) push.harvestUnit = local;
+  }
+
+  const goal = remote('annualGoal');
+  if (typeof goal === 'number' && isFinite(goal)) {
+    saveData('annualGoal', goal, { userId, sync: false });
+  } else {
+    const local = loadData<number | null>('annualGoal', null, { userId });
+    if (typeof local === 'number' && isFinite(local)) push.annualGoal = local;
+  }
+
+  const price = remote('basePrice');
+  if (typeof price === 'number' && isFinite(price)) {
+    saveData('basePrice', price, { userId, sync: false });
+  } else {
+    const local = loadData<number | null>('basePrice', null, { userId });
+    if (typeof local === 'number' && isFinite(local)) push.basePrice = local;
+  }
+
+  if (Object.keys(push).length > 0) {
+    await updateUserDataDoc(userId, push);
+    console.log(`🛰️ [FIRESTORE] Campos de usuario migrados al servidor: ${Object.keys(push).join(', ')}`);
+  }
+};
+
+/**
+ * Paso 1 de la hidratación: documento `userData` → local (ajustes,
+ * notificaciones, inventario, transferencias, unidad de cosecha…) y, en el
+ * sentido inverso, los campos locales que el servidor aún no tiene.
+ *
+ * Está separado y memoizado de forma independiente porque es lo único que la
+ * app necesita ANTES de montar el dashboard: los efectos de montaje (que
+ * persisten notificaciones, inventario y ajustes) pueden correr mientras la
+ * hidratación sigue; si lo remoto se aplicara al final, esos efectos ya
+ * habrían subido antes su estado local viejo y pisarían los datos buenos del
+ * servidor. Aplicar lo remoto primero cierra esa carrera.
+ *
+ * El resto de la hidratación (apiarios y sus 16 entidades) NO depende de
+ * esto, así que sale en paralelo: una sola lectura aquí no puede ser la que
+ * retrase el arranque.
+ */
+const userFieldsPromises = new Map<string, Promise<void>>();
+
+const applyUserFields = (userId: string): Promise<void> => {
+  const cached = userFieldsPromises.get(userId);
+  if (cached) return cached;
+  const p = (async () => {
+    // PERF: es el único viaje que bloquea el dashboard en modo `progressive`.
+    const etiquetaPerf = `[PERF] userData (${userId})`;
+    console.time(etiquetaPerf);
+    try {
+      const snap = await getDoc(doc(db!, USER_DATA_COLLECTION, userId));
+      await hydrateUserFields(
+        userId,
+        snap.exists() ? (snap.data() as Record<string, unknown>) : undefined
+      );
+    } finally {
+      console.timeEnd(etiquetaPerf);
     }
-    if (Array.isArray(th) && th.length) {
-      await updateUserDataDoc(userId, { transferHistory: th });
-    }
+  })().catch((error) => {
+    // No se memoriza el fallo: si la red falló al arrancar, el siguiente
+    // intento (una nueva visita o `rehydrateUserData`) vuelve a pedirlo.
+    userFieldsPromises.delete(userId);
+    throw error;
+  });
+  userFieldsPromises.set(userId, p);
+  return p;
+};
+
+/**
+ * Promesa solo de los campos de usuario, para la puerta de datos.
+ *
+ * Con caché local de apiarios + este paso resuelto, el dashboard puede
+ * montar ya: lo que queda (apiarios y entidades) sigue bajando por detrás y
+ * `onFirestoreHydrated` refresca el estado en memoria cuando termina. Es la
+ * diferencia entre esperar 1 viaje y esperar 1 + 16 x N.
+ */
+export const getUserFieldsPromise = (userId: string): Promise<void> => {
+  if (!canSync(userId)) return Promise.resolve();
+  return applyUserFields(userId).catch(() => undefined);
+};
+
+/**
+ * ¿Hay caché local "de verdad" (al menos un apiario con colmenas)?
+ *
+ * Es la condición para que el TTL tenga sentido: saltarse Firestore solo es
+ * seguro si en local hay datos completos de una hidratación previa. Sin
+ * colmenas, se hidrata siempre (dispositivo nuevo, o el usuario aún no ha
+ * creado nada).
+ */
+const hasLocalData = (userId: string): boolean => {
+  const apiaries = (loadApiaries(userId) as any[]).filter((a) => a && a.id);
+  if (apiaries.length === 0) return false;
+  return apiaries.some(
+    (a) => (loadData('hives', [] as any[], { userId, apiaryId: String(a.id) }) as any[]).length > 0
+  );
+};
+
+const hydrateUserData = async (userId: string, opts: { force?: boolean } = {}): Promise<void> => {
+  if (!canSync(userId)) return;
+
+  // TTL (ver HYDRATION_TTL_MS): caché local fresca → no se toca la red. Es la
+  // optimización de consultas del arranque: en recargas seguidas dentro de la
+  // ventana de 5 min, cero getDocs. `rehydrateUserData` fuerza con `force`.
+  if (!opts.force && hasLocalData(userId) && Date.now() - loadHydratedAt(userId) < HYDRATION_TTL_MS) {
+    console.log('[FIRESTORE] Hidratación omitida: caché local fresca (<5 min)');
+    return;
+  }
+
+  // PERF: medición del arranque de datos. `console.timeEnd` imprime en consola
+  // cuánto tarda la hidratación completa (oleadas incluidas) para poder
+  // comparar antes/después y detectar regresiones en móvil/3G.
+  const etiquetaPerf = `[PERF] Hidratación de datos (${userId})`;
+  console.time(etiquetaPerf);
+  // Marca la caché como "aún no fiable": mientras dure, `writeToKey` no deja
+  // que un arranque con caché parcial vacíe claves que Firestore todavía no ha
+  // entregado. Se pone ANTES del primer `await` para que el valor esté puesto
+  // de forma síncrona, en la misma tarea que llama a `getHydrationPromise`.
+  setHydrationInProgress(true);
+  try {
+    const localApiaries = (loadApiaries(userId) as any[]).filter((a) => a && a.id);
+    const localIds = Array.from(new Set(localApiaries.map((a) => String(a.id))));
+
+    // --- oleada 1: todo lo que no depende de nada más, a la vez ---
+    //
+    // Antes eran TRES round-trips en serie antes de poder leer una sola
+    // entidad: (1) documento userData + catálogo, (2) campos de usuario,
+    // (3) consulta de apiarios — y solo después (4) las 16 entidades por
+    // apiario. En 3G eso son 3-4 s de pantalla de espera contados al inicio
+    // del arranque, que es exactamente lo que se veía como "carga lenta".
+    //
+    // Ahora los cuatro pasos salen juntos. El matiz importante: los apiarios
+    // que YA están en local arrancan sus entidades sin esperar a la lista
+    // remota. Son los mismos ids que va a devolver la consulta y
+    // `entityPromises` memoiza por (usuario, apiario, entidad), así que la
+    // pasada final no repite ni una petición.
+    const [, , remoteSnap] = await Promise.all([
+      // Ya captura sus propios errores: si el documento de usuario no llega,
+      // el resto de la hidratación debe seguir igual (la caché local sirve).
+      getUserFieldsPromise(userId),
+      // El catálogo es secundario para el arranque: un fallo suyo no debe
+      // costarle a la app los apiarios y las entidades.
+      hydrateProducts().catch(() => undefined),
+      getDocs(query(collection(db!, APIARIOS_COLLECTION), where('userId', '==', userId))),
+      Promise.all(localIds.map((apiaryId) => hydrateApiaryEntities(userId, apiaryId))),
+    ]);
+
+    const remoteApiaries = remoteSnap.docs
+      .map((d) => d.data() as any)
+      .filter((a) => a && a.id);
+    const remoteIds = new Set(remoteApiaries.map((a: any) => a.id));
+    const onlyLocal = localApiaries.filter((a: any) => !remoteIds.has(a.id));
+    // Apiarios que solo están en el servidor (p. ej. creados en otro equipo):
+    // sus entidades no se pudieron pedir en la oleada 1.
+    const newIds = remoteApiaries
+      .map((a: any) => String(a.id))
+      .filter((id) => !localIds.includes(id));
+
+    // --- oleada 2: lo único que sí depende de la oleada 1, también en paralelo ---
+    await Promise.all([
+      remoteApiaries.length > 0
+        ? Promise.resolve(upsertApiariosLocal(remoteApiaries, userId))
+        : onlyLocal.length > 0
+          ? // Migración: el usuario ya tenía apiarios en localStorage que aún no
+            // existen en Firestore → subirlos (no se pierde nada).
+            reconcileUserApiaries(userId, onlyLocal).then(() => {
+              console.log(`🛰️ [FIRESTORE] Migrados ${onlyLocal.length} apiarios del usuario ${userId}`);
+            })
+          : Promise.resolve(),
+      Promise.all(newIds.map((apiaryId) => hydrateApiaryEntities(userId, apiaryId))),
+    ]);
+
+    // Hidratación completa → marca de frescura para el TTL.
+    saveHydratedAt(userId);
+  } finally {
+    setHydrationInProgress(false);
+    console.timeEnd(etiquetaPerf);
   }
 };
 
@@ -576,9 +794,12 @@ const notifyHydrated = (userId: string): void => {
   });
 };
 
-export const getHydrationPromise = (userId: string): Promise<void> => {
+export const getHydrationPromise = (userId: string, force = false): Promise<void> => {
+  // `force` (rehidratación manual) descarta tanto la promesa cacheada como el
+  // TTL: se vuelve a leer Firestore aunque la caché local sea reciente.
+  if (force) hydrationPromises.delete(userId);
   if (!hydrationPromises.has(userId)) {
-    const p = hydrateUserData(userId)
+    const p = hydrateUserData(userId, { force })
       .catch((error) => {
         console.warn('[FIRESTORE] Hidratación incompleta (se usa caché local):', error);
       })
@@ -587,7 +808,7 @@ export const getHydrationPromise = (userId: string): Promise<void> => {
       });
     // La promesa se queda cacheada durante toda la sesión. Antes se borraba a
     // los 60 s, lo que hacía que volver a una sección rehidratara TODO el
-    // usuario (14 entidades x todos sus apiarios) aunque la caché local ya
+    // usuario (16 entidades x todos sus apiarios) aunque la caché local ya
     // estuviera al día. Para forzar la relectura está `rehydrateUserData`.
     hydrationPromises.set(userId, p);
   }
@@ -596,13 +817,14 @@ export const getHydrationPromise = (userId: string): Promise<void> => {
 
 export const rehydrateUserData = (userId: string): void => {
   hydrationPromises.delete(userId);
+  userFieldsPromises.delete(userId);
   // También cae la caché por entidad de ese usuario, o el re-hidratado no
   // volvería a pedir los documentos que ya están memorizados.
   const prefijo = `${userId}|`;
   for (const key of Array.from(entityPromises.keys())) {
     if (key.startsWith(prefijo)) entityPromises.delete(key);
   }
-  void getHydrationPromise(userId);
+  void getHydrationPromise(userId, true);
 };
 
 // ------------------------------------------------------------
@@ -693,14 +915,71 @@ export const fetchAllColoniesSummary = async (): Promise<AdminUserSummary[]> => 
 };
 
 // ------------------------------------------------------------
-// Registro del puente de sincronización
+// Registro del puente de sincronización + reintentos
 // ------------------------------------------------------------
 let registered = false;
+
+// Cola de reintentos: si una escritura se rechaza (un corte de red de un
+// instante, cuota temporal…), se vuelve a intentar con backoff exponencial
+// en vez de perder el evento. Solo se encola UN evento por (entidad, usuario,
+// apiario): al llegar otro del mismo tipo lo sustituye, porque el array que
+// lleva ya es el estado completo más reciente, no un delta. Con la caché
+// persistente de Firestore activa, las escrituras que llegan a quedar en
+// vuelo sobreviven a una recarga; esto cubre las que se llegaron a rechazar.
+const retryQueue = new Map<string, { evt: StoreSyncEvent; attempt: number }>();
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const MAX_RETRIES = 4;
+
+const retryKey = (evt: StoreSyncEvent): string => `${evt.entity}|${evt.userId}|${evt.apiaryId || ''}`;
+
+const attemptSync = async (evt: StoreSyncEvent, attempt: number): Promise<void> => {
+  try {
+    await handleSyncEvent(evt);
+    retryQueue.delete(retryKey(evt));
+  } catch (error) {
+    if (attempt >= MAX_RETRIES) {
+      retryQueue.delete(retryKey(evt));
+      console.error(
+        `[FIRESTORE] Sin reintentos pendientes: "${evt.entity}" no llega al servidor (se agotaron ${MAX_RETRIES}).`,
+        error
+      );
+      return;
+    }
+    const delay = Math.min(30_000, 1_000 * 2 ** attempt);
+    retryQueue.set(retryKey(evt), { evt, attempt: attempt + 1 });
+    if (!retryTimer) {
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void flushRetries();
+      }, delay);
+    }
+    console.warn(
+      `[FIRESTORE] Falló "${evt.entity}" (intento ${attempt + 1}/${MAX_RETRIES + 1}); se reintenta en ${delay} ms`,
+      error
+    );
+  }
+};
+
+const flushRetries = async (): Promise<void> => {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  for (const { evt, attempt } of Array.from(retryQueue.values())) {
+    retryQueue.delete(retryKey(evt));
+    await attemptSync(evt, attempt);
+  }
+};
 
 export const enableFirestoreSync = (): void => {
   if (registered) return;
   registered = true;
-  setSyncHandler((evt) => handleSyncEvent(evt));
+  setSyncHandler((evt) => attemptSync(evt, 0));
+  if (typeof window !== 'undefined') {
+    // Vuelve a vaciar la cola en cuanto hay red: los timers de backoff pueden
+    // haberse disparado con el navegador todavía desconectado.
+    window.addEventListener('online', () => void flushRetries());
+  }
 };
 
 // Inicialización por defecto (módulo importado → handler disponible).

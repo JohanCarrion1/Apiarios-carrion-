@@ -16,8 +16,10 @@ import { IconPlus, IconTrash, IconQueen } from '../ui';
 import type { PhotoData } from '../services/photos';
 import FecundadorForm, { type FecundadorFormData } from './FecundadorForm';
 import FecundadorDetail from './FecundadorDetail';
+import ShowMoreButton from './ShowMoreButton';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { useClosingPanel } from '../hooks/useClosingPanel';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { backdropVariants, modalVariants } from '../lib/motion';
 
 interface FecundadoresSectionProps {
@@ -111,10 +113,14 @@ export default function FecundadoresSection({
   );
   const enPuestaCount = active.filter(f => f.queenState === 'en_puesta').length;
 
+  // El texto del buscador se difiere 200 ms (input inmediato, filtrado
+  // diferido) para no recalcular ni reiniciar la página en cada tecla.
+  const debouncedSearch = useDebouncedValue(searchQuery, 200);
+
   // Búsqueda "Buscar fecundador..." (filtra por código, nombre, ubicación o estado)
   const searchFiltered = useMemo(() => {
-    if (!searchQuery.trim()) return active;
-    const q = searchQuery.toLowerCase();
+    if (!debouncedSearch.trim()) return active;
+    const q = debouncedSearch.toLowerCase();
     return active.filter(
       f =>
         f.code.toLowerCase().includes(q) ||
@@ -122,7 +128,7 @@ export default function FecundadoresSection({
         (f.location && f.location.toLowerCase().includes(q)) ||
         FECUNDADOR_STATE_LABELS[f.queenState].toLowerCase().includes(q),
     );
-  }, [active, searchQuery]);
+  }, [active, debouncedSearch]);
 
   const visibleFecundadores = useMemo(
     () => (filter === 'todas' ? searchFiltered : searchFiltered.filter(f => f.queenState === filter)),
@@ -143,18 +149,32 @@ export default function FecundadoresSection({
 
   const nextNucleoCode = getNextNucleoCode(nuclei);
 
+  // Paginación de render: igual que en el panal de colmenas/núcleos, solo se
+  // montan las primeras `visibleCount` celdas. `visibleFecundadores` (lista
+  // completa filtrada) sigue contando para los chips y el encabezado. Se
+  // reinicia al primer bloque cuando cambia búsqueda, filtro o lista.
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [visibleFecundadores]);
+  const shownFecundadores = useMemo(
+    () => (visibleCount >= visibleFecundadores.length ? visibleFecundadores : visibleFecundadores.slice(0, visibleCount)),
+    [visibleFecundadores, visibleCount]
+  );
+
   // Agrupar fecundadores en filas alternadas: impares `even`, pares `odd` (izquierda a derecha)
   const rows = useMemo(() => {
     const { even, odd } = cols;
     const out: Fecundador[][] = [];
     let i = 0;
-    while (i < visibleFecundadores.length) {
+    while (i < shownFecundadores.length) {
       const n = out.length % 2 === 0 ? even : odd;
-      out.push(visibleFecundadores.slice(i, i + n));
+      out.push(shownFecundadores.slice(i, i + n));
       i += n;
     }
     return out;
-  }, [visibleFecundadores, cols]);
+  }, [shownFecundadores, cols]);
 
   const renderHex = (f: Fecundador) => {
     const stateColor = FECUNDADOR_STATE_COLORS[f.queenState];
@@ -436,6 +456,11 @@ export default function FecundadoresSection({
                 </div>
               ))}
             </div>
+            <ShowMoreButton
+              shown={shownFecundadores.length}
+              total={visibleFecundadores.length}
+              onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            />
             <p className="relative mt-3 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-husk">
               Toca un hexágono para ver el detalle del baby nuc
             </p>

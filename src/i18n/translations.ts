@@ -44,6 +44,8 @@ export const translations = {
     'message.deleted': 'Eliminado correctamente',
     'message.error': 'Error al guardar',
     'message.confirmDelete': '¿Estás seguro de que deseas eliminar?',
+    'push.denied': 'El navegador bloqueó las notificaciones. Actívalas en la configuración del sitio para recibir avisos push.',
+    'push.unsupported': 'Este navegador no soporta notificaciones push. Puedes seguir usando los avisos visuales de la app.',
     
     // Clima
     'weather.temperature': 'Temperatura',
@@ -208,6 +210,8 @@ export const translations = {
     'message.deleted': 'Deleted successfully',
     'message.error': 'Error saving',
     'message.confirmDelete': 'Are you sure you want to delete?',
+    'push.denied': 'Notifications are blocked. Enable them in the site settings to receive push alerts.',
+    'push.unsupported': 'This browser does not support push notifications. You can keep using the app’s visual alerts.',
     
     // Weather
     'weather.temperature': 'Temperature',

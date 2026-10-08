@@ -10,6 +10,7 @@ import {
 } from "../types/hive";
 import { IconAlert, IconCrown } from '../ui';
 import ShowMoreButton from './ShowMoreButton';
+import AnimatedTabs from './AnimatedTabs';
 
 interface Props {
   hives: Hive[];
@@ -249,42 +250,39 @@ export default function HiveComb({
 
   return (
     <div>
-      {/* Filtros tipo pill */}
-      <motion.div 
-        className="mb-6 flex flex-wrap items-center gap-1.5"
+      {/* Filtros tipo pill — indicador deslizante (misma animación que Tienda) */}
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
       >
-        {chips.map((c) => {
-          const active = filter === c.key;
-          return (
-            <motion.button
-              key={c.key}
-              onClick={() => onFilter(c.key)}
-              className={`flex w-auto items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 font-mono text-xs font-bold uppercase tracking-wide transition-all duration-200 ${
-                active
-                  ? "border-honey bg-honey text-ink shadow-[0_0_20px_rgba(240,164,28,.4)]"
-                  : "border-line bg-pane text-husk hover:border-honey/60 hover:text-cream"
-              }`}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {c.color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />}
-              {c.label}
-              <span 
-                className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${active ? "bg-ink/20 text-ink" : ""}`}
-                style={!active && c.color ? { 
-                  background: `${c.color}20`,
-                  color: c.color,
-                  border: `1px solid ${c.color}40`
-                } : {}}
-              >
-                {c.n}
-              </span>
-            </motion.button>
-          );
-        })}
+        <AnimatedTabs
+          className="mb-6 flex flex-wrap items-center gap-1.5"
+          ariaLabel="Filtrar por estado"
+          items={chips}
+          value={filter}
+          onChange={onFilter}
+          hoverScale={1.03}
+          renderTab={(item, active) => {
+            const c = chips.find((x) => x.key === item.key)!;
+            return (
+              <>
+                {c.color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />}
+                {c.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${active ? 'bg-ink/20 text-ink' : ''}`}
+                  style={!active && c.color ? {
+                    background: `${c.color}20`,
+                    color: c.color,
+                    border: `1px solid ${c.color}40`,
+                  } : {}}
+                >
+                  {c.n}
+                </span>
+              </>
+            );
+          }}
+        />
       </motion.div>
 
       {/* Mapa hexagonal compacto (panal: 6/5 móvil, 9/8 tablet y escritorio,

@@ -6,7 +6,7 @@ import { uid } from '../data';
 import { getNextNucleoCode } from '../services/transfers';
 import { ENTITY_BORDER_COLORS, type Hive } from '../types/hive';
 import type { BreedingLot } from '../types/breeding';
-import type { Fecundador, FecundadorQueenState } from '../types/fecundador';
+import type { Fecundador, FecundadorQueenState, FecundadorHistorialEntry } from '../types/fecundador';
 import {
   FECUNDADOR_STATE_LABELS,
   FECUNDADOR_STATE_COLORS,
@@ -16,7 +16,11 @@ import { IconPlus, IconTrash, IconQueen } from '../ui';
 import type { PhotoData } from '../services/photos';
 import FecundadorForm, { type FecundadorFormData } from './FecundadorForm';
 import FecundadorDetail from './FecundadorDetail';
+import FecundadorInspectionModal, {
+  type FecundadorInspectionDraft,
+} from './FecundadorInspectionModal';
 import ShowMoreButton from './ShowMoreButton';
+import AnimatedTabs from './AnimatedTabs';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { useClosingPanel } from '../hooks/useClosingPanel';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -64,6 +68,8 @@ export default function FecundadoresSection({
   const [searchQuery, setSearchQuery] = useState('');
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  // Id del fecundador cuya inspección se está registrando (abre el modal).
+  const [inspectingId, setInspectingId] = useState<string | null>(null);
 
   // Panel de detalle con NODO ÚNICO: estado closing + clearTimeout al reabrir
   const { closingId, beginClose, cancelClosing } = useClosingPanel();
@@ -290,15 +296,58 @@ export default function FecundadoresSection({
   const handleRegisterInspection = (id: string) => {
     const fec = fecundadores.find(f => f.id === id);
     if (!fec) return;
+    setInspectingId(fec.id);
+  };
+
+  // Guarda la inspección DEL FORMULARIO (no se guarda nada hasta que el usuario
+  // pulsa "Guardar inspección"). Añade la entrada al historial del baby nuc,
+  // actualiza el estado de la reina si cambió y, si se marcó, abre la
+  // confirmación de promoción a núcleo.
+  const handleSaveInspection = (draft: FecundadorInspectionDraft) => {
+    const fec = fecundadores.find(f => f.id === inspectingId);
+    if (!fec) return;
+
     const now = new Date().toISOString();
+    const stateChanged = draft.queenState !== fec.queenState;
+
+    const entries: FecundadorHistorialEntry[] = [
+      {
+        id: uid(),
+        fecha: draft.fecha,
+        tipo: 'inspeccion',
+        descripcion: draft.observaciones || 'Revisión del baby nuc (manejo)',
+        photos: draft.photos,
+      },
+    ];
+    if (stateChanged) {
+      entries.push({ id: uid(), fecha: now, tipo: draft.queenState });
+    }
+
     const updated: Fecundador = {
       ...fec,
+      queenState: draft.queenState,
+      fechaNacimiento: stateChanged && draft.queenState === 'virgen' ? draft.fecha.slice(0, 10) : fec.fechaNacimiento,
+      fechaFecundacion: stateChanged && draft.queenState === 'fecundada' ? draft.fecha.slice(0, 10) : fec.fechaFecundacion,
+      fechaPuesta: stateChanged && draft.queenState === 'en_puesta' ? draft.fecha.slice(0, 10) : fec.fechaPuesta,
+      proximaRevision: draft.proximaRevision || undefined,
+      historial: [...fec.historial, ...entries],
       updatedAt: now,
-      historial: [...fec.historial, { id: uid(), fecha: now, tipo: 'inspeccion', descripcion: 'Revisión del baby nuc (manejo)' }],
     };
+
     onUpdate(updated);
-    onAddCuadernoEntry?.(`Inspección registrada en fecundador ${fec.code}`);
-    onShowToast?.('Inspección registrada', `${fec.code} · REV. hoy`);
+    onAddCuadernoEntry?.(
+      `Inspección registrada en fecundador ${fec.code}${stateChanged ? ` · reina en ${FECUNDADOR_STATE_LABELS[draft.queenState]}` : ''}${draft.proximaRevision ? ` · próxima revisión ${draft.proximaRevision}` : ''}`
+    );
+    setInspectingId(null);
+
+    // Toast DESPUÉS de guardar.
+    onShowToast?.('Inspección registrada', `${fec.code} · ${FECUNDADOR_STATE_LABELS[draft.queenState]}`);
+
+    // Si se pidió promover (reina en puesta + activo), abrir la confirmación
+    // existente para crear el núcleo.
+    if (draft.promover && draft.queenState === 'en_puesta' && fec.estado === 'activo') {
+      setPromoteId(fec.id);
+    }
   };
 
   const handleDelete = () => {
@@ -387,43 +436,47 @@ export default function FecundadoresSection({
             )}
           </motion.div>
 
-          {/* Chips de filtro por estado de reina */}
+          {/* Chips de filtro por estado de reina — indicador deslizante (misma animación que Tienda) */}
           <motion.div
-            className="flex flex-wrap items-center gap-1.5"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15 }}
           >
-            <button
-              onClick={() => setFilter('todas')}
-              className={`flex w-auto items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 font-mono text-xs font-bold uppercase tracking-wide transition-all duration-200 ${
-                filter === 'todas' ? 'border-honey bg-honey text-ink' : 'border-line bg-pane text-husk hover:border-honey/60 hover:text-cream'
-              }`}
-            >
-              Todas<span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none bg-ink/15">{active.length}</span>
-            </button>
-            {FECUNDADOR_STATE_ORDER.map(s => {
-              const n = active.filter(f => f.queenState === s).length;
-              const color = FECUNDADOR_STATE_COLORS[s];
-              return (
-                <button
-                  key={s}
-                  onClick={() => setFilter(filter === s ? 'todas' : s)}
-                  className={`flex w-auto items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 font-mono text-xs font-bold uppercase tracking-wide transition-all duration-200 ${
-                    filter === s ? 'border-honey bg-honey text-ink' : 'border-line bg-pane text-husk hover:border-honey/60 hover:text-cream'
-                  }`}
-                >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-                  {FECUNDADOR_STATE_LABELS[s]}
-                  <span
-                    className="rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none"
-                    style={filter === s ? { background: 'rgba(0,0,0,.2)' } : { backgroundColor: color + '20', color }}
-                  >
-                    {n}
-                  </span>
-                </button>
-              );
-            })}
+            <AnimatedTabs
+              className="flex flex-wrap items-center gap-1.5"
+              ariaLabel="Filtrar por estado de reina"
+              items={[
+                { key: 'todas' as StateFilter, label: 'Todas' },
+                ...FECUNDADOR_STATE_ORDER.map((s) => ({ key: s as StateFilter, label: FECUNDADOR_STATE_LABELS[s] })),
+              ]}
+              value={filter}
+              onChange={(key) => setFilter((prev) => (prev === key && key !== 'todas' ? 'todas' : key))}
+              renderTab={(item, isActive) => {
+                if (item.key === 'todas') {
+                  return (
+                    <>
+                      Todas
+                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none bg-ink/15">{active.length}</span>
+                    </>
+                  );
+                }
+                const s = item.key;
+                const n = active.filter((f) => f.queenState === s).length;
+                const color = FECUNDADOR_STATE_COLORS[s];
+                return (
+                  <>
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+                    {FECUNDADOR_STATE_LABELS[s]}
+                    <span
+                      className="rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none"
+                      style={isActive ? { background: 'rgba(0,0,0,.2)' } : { backgroundColor: color + '20', color }}
+                    >
+                      {n}
+                    </span>
+                  </>
+                );
+              }}
+            />
           </motion.div>
 
           {/* Mapa hexagonal compacto (baby nucs · hexágonos al 70%) */}
@@ -552,6 +605,15 @@ export default function FecundadoresSection({
           />
         )}
       </div>
+
+      {/* Modal de inspección del baby nuc: se abre con "+ Registrar inspección" */}
+      <FecundadorInspectionModal
+        open={inspectingId !== null}
+        fecundador={inspectingId ? fecundadores.find((f) => f.id === inspectingId) ?? null : null}
+        nextNucleoCode={nextNucleoCode}
+        onClose={() => setInspectingId(null)}
+        onSubmit={handleSaveInspection}
+      />
 
       {/* Confirmar promoción */}
       <AnimatePresence>

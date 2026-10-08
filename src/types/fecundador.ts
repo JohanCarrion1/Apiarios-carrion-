@@ -18,6 +18,8 @@ export interface FecundadorHistorialEntry {
   fecha: string; // ISO
   tipo: FecundadorHistorialTipo;
   descripcion?: string;
+  /** URLs de Cloudinary de las fotos tomadas durante la inspección. */
+  photos?: string[];
 }
 
 export interface FecundadorPromotion {
@@ -40,6 +42,8 @@ export interface Fecundador {
   notes?: string;
   estado: FecundadorEstado; // 'activo' o 'promovido' (promovido a núcleo)
   promotion?: FecundadorPromotion;
+  /** Próxima revisión programada (yyyy-MM-dd) definida en la última inspección. */
+  proximaRevision?: string;
   fotos?: PhotoData[];
   photos?: string[]; // URLs de Firebase Storage
   historial: FecundadorHistorialEntry[];

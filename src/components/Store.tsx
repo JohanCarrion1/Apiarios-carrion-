@@ -13,6 +13,7 @@ import {
   tOut,
 } from '../lib/motion';
 import { useScrollLock } from '../hooks/useScrollLock';
+import AnimatedTabs from './AnimatedTabs';
 import { useScrollToTopOnMount } from '../hooks/useScrollToTopOnMount';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import StoreImage from './StoreImage';
@@ -1773,40 +1774,45 @@ href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WA_MENSAJE_CON
 
         {/* Botones de macro-categorías + buscador + sub-chips */}
         <div className="mb-6 space-y-3">
-          {/* 3 chips de macro-categoría (Título → Subtítulo → Chips → Buscador → Sub-chips) */}
-          <div className="flex flex-row items-center justify-start gap-2 overflow-x-auto scrollbar-hide">
-            {macroCounts.map((m) => {
-              const active = macro === m.nombre;
+          {/* 3 chips de macro-categoría (Título → Subtítulo → Chips → Buscador → Sub-chips).
+              Indicador deslizante: mismo componente que los filtros del Dashboard. */}
+          <AnimatedTabs
+            className="flex flex-row items-center justify-start gap-2 overflow-x-auto scrollbar-hide"
+            ariaLabel="Categorías de la tienda"
+            items={macroCounts.map((m) => ({ key: m.nombre, label: m.nombre }))}
+            value={macro}
+            onChange={(nombre) => {
+              if (nombre === macro) {
+                setMacro(null);
+                setSub('Todas');
+              } else {
+                setMacro(nombre);
+                setSub('Todas');
+              }
+            }}
+            contentClassName="relative z-10 flex shrink-0 items-center min-h-[32px]"
+            buttonClassName={(active) =>
+              `relative flex shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? 'border-transparent text-gray-900'
+                  : 'border-amber-500/30 bg-[#241C12]/80 text-cream hover:border-amber-500/60'
+              }`
+            }
+            pillClassName="border border-[#F5A623] bg-[#F5A623]"
+            renderTab={(item, isActive) => {
+              const m = macroCounts.find((x) => x.nombre === item.key)!;
               return (
-                <button
-                  key={m.nombre}
-                  onClick={() => {
-                    if (active) {
-                      setMacro(null);
-                      setSub('Todas');
-                    } else {
-                      setMacro(m.nombre);
-                      setSub('Todas');
-                    }
-                  }}
-                  aria-pressed={active}
-                  style={{ minHeight: 32 }}
-                  className={`flex shrink-0 items-center whitespace-nowrap rounded-full border border-amber-500/30 px-3 py-1.5 text-xs font-medium transition-colors ${
-                    active
-                      ? 'border-[#F5A623] bg-[#F5A623] text-gray-900'
-                      : 'bg-[#241C12]/80 text-cream hover:border-amber-500/60'
-                  }`}
-                >
+                <>
                   <span className="mr-1 shrink-0 text-sm">{m.emoji}</span>
                   <span className="shrink-0">{m.nombre}</span>
-                  <span className={`ml-1 shrink-0 text-[10px] ${active ? 'text-gray-900/80' : 'text-husk'}`}>
+                  <span className={`ml-1 shrink-0 text-[10px] ${isActive ? 'text-gray-900/80' : 'text-husk'}`}>
                     {m.count}
                   </span>
-                  {active && <span className="ml-1 shrink-0 text-[10px] font-black">✓</span>}
-                </button>
+                  {isActive && <span className="ml-1 shrink-0 text-[10px] font-black">✓</span>}
+                </>
               );
-            })}
-          </div>
+            }}
+          />
 
           <div className="relative">
             <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-husk" fill="none" stroke="currentColor" viewBox="0 0 24 24">

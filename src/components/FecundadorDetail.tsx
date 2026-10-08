@@ -162,6 +162,11 @@ export default function FecundadorDetail({
             <span className="font-mono text-[10px] uppercase tracking-wider text-husk">
               REV. {daysAgo(fecundador.updatedAt).toUpperCase()}
             </span>
+            {fecundador.proximaRevision && (
+              <span className="font-mono text-[10px] uppercase tracking-wider text-honey/90">
+                PRÓX. REV. {formatDay(fecundador.proximaRevision)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -367,6 +372,7 @@ export default function FecundadorDetail({
                 id: h.id,
                 date: h.fecha,
                 note: h.descripcion?.trim() || '',
+                photos: h.photos || [],
               }))}
             loosePhotos={fecundador.fotos || []}
             onDeleteLoosePhoto={(photoId) =>

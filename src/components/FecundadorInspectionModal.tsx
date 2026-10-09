@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useScrollLock } from '../hooks/useScrollLock';
-import { backdropVariants, modalVariants } from '../lib/motion';
+import { backdropVariants, modalVariants, DUR_OUT } from '../lib/motion';
 import type { Fecundador, FecundadorQueenState } from '../types/fecundador';
 import {
   FECUNDADOR_STATE_LABELS,
@@ -36,6 +36,9 @@ interface FecundadorInspectionModalProps {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** Tiempo de mantenimiento del contenido tras cerrar = duración del exit + margen. */
+const EXIT_MS = Math.ceil(DUR_OUT * 1000) + 60;
+
 export default function FecundadorInspectionModal({
   open,
   fecundador,
@@ -52,6 +55,42 @@ export default function FecundadorInspectionModal({
   const [photosUploading, setPhotosUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const photoUploaderRef = useRef<InspectionPhotoUploaderHandle>(null);
+
+  // ¿Contenido montado? El cierre se anima dentro de React y el contenido se
+  // desmonta SIEMPRE tras EXIT_MS. No se depende de que AnimatePresence
+  // complete el `exit`: si el tween de framer no llega a terminar (tab en
+  // segundo plano, rAF interrumpido, reduced-motion…), el overlay `fixed` con
+  // `touch-none` se quedaría montado a pantalla completa bloqueando el scroll
+  // del móvil — el bug reportado en el modal de inspección de baby nucs.
+  const [showContent, setShowContent] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const lastFecRef = useRef(fecundador);
+  const hadContentRef = useRef(false);
+  if (open && fecundador) lastFecRef.current = fecundador;
+
+  useEffect(() => {
+    if (fecundador) lastFecRef.current = fecundador;
+    if (open) {
+      hadContentRef.current = true;
+      setClosing(false);
+      setShowContent(true);
+      return;
+    }
+    // Solo se programa la salida si hubo contenido: en el montaje inicial con
+    // `open=false` no hace falta ni cerrar ni montar nada.
+    if (!hadContentRef.current) return;
+    setClosing(true);
+    const t = setTimeout(() => {
+      hadContentRef.current = false;
+      setClosing(false);
+      setShowContent(false);
+    }, EXIT_MS);
+    return () => clearTimeout(t);
+  }, [open, fecundador]);
+
+  // Mientras el contenido se desmonta (exit) el padre ya propaga `fecundador`
+  // a null: se conserva el último valor para que la salida sea fluida.
+  const fecMostrar = fecundador ?? lastFecRef.current;
 
   useScrollLock(open);
 
@@ -108,29 +147,28 @@ export default function FecundadorInspectionModal({
   };
 
   return (
-    <AnimatePresence>
-      {open && fecundador && (
+    <>
+      {showContent && fecMostrar && (
         <>
           <motion.div
+            key="fec-insp-backdrop"
             variants={backdropVariants}
             initial="hidden"
-            animate="visible"
-            exit="exit"
+            animate={closing ? 'exit' : 'visible'}
             className="fixed inset-0 z-50 bg-ink/85 backdrop-blur-sm touch-none"
             onClick={onClose}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div key="fec-insp-panel" className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
               variants={modalVariants}
               initial="hidden"
-              animate="visible"
-              exit="exit"
+              animate={closing ? 'exit' : 'visible'}
               className="card relative flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,.6)]"
             >
               <div className="flex items-start justify-between border-b border-line px-6 pb-5 pt-6 sm:px-8">
                 <div>
                   <p className="tick-label mb-1.5">
-                    {fecundador.code} · Baby nuc
+                    {fecMostrar.code} · Baby nuc
                   </p>
                   <h3 className="font-display text-3xl font-black tracking-tight text-cream">
                     Nueva inspección
@@ -302,6 +340,6 @@ export default function FecundadorInspectionModal({
           </div>
         </>
       )}
-    </AnimatePresence>
+    </>
   );
 }

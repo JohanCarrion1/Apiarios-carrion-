@@ -28,6 +28,10 @@ import { FECUNDADOR_STATE_LABELS } from '../types/fecundador';
 export const AI_MODEL = 'gemini-3.5-flash';
 export const AI_TIMEOUT_MS = 45_000;
 export const AI_CONNECTION_ERROR = 'Error de conexión. Intenta de nuevo.';
+// Se muestra cuando el proxy devuelve 429 (todas las claves del servidor
+// agotaron su cuota). Distinto de un fallo de red para que el usuario sepa que
+// debe esperar, no reintentar en bucle.
+export const AI_LIMIT_ERROR = 'El asistente alcanzó su límite de uso. Intenta de nuevo en un rato.';
 
 /** Ruta del proxy propio que guarda la clave de Gemini en el servidor. */
 const AI_ENDPOINT = '/api/gemini';
@@ -525,7 +529,16 @@ export async function consultarChat(params: ChatParams): Promise<RespuestaAsiste
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemText }] },
         contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+        // `thinkingBudget: 0` desactiva el "thinking" de gemini-3.x. Sin esto,
+        // el modelo puede gastar TODO el presupuesto de salida pensando y
+        // devolver `parts` sin texto, que el cliente interpreta como
+        // "Error de conexión". `maxOutputTokens` se sube a 2048 para que las
+        // respuestas (con contexto de apiario e imágenes) no se corten.
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
       signal: controller.signal,
     });
@@ -545,7 +558,7 @@ export async function consultarChat(params: ChatParams): Promise<RespuestaAsiste
       res = await enviar(contents);
     }
 
-    if (!res.ok) throw new Error(AI_CONNECTION_ERROR);
+    if (!res.ok) throw new Error(res.status === 429 ? AI_LIMIT_ERROR : AI_CONNECTION_ERROR);
 
     const data = (await res.json()) as GeminiResponse;
     const contenido = (data.candidates?.[0]?.content?.parts ?? [])

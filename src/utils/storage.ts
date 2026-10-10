@@ -334,6 +334,7 @@ export const SYNC_ENTITIES = new Set([
   'flowering',
   'eventTemplates',
   'treatments',
+  'conversacionesIA',
 ]);
 
 export interface StoreSyncEvent {
@@ -689,6 +690,15 @@ export const loadAnnualGoal = () => loadData('annualGoal', 100 as number);
 
 export const saveBasePrice = (price: number) => saveData('basePrice', price);
 export const loadBasePrice = () => loadData('basePrice', 25 as number);
+
+// Historial del Asistente IA (por usuario). Es un OBJETO único
+// (`{ conversaciones, activaId }`), no un array: se sincroniza como campo del
+// documento userData/{uid} y —al usar la clave versionada estándar— entra
+// automáticamente en las copias de seguridad y en "Borrar todos mis datos".
+export const saveConversacionesIA = (estado: unknown, userId?: string): void =>
+  saveData('conversacionesIA', estado, { userId });
+export const loadConversacionesIA = <T>(fallback: T, userId?: string): T =>
+  loadData('conversacionesIA', fallback, { userId });
 
 // Última selección (Tienda/Colmenas) (por usuario)
 export const saveLastSelection = (selection: string) => saveData('lastSelection', selection);

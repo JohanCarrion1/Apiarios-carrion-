@@ -19,6 +19,81 @@ function securityHeaders() {
   };
 }
 
+// ------------------------------------------------------------
+// Proxy de Gemini con ROTACIÓN de claves (dev y preview)
+// ------------------------------------------------------------
+// Igual que la función de Firebase, la clave se queda en el servidor de
+// desarrollo. `GEMINI_API_KEY` admite varias claves separadas por comas; si una
+// devuelve cuota agotada (429/403 con "quota") o un 5xx, se reintenta con la
+// siguiente. Debe coincidir con functions/index.js.
+const parseGeminiKeys = (raw) =>
+  String(raw || "")
+    .split(/[\s,]+/)
+    .map((k) => k.trim())
+    .filter(Boolean);
+
+const convieneRotar = (status, data) => {
+  if (status === 429 || status >= 500) return true;
+  if (status === 403) {
+    const msg = JSON.stringify(data || {}).toLowerCase();
+    return msg.includes("quota") || msg.includes("exhausted") || msg.includes("rate");
+  }
+  return false;
+};
+
+async function llamarGemini(keys, body) {
+  let ultimo = { status: 502, data: { error: "Error de conexión con Gemini." } };
+  for (const key of keys) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(
+          key
+        )}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body }
+      );
+      const data = await r.json().catch(() => ({}));
+      ultimo = { status: r.status, data };
+      if (!convieneRotar(r.status, data)) return ultimo;
+    } catch {
+      ultimo = { status: 502, data: { error: "Error de conexión con Gemini." } };
+    }
+  }
+  return ultimo;
+}
+
+function installGeminiMiddleware(middlewares, keys) {
+  middlewares.use("/api/gemini", async (req, res) => {
+    const json = (status, data) => {
+      res.statusCode = status;
+      res.setHeader("Content-Type", "application/json");
+      res.end(typeof data === "string" ? data : JSON.stringify(data));
+    };
+    if (req.method !== "POST") return json(405, { error: "Method not allowed" });
+    if (keys.length === 0) return json(500, { error: "Falta GEMINI_API_KEY." });
+    const chunks = [];
+    try {
+      for await (const chunk of req) chunks.push(chunk);
+    } catch {
+      return json(400, { error: "No se pudo leer la petición." });
+    }
+    const { status, data } = await llamarGemini(keys, Buffer.concat(chunks));
+    json(status, data);
+  });
+}
+
+function geminiProxyPlugin(keys) {
+  return {
+    name: "gemini-key-rotation",
+    configureServer(server) {
+      installGeminiMiddleware(server.middlewares, keys);
+    },
+    configurePreviewServer(server) {
+      installGeminiMiddleware(server.middlewares, keys);
+    },
+  };
+}
+
+
 export default defineConfig(({ mode }) => {
   // El tercer argumento "" carga TODAS las variables (también las que no
   // empiezan por VITE_), para poder leer GEMINI_API_KEY solo en el servidor.
@@ -44,6 +119,12 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         },
       }),
+      // El navegador llama a /api/gemini y este middleware añade la clave
+      // GEMINI_API_KEY (leída de .env), rotando entre varias si la primera está
+      // agotada. Así la clave nunca se incrusta en el bundle del cliente. En
+      // producción cumple esta misma función la función de Firebase (rewrite de
+      // Hosting).
+      geminiProxyPlugin(parseGeminiKeys(env.GEMINI_API_KEY)),
     ],
     server: {
       host: "0.0.0.0",
@@ -61,19 +142,6 @@ export default defineConfig(({ mode }) => {
         port: 3000,
       },
       headers: securityHeaders(),
-      // El navegador llama a /api/gemini y este proxy añade la clave
-      // GEMINI_API_KEY (leída de .env) antes de reenviar a Gemini. Así la clave
-      // nunca se incrusta en el bundle del cliente. En producción cumple esta
-      // misma función la función de Firebase (rewrite de Hosting).
-      proxy: {
-        "/api/gemini": {
-          target: "https://generativelanguage.googleapis.com",
-          changeOrigin: true,
-          secure: true,
-          rewrite: () =>
-            `/v1beta/models/${GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY || ""}`,
-        },
-      },
     },
     preview: {
       headers: securityHeaders(),

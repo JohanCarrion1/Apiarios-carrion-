@@ -10,9 +10,14 @@
 // (p. ej. "C-99", "colmena 5"), se buscan sus datos y se pasan a la IA; si no,
 // responde con conocimiento general de apicultura.
 //
-// Historial: cada usuario guarda varias conversaciones en localStorage
-// (`ia_conversaciones_${userId}`), accesibles desde el menú hamburguesa del
-// header (estilo Claude). Cada conversación se limita a 50 mensajes.
+// Historial: cada usuario guarda varias conversaciones. El historial vive en
+// la capa única de almacenamiento (`panal_v1_user_${uid}_conversacionesIA`) y
+// se sincroniza con Firestore como campo del documento `userData/{uid}`, así
+// que viaja entre dispositivos y entra en las copias de seguridad y en
+// "Borrar todos mis datos". El menú hamburguesa del chat permite cambiar de
+// conversación; cada una se limita a 50 mensajes. Se admiten claves heredadas
+// (`ia_conversaciones_${userId}` y `ia_chat_${userId}`), que se migran la
+// primera vez.
 //
 // Límite: cada mensaje enviado cuenta como 1 de las 5 consultas gratuitas
 // diarias (src/services/aiUsage.ts). Los ADMINISTRADORES no tienen límite.
@@ -47,6 +52,7 @@ import {
   construirContextoChat,
   detectarUnidadEnMensaje,
   AI_CONNECTION_ERROR,
+  AI_LIMIT_ERROR,
   type ApiarioContexto,
   type MensajeChat,
   type SujetoContexto,
@@ -62,6 +68,7 @@ import {
   type InspectionPhotoItem,
 } from '../services/firestoreSync';
 import { compressImage } from '../services/photos';
+import { loadConversacionesIA, saveConversacionesIA } from '../utils/storage';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 interface Props {
@@ -163,33 +170,52 @@ function cargarChat(userId: string): ChatMsg[] {
   }
 }
 
-/** Carga el historial de conversaciones, migrando el chat único heredado. */
+/** Normaliza un objeto guardado a `EstadoChat`, descartando entradas inválidas. */
+function normalizarEstado(parsed: Partial<EstadoChat> | null): EstadoChat | null {
+  const lista = Array.isArray(parsed?.conversaciones)
+    ? parsed!.conversaciones.filter(
+        (c): c is Conversacion =>
+          !!c && typeof c.id === 'string' && Array.isArray(c.mensajes)
+      )
+    : [];
+  if (!lista.length) return null;
+  const activaId = lista.some((c) => c.id === parsed?.activaId)
+    ? (parsed!.activaId as string)
+    : lista[0].id;
+  return { conversaciones: lista.slice(0, MAX_CONVERSACIONES), activaId };
+}
+
+/**
+ * Carga el historial de conversaciones.
+ *
+ * Fuente principal: la entidad unificada (`conversacionesIA`), que se hidrata
+ * desde Firestore y entra en las copias de seguridad y en "Borrar todos mis
+ * datos". Si aún no existe, migra las claves heredadas sin versión (el
+ * historial múltiple `ia_conversaciones_` y el chat único `ia_chat_`).
+ */
 function cargarEstado(userId: string): EstadoChat {
   if (userId) {
     try {
+      const actual = normalizarEstado(
+        loadConversacionesIA<Partial<EstadoChat> | null>(null, userId)
+      );
+      if (actual) return actual;
+    } catch {
+      /* datos corruptos: se intenta migrar o se regenera */
+    }
+    try {
       const raw = window.localStorage.getItem(convKey(userId));
       if (raw) {
-        const parsed = JSON.parse(raw) as Partial<EstadoChat> | null;
-        const lista = Array.isArray(parsed?.conversaciones)
-          ? parsed!.conversaciones.filter(
-              (c): c is Conversacion =>
-                !!c && typeof c.id === 'string' && Array.isArray(c.mensajes)
-            )
-          : [];
-        if (lista.length) {
-          const activaId = lista.some((c) => c.id === parsed?.activaId)
-            ? (parsed!.activaId as string)
-            : lista[0].id;
-          return { conversaciones: lista.slice(0, MAX_CONVERSACIONES), activaId };
-        }
+        const heredado = normalizarEstado(JSON.parse(raw) as Partial<EstadoChat> | null);
+        if (heredado) return heredado;
       }
     } catch {
       /* datos corruptos: se regenera */
     }
   }
-  const heredado = cargarChat(userId);
-  if (heredado.length) {
-    const conv = crearConversacion(heredado);
+  const chatUnico = cargarChat(userId);
+  if (chatUnico.length) {
+    const conv = crearConversacion(chatUnico);
     return { conversaciones: [conv], activaId: conv.id };
   }
   const conv = crearConversacion();
@@ -296,11 +322,20 @@ export default function AsistenteIA({
 
   useScrollLock(modalFotos || fullscreen);
 
-  // Persistencia del historial completo de conversaciones del usuario.
+  // Persistencia del historial: se guarda en la entidad unificada, que además
+  // replica a Firestore (multi-dispositivo), entra en las copias de seguridad y
+  // en "Borrar todos mis datos".
   useEffect(() => {
     if (!userId) return;
+    saveConversacionesIA(estado, userId);
+    // Migración completada: eliminar las claves heredadas sin versión para que
+    // no queden fuera del borrado ni de las copias de seguridad. Solo se hace
+    // una vez, y únicamente si el guardado unificado llegó a escribir.
     try {
-      window.localStorage.setItem(convKey(userId), JSON.stringify(estado));
+      if (loadConversacionesIA<EstadoChat | null>(null, userId)) {
+        window.localStorage.removeItem(convKey(userId));
+        window.localStorage.removeItem(chatKey(userId));
+      }
     } catch {
       /* sin localStorage la sesión sigue funcionando */
     }
@@ -538,14 +573,15 @@ export default function AsistenteIA({
       actualizarMensajes((prev) => [...prev, modelMsg].slice(-MAX_MENSAJES));
       // Los administradores no consumen el límite diario.
       if (!esAdmin) setUsadas(registrarConsulta(userId));
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error && err.message === AI_LIMIT_ERROR ? AI_LIMIT_ERROR : AI_CONNECTION_ERROR;
       actualizarMensajes((prev) =>
         [
           ...prev,
-          { id: nuevoId(), rol: 'model' as const, texto: AI_CONNECTION_ERROR, fecha: Date.now() },
+          { id: nuevoId(), rol: 'model' as const, texto: msg, fecha: Date.now() },
         ].slice(-MAX_MENSAJES)
       );
-      onShowToast?.(AI_CONNECTION_ERROR, undefined, 'error');
+      onShowToast?.(msg, undefined, 'error');
     } finally {
       setEnviando(false);
       textareaRef.current?.focus();

@@ -102,7 +102,7 @@ type ApiaryEntity = (typeof APIARY_ENTITIES)[number];
 /** Campos de ARRAY en el documento userData/{uid} (se guardan tal cual). */
 const USER_ARRAY_ENTITIES = new Set(['inventory', 'transferHistory', 'notifications']);
 /** Campos OBJETO/ESCALAR en userData/{uid} (llegan envueltos en [valor]). */
-const USER_DOC_ENTITIES = new Set(['settings', 'harvestUnit', 'annualGoal', 'basePrice']);
+const USER_DOC_ENTITIES = new Set(['settings', 'harvestUnit', 'annualGoal', 'basePrice', 'conversacionesIA']);
 
 const suffixFor = (userId: string, apiaryId: string): string => `_${userId}_${apiaryId}`;
 
@@ -555,6 +555,26 @@ const hydrateUserFields = async (
   } else {
     const local = loadData<number | null>('basePrice', null, { userId });
     if (typeof local === 'number' && isFinite(local)) push.basePrice = local;
+  }
+
+  // Historial del Asistente IA: objeto `{ conversaciones, activaId }`. Como el
+  // resto de campos de userData, si la app ya lo escribió durante esta
+  // hidratación no se pisa (el valor local es más nuevo que la instantánea).
+  const chat = remote('conversacionesIA');
+  if (
+    chat &&
+    typeof chat === 'object' &&
+    !Array.isArray(chat) &&
+    Array.isArray((chat as { conversaciones?: unknown }).conversaciones)
+  ) {
+    if (!wasWrittenDuringHydration('conversacionesIA', { userId })) {
+      saveData('conversacionesIA', chat, { userId, sync: false });
+    }
+  } else {
+    const local = loadData<{ conversaciones?: unknown[] } | null>('conversacionesIA', null, { userId });
+    if (local && Array.isArray(local.conversaciones) && local.conversaciones.length > 0) {
+      push.conversacionesIA = local;
+    }
   }
 
   if (Object.keys(push).length > 0) {

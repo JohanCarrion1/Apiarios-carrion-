@@ -915,6 +915,132 @@ export const fetchAllColoniesSummary = async (): Promise<AdminUserSummary[]> => 
 };
 
 // ------------------------------------------------------------
+// Fotos de inspecciones recientes (para el selector del Asistente IA)
+// ------------------------------------------------------------
+// El Asistente IA permite adjuntar fotos de inspecciones ya registradas SIN
+// elegir colmena manualmente. Esta función recorre TODOS los apiarios del
+// usuario en la caché local (ya hidratada desde Firestore) y devuelve las
+// últimas inspecciones con fotos, tanto de colmenas/núcleos (`inspection.photos`
+// con URLs de Cloudinary y `inspection.fotos` en base64) como de fecundadores
+// (`fecundador.historial[].photos`).
+//
+// Se lee de la caché local y no de Firestore a propósito: la app ya hidrata
+// todas las entidades al arrancar, así que hacer otra ronda de red solo añadiría
+// latencia y coste. Las URLs se devuelven tal cual (sin convertir a base64) para
+// que el componente las envíe a la IA como `file_data`.
+
+export type UnidadFotoTipo = 'colmena' | 'nucleo' | 'fecundador';
+
+export interface InspectionPhotoItem {
+  /** Id de la inspección (o de la entrada de historial del fecundador). */
+  id: string;
+  /** Fecha ISO de la inspección. */
+  fecha: string;
+  unidadId: string;
+  unidadTipo: UnidadFotoTipo;
+  unidadNombre: string;
+  photoUrl: string;
+  /** true si es una URL (Cloudinary/Storage); false si es base64. */
+  esUrl: boolean;
+}
+
+interface FotoCruda {
+  id: string;
+  fecha: string;
+  unidadId: string;
+  unidadTipo: UnidadFotoTipo;
+  unidadNombre: string;
+  fotos: Array<{ url: string; esUrl: boolean }>;
+}
+
+const extraerFotosInspeccion = (ins: any): Array<{ url: string; esUrl: boolean }> => {
+  const out: Array<{ url: string; esUrl: boolean }> = [];
+  for (const url of (ins?.photos as unknown[]) ?? []) {
+    if (typeof url === 'string' && url) out.push({ url, esUrl: true });
+  }
+  for (const foto of (ins?.fotos as unknown[]) ?? []) {
+    const data = typeof foto === 'string' ? foto : (foto as any)?.data;
+    if (typeof data === 'string' && data) {
+      out.push({ url: data, esUrl: !data.startsWith('data:') });
+    }
+  }
+  return out;
+};
+
+/**
+ * Últimas `limite` inspecciones con fotos de cualquier apiario del usuario.
+ * Devuelve un objeto por FOTO, listo para el grid del modal de selección.
+ */
+export async function getRecentInspectionPhotos(
+  userId: string,
+  limite = 15
+): Promise<InspectionPhotoItem[]> {
+  if (!userId) return [];
+  const apiaries = (loadApiaries(userId) as any[]).filter((a) => a && a.id);
+  const crudas: FotoCruda[] = [];
+
+  for (const apiary of apiaries) {
+    const apiaryId = String(apiary.id);
+    const suffix = suffixFor(userId, apiaryId);
+    const hives = loadHives(suffix) as any[];
+    const nuclei = loadNuclei(suffix) as any[];
+    const fecundadores = loadFecundadores(userId, apiaryId) as any[];
+
+    const porId = new Map<string, { code: string; tipo: UnidadFotoTipo }>();
+    hives.forEach((h) => porId.set(h.id, { code: h.code, tipo: 'colmena' }));
+    nuclei.forEach((h) => porId.set(h.id, { code: h.code, tipo: 'nucleo' }));
+
+    for (const ins of loadInspections(suffix) as any[]) {
+      const fotos = extraerFotosInspeccion(ins);
+      if (fotos.length === 0) continue;
+      const info = porId.get(ins.hiveId);
+      const tipo: UnidadFotoTipo = info?.tipo ?? (ins.entityType === 'nucleo' ? 'nucleo' : 'colmena');
+      crudas.push({
+        id: String(ins.id ?? `${apiaryId}-${ins.hiveId}-${ins.date}`),
+        fecha: String(ins.date ?? ''),
+        unidadId: String(ins.hiveId ?? ''),
+        unidadTipo: tipo,
+        unidadNombre: info?.code ?? String(ins.hiveId ?? ''),
+        fotos,
+      });
+    }
+
+    for (const f of fecundadores) {
+      for (const entrada of (f?.historial as any[]) ?? []) {
+        const urls = ((entrada?.photos as unknown[]) ?? []).filter(
+          (u): u is string => typeof u === 'string' && !!u
+        );
+        if (urls.length === 0) continue;
+        crudas.push({
+          id: String(entrada.id ?? `${apiaryId}-${f.id}-${entrada.fecha}`),
+          fecha: String(entrada.fecha ?? ''),
+          unidadId: String(f.id ?? ''),
+          unidadTipo: 'fecundador',
+          unidadNombre: f.code ?? '',
+          fotos: urls.map((url) => ({ url, esUrl: true })),
+        });
+      }
+    }
+  }
+
+  const ordenadas = crudas
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
+    .slice(0, limite);
+
+  return ordenadas.flatMap((insp) =>
+    insp.fotos.map((foto) => ({
+      id: insp.id,
+      fecha: insp.fecha,
+      unidadId: insp.unidadId,
+      unidadTipo: insp.unidadTipo,
+      unidadNombre: insp.unidadNombre,
+      photoUrl: foto.url,
+      esUrl: foto.esUrl,
+    }))
+  );
+}
+
+// ------------------------------------------------------------
 // Registro del puente de sincronización + reintentos
 // ------------------------------------------------------------
 let registered = false;

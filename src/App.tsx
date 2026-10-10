@@ -35,6 +35,7 @@ import { IconBee,
   IconQueen,
   IconPackage,
   IconLayers,
+  IconRobot,
   SectionHead,
   IconCalendar,
 } from "./ui";
@@ -119,6 +120,7 @@ const NAV = [
   { id: "inventario", label: "Inventario", icon: IconPackage },
   { id: "transferencias", label: "Transferencias", icon: IconLayers },
   { id: "polinizacion", label: "Polinización", icon: IconFlower },
+  { id: "asistente-ia", label: "Asistente IA", icon: IconRobot },
 ] as const;
 
 type ViewSection = (typeof NAV)[number]['id'];
@@ -276,8 +278,10 @@ function lazyWithPreload<T extends ComponentType<any>>(
 
 const dashboardPanel = lazyWithPreload(() => import("./components/Dashboard"));
 const hivesSection = lazyWithPreload(() => import("./components/HivesSection"));
+const asistenteIaSection = lazyWithPreload(() => import("./components/AsistenteIA"));
 const DashboardPanel = dashboardPanel.Comp;
 const HivesSection = hivesSection.Comp;
+const AsistenteIA = asistenteIaSection.Comp;
 
 const Store = lazy(() => import("./components/Store"));
 const AdminStore = lazy(() => import("./components/AdminStore"));
@@ -482,6 +486,20 @@ export default function App() {
                 }
               />
               <Route
+                path="/dashboard/asistente-ia"
+                element={
+                  <ProtectedRoute>
+                    <DataHydrationGate mode="progressive">
+                      <RouteFade>
+                        <Lazy>
+                          <AsistenteIaPage />
+                        </Lazy>
+                      </RouteFade>
+                    </DataHydrationGate>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/dashboard/:id"
                 element={
                   <ProtectedRoute>
@@ -600,6 +618,22 @@ function DashboardWrapper() {
   return <Dashboard apiaryId={target.apiaryId} />;
 }
 
+/**
+ * Entrada directa a /dashboard/asistente-ia: resuelve el último apiario activo
+ * (o el primero) en el render, ya que loadApiaries es una lectura síncrona de
+ * localStorage, y abre el dashboard con el Asistente IA como sección inicial.
+ * Sin apiario cae en /dashboard, que gestiona el onboarding.
+ */
+function AsistenteIaPage() {
+  const { user } = useAuth();
+  if (!user) return null;
+  const apiaries = loadApiaries(user.uid);
+  if (apiaries.length === 0) return <Navigate to="/dashboard" replace />;
+  const lastActiveId = loadLastActiveApiaryId(user.uid);
+  const apiary = apiaries.find((a: any) => a.id === lastActiveId) ?? apiaries[0];
+  return <Dashboard apiaryId={apiary.id} initialSection="asistente-ia" />;
+}
+
 // La pantalla "Mis Apiarios" deja de ser ruta de entrada: cualquier visita
 // manual a /apiarios redirige al dashboard.
 function ApiariosRedirect() {
@@ -686,7 +720,7 @@ function ColdStartRestore() {
   return null;
 }
 
-function Dashboard({ apiaryId }: { apiaryId: string }) {
+function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSection?: ViewSection }) {
   console.log('🟣 [DASHBOARD] Dashboard renderizado');
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -709,6 +743,9 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   const [queens, setQueens] = useState<Queen[]>([]);
   const [queenHistory, setQueenHistory] = useState<QueenChange[]>([]);
   const [fecundadores, setFecundadores] = useState<Fecundador[]>([]);
+  // El Asistente IA puede entrar en modo pantalla completa: cuando lo hace, se
+  // ocultan el header y el footer del dashboard para que el chat sea inmersivo.
+  const [iaFullscreen, setIaFullscreen] = useState(false);
 
   // Contratos de polinización (listener en tiempo real por usuario).
   const { contratos: polinizacionContratos } = usePolinizacion(user?.uid);
@@ -2007,6 +2044,19 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     }
   };
 
+  // Al salir del Asistente IA (o al cambiar de sección) se abandona el modo
+  // pantalla completa para no dejar el dashboard con el chrome oculto.
+  useEffect(() => {
+    if (activeSection !== 'asistente-ia' && iaFullscreen) setIaFullscreen(false);
+  }, [activeSection, iaFullscreen]);
+
+  // Botón "Salir" del Asistente IA: vuelve al Panel del dashboard.
+  const salirAsistente = () => {
+    setIaFullscreen(false);
+    navigateToSection('panel');
+    navigate('/dashboard');
+  };
+
   // Precarga de los chunks de las secciones lazy.
   //
   // Suspense y startTransition evitan que la pantalla se congele o se sustituya,
@@ -2065,6 +2115,12 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
   // ruta y salía el skeleton a pantalla completa al abrir la app.
   useEffect(() => {
     if (!user) return;
+    // La sección pedida por la ruta (/dashboard/asistente-ia) manda sobre la
+    // última vista guardada; así el enlace directo abre el Asistente IA.
+    if (initialSection) {
+      startTransition(() => setActiveSection(initialSection));
+      return;
+    }
     const savedView = loadDashboardUltimaVista(user.uid);
     const saved =
       savedView && isViewSection(savedView.section) ? savedView.section : loadLastView(user.uid);
@@ -2072,9 +2128,16 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
       setActiveSection(isViewSection(saved) ? saved : 'panel');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
+  }, [user?.uid, initialSection]);
 
   const jumpTo = (id: string) => {
+    // El Asistente IA tiene su propia ruta (/dashboard/asistente-ia); el resto
+    // de secciones se cambian por estado, sin tocar la URL.
+    if (id === 'asistente-ia') {
+      navigateToSection('asistente-ia');
+      navigate('/dashboard/asistente-ia');
+      return;
+    }
     navigateToSection(id as ViewSection);
   };
 
@@ -2096,26 +2159,28 @@ function Dashboard({ apiaryId }: { apiaryId: string }) {
     <div className="relative min-h-screen pb-20 lg:pb-0">
       <Ambient />
 
-      {/* Header Responsive */}
-      <ResponsiveHeader 
-        onNavigate={jumpTo} 
-        onSettings={() => setShowSettingsPage(true)}
-        onHome={returnToSelection}
-        onChangeSection={returnToSelection}
-        onNavigateSubsection={goToHiveAnchor}
-        activeSection={activeSection}
-        notifications={notifications}
-        onMarkAsRead={markNotificationAsRead}
-        onMarkAllAsRead={markAllNotificationsAsRead}
-        onNotificationClick={handleNotificationClick}
-        inventoryAlertsCount={inventoryLowStockCount}
-      />
+      {/* Header Responsive (se oculta en pantalla completa del Asistente IA) */}
+      {!(activeSection === 'asistente-ia' && iaFullscreen) && (
+        <ResponsiveHeader 
+          onNavigate={jumpTo} 
+          onSettings={() => setShowSettingsPage(true)}
+          onHome={returnToSelection}
+          onChangeSection={returnToSelection}
+          onNavigateSubsection={goToHiveAnchor}
+          activeSection={activeSection}
+          notifications={notifications}
+          onMarkAsRead={markNotificationAsRead}
+          onMarkAllAsRead={markAllNotificationsAsRead}
+          onNotificationClick={handleNotificationClick}
+          inventoryAlertsCount={inventoryLowStockCount}
+        />
+      )}
 
       {/* contenido */}
       <div className="relative z-10">
         {/* `relative` en <main> es el punto de referencia de los hijos
             absolutos de las secciones (paneles flotantes, menús). */}
-        <main className="relative mx-auto max-w-6xl space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 sm:pt-8 md:pt-10">
+        <main className="relative w-full space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 lg:px-8 sm:pt-8 md:pt-10">
           {activeSection === 'panel' && (
             <FadeInUp>
               <IntroHead temp={temp} wind={wind} activity={activity} apiaryName={apiaryName} apiaryLocation={apiaryLocation} />
@@ -2394,8 +2459,34 @@ queenAlerts={{
               </section>
             )}
 
+            {activeSection === 'asistente-ia' && (
+              <section
+                key="asistente-ia"
+              >
+                <SectionSuspense>
+                <AsistenteIA
+                  userId={user?.uid ?? ''}
+                  apiaryName={apiaryName}
+                  apiaryLocation={apiaryLocation}
+                  hives={hives}
+                  nuclei={nuclei}
+                  fecundadores={fecundadores}
+                  inspections={inspections}
+                  harvests={harvests}
+                  onShowToast={pushToast}
+                  fullscreen={iaFullscreen}
+                  onToggleFullscreen={() => setIaFullscreen((v) => !v)}
+                  onExit={salirAsistente}
+                />
+                </SectionSuspense>
+              </section>
+            )}
+
+          {!iaFullscreen && (
           <motion.footer 
-            className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 border-t border-line pt-8 text-xs text-husk"
+            className={`flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 border-t border-line pt-8 text-xs text-husk ${
+              activeSection === 'asistente-ia' ? 'max-sm:hidden' : ''
+            }`}
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
@@ -2412,6 +2503,7 @@ queenAlerts={{
               {hives.length} colmenas · {nuclei.length} núcleos · {fecundadores.filter(f => f.estado === 'activo').length} fecundadores
             </span>
           </motion.footer>
+          )}
         </main>
       </div>
 

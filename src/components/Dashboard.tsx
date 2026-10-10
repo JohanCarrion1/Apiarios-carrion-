@@ -62,7 +62,7 @@ function Card({ children, className = "", delay = 0 }: { children: React.ReactNo
   return (
     <motion.div
       ref={ref}
-      className={`reveal ${inView ? "in" : ""} card p-6 ${className}`}
+      className={`reveal ${inView ? "in" : ""} card p-6 lg:p-7 ${className}`}
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -580,7 +580,7 @@ export default function Dashboard({
       )}
 
       {/* 1. RESUMEN RÁPIDO */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <Card delay={0} className="col-span-1">
           <div className="flex items-start justify-between">
             <div>

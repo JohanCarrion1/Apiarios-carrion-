@@ -1,0 +1,16 @@
+{
+  "name": "apiarios-carrion-functions",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "deploy": "firebase deploy --only functions",
+    "serve": "firebase emulators:start --only functions"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.0.0"
+  }
+}

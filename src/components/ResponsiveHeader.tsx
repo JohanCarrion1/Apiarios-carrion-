@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconQueen, IconPackage, IconLayers, IconFlower } from '../ui';
+import { IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconQueen, IconPackage, IconLayers, IconFlower, IconRobot } from '../ui';
 import { useAuth } from '../context/AuthContext';
 import { BRANDING } from '../lib/branding';
 import Logo from './Logo';
@@ -34,6 +34,7 @@ const menuItems: MenuItem[] = [
   { id: 'inventario', label: 'Inventario', icon: IconPackage },
   { id: 'transferencias', label: 'Transferencias', icon: IconLayers },
   { id: 'polinizacion', label: 'Polinización', icon: IconFlower },
+  { id: 'asistente-ia', label: 'Asistente IA', icon: IconRobot },
 ];
 
 interface ResponsiveHeaderProps {
@@ -136,7 +137,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSecti
     <>
       {/* Header */}
       <header className={`sticky top-0 z-30 bg-pane/95 backdrop-blur-md border-b border-line ${isStandalone ? 'pwa-standalone-header' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo — clic lleva al dashboard */}
           <motion.button
             onClick={() => {

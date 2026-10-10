@@ -55,19 +55,17 @@ body {
 }
 
 /* ---------- panal compacto (colmenas / núcleos / fecundadores) ----------
-   Dos tramos de columnas, iguales a los que devuelve `getCols()`:
+   Tres tramos de columnas, iguales a los que devuelve `getCols()`:
 
-     móvil      < 768px   -> 6 por fila   (celdas grandes, cómodo al dedo)
-     escrito/ tablet >=768 -> 9 por fila
+     móvil          < 768px   -> 6 por fila   (celdas grandes, cómodo al dedo)
+     tablet/escritorio >=768  -> 9 por fila
+     escritorio ancho  >=1280 -> 11 por fila (aprovecha el ancho completo)
 
-   Hubo un tercer tramo (tablet 768-1024px -> 7) que se eliminó a propósito:
-   el corte en 1025px hacía que cualquier ventana estrecha de 768 a 1024px
-   (ventana no maximizada, pantalla dividida, zoom del navegador o escala del
-   sistema) se quedara en 7 celdas, y se veía como un fallo. Con dos tramos
-   el cómputo de escritorio depende solo de si la ventana es estrecha o no,
-   que es la distinción que de verdad importa.
+   (Hubo un tramo intermedio de tablet 768-1024px -> 7 que se eliminó a
+   propósito: cualquier ventana estrecha se quedaba en 7 celdas y parecía un
+   fallo. El tramo de 11 sí es estable porque solo entra en pantallas anchas.)
 
-   En los dos tramos las filas impares llevan una celda menos, que es lo que
+   En todos los tramos las filas impares llevan una celda menos, que es lo que
    genera el desplazamiento de media celda (`.fila:nth-child(even)`).
 
    REGLA DE ORO: `--hex-h` SIEMPRE derivado de un ancho válido
@@ -75,20 +73,14 @@ body {
    aunque cambie el tramo.
 
    El ancho sale de las celdas + huecos dentro del espacio REALMENTE
-   disponible. Hay dos motivos por los que no es 100vw:
-
-   1. Hay que descontar el `padding-x` del <main> (`--hex-shell`).
-   2. El <main> está limitado a `max-w-6xl` (1152px), así que por encima de
-      ese ancho el hueco deja de crecer. Usar 100vw a secas haría crecer la
-      celda sin límite hasta que la fila se saliera del recuadro, que la
-      recorta con `overflow-x: clip`. De ahí el `min(100vw, 1152px)`.
-
-   El tope de celda baja de 116 a 104 px, que es lo que mantiene la fila de 9
-   celdas (1000px) dentro de los 1084px de contenido del recuadro.
+   disponible: 100vw menos el `padding-x` del <main> y el del recuadro
+   (`--hex-shell`). El <main> ya es full-width (sin `max-w`), así que la
+   rejilla crece hasta llenar la pantalla; `--hex-cap` pone un techo al lado
+   del hexágono para que no se vuelva gigante en monitores muy anchos.
 
    IMPORTANTE: `--hex-count` tiene que coincidir con el `getCols()` de
-   HiveComb.tsx y FecundadoresSection.tsx. Si el CSS cuenta 8 celdas y el JS
-   agrupa 6, la rejilla queda más estrecha que el hueco reservado. */
+   HiveComb.tsx y FecundadoresSection.tsx. Si el CSS cuenta 11 celdas y el JS
+   agrupa 9, la rejilla queda más estrecha que el hueco reservado. */
 .map-panal {
   /* Por defecto, móvil (<768px): 6 por fila y hueco fino. */
   --hex-count: 6;
@@ -98,7 +90,9 @@ body {
   /* Espacio que NO puede usar la rejilla: 32px del px-4 del <main> + 12px
      del padding propio del recuadro (6 por lado). */
   --hex-shell: 44px;
-  --hex-w: min(104px, calc((min(100vw, 1152px) - var(--hex-shell) - (var(--hex-gaps) * var(--hex-gap))) / var(--hex-count)));
+  /* Tope del lado del hexágono. Sube en escritorio. */
+  --hex-cap: 104px;
+  --hex-w: min(var(--hex-cap), calc((100vw - var(--hex-shell) - (var(--hex-gaps) * var(--hex-gap))) / var(--hex-count)));
   --hex-h: calc(var(--hex-w) * 1.1547);
   overflow-x: clip;
 }
@@ -108,7 +102,7 @@ body {
     --hex-shell: 60px;
   }
 }
-/* Escritorio y tablet >=768px: 9 por fila, sin full-bleed, hueco cómodo.
+/* Escritorio y tablet >=768px: 9 por fila, hueco cómodo, celdas algo mayores.
    El mismo umbral que getCols() (768) para que CSS y JS cuenten siempre lo
    mismo: si usan cortes distintos aparece una franja donde cambian de
    coincidir. */
@@ -119,6 +113,21 @@ body {
     --hex-gap: 8px;
     --hex-pad: 10px;
     --hex-shell: 68px;
+    --hex-cap: 112px;
+  }
+}
+/* A partir de `lg` el <main> pasa a px-8: 64px en vez de 48px. */
+@media (min-width: 1024px) {
+  .map-panal {
+    --hex-shell: 88px;
+  }
+}
+/* Escritorio ancho >=1280px: 11 por fila. Mismo umbral que getCols(). */
+@media (min-width: 1280px) {
+  .map-panal {
+    --hex-count: 11;
+    --hex-gaps: 10;
+    --hex-cap: 124px;
   }
 }
 

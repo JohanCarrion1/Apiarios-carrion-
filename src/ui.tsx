@@ -214,6 +214,18 @@ export const IconBee = ({ className }: IconProps) => (
   </svg>
 );
 
+/** Robot del Asistente IA (cabezal, antena, ojos y brazos laterales). */
+export const IconRobot = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <rect x="4.6" y="7.4" width="14.8" height="11.2" rx="2.6" />
+    <path d="M12 3.2v4.2" />
+    <circle cx="12" cy="2.5" r="1.2" />
+    <path d="M9 11.6v1.8M15 11.6v1.8" />
+    <path d="M9.2 15.8h5.6" />
+    <path d="M2.6 11v4.2M21.4 11v4.2" />
+  </svg>
+);
+
 /* ---------- compartidos ---------- */
 
 export function StatusPill({ status, small }: { status: 'saludable' | 'revision' | 'alerta' | 'sin_reina'; small?: boolean }) {

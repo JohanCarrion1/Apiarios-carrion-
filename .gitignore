@@ -10,3 +10,10 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Cuenta de servicio de Firebase (secreto: nunca al repositorio)
+service-account.json
+service-account*.json
+
+# Funciones (dependencias de Cloud Functions)
+functions/node_modules/

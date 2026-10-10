@@ -88,19 +88,16 @@ export default function FecundadoresSection({
 
   // Columnas por fila, igual que los media queries de `.map-panal` en index.css:
   //   móvil            < 768px  -> 6/5
-  //   escritorio/tablet >= 768px -> 9/8
-  // Dos tramos y no tres: el corte intermedio de tablet (768-1024px -> 7)
-  // hacía que cualquier ventana estrecha se quedara en 7 celdas y pareciera
-  // un fallo. Ambos cortes usan exactamente 768 para que CSS y JS cuenten
-  // siempre lo mismo.
+  //   tablet/escritorio >= 768px -> 9/8
+  //   escritorio ancho  >= 1280px -> 11/10
   // Las filas impares llevan siempre una celda menos: eso es lo que produce el
-  // desplazamiento de media celda del panal, y se mantiene en los dos tramos.
-  // Si el CSS cuenta 9 celdas y el JS agrupa 6, la rejilla queda más estrecha
-  // que el hueco reservado y aparecen huecos a los lados.
+  // desplazamiento de media celda del panal. Cada tramo debe coincidir EXACTO
+  // con su media query de CSS.
   const getCols = () => {
     const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
     if (w < 768) return { even: 6, odd: 5 } as const;
-    return { even: 9, odd: 8 } as const;
+    if (w < 1280) return { even: 9, odd: 8 } as const;
+    return { even: 11, odd: 10 } as const;
   };
   const [cols, setCols] = useState(getCols);
   // useEffect, no useMemo: con useMemo el valor de retorno (la función de
@@ -443,7 +440,7 @@ export default function FecundadoresSection({
             transition={{ duration: 0.5, delay: 0.15 }}
           >
             <AnimatedTabs
-              className="flex flex-wrap items-center gap-1.5"
+              className="flex flex-wrap items-center gap-1.5 lg:flex-nowrap"
               ariaLabel="Filtrar por estado de reina"
               items={[
                 { key: 'todas' as StateFilter, label: 'Todas' },

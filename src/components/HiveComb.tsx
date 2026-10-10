@@ -45,6 +45,15 @@ interface Props {
   entitySingular?: string;
 }
 
+// Arrays vacíos compartidos: si se usan literales `[]` como valor por defecto,
+// cada render crea una referencia nueva. Eso cambia la identidad de `isDim`,
+// obliga a recomputar `visibleHives` y dispara el efecto que reinicia
+// `visibleCount` a la primera página en cada render; el botón "Cargar más"
+// se deshacía al instante en las secciones que no pasan estas props (Núcleos).
+const EMPTY_CODES: string[] = [];
+const EMPTY_FAVORITES: string[] = [];
+const EMPTY_COMPARE: string[] = [];
+
 function shortDays(date: string | null): string {
   if (!date) return "—";
   const d = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
@@ -62,11 +71,11 @@ export default function HiveComb({
   query, 
   entityType = 'colmena',
   pageSize = 24,
-  polinizacionCodes = [],
-  favorites = [],
+  polinizacionCodes = EMPTY_CODES,
+  favorites = EMPTY_FAVORITES,
   onToggleFavorite,
   compareMode = false,
-  selectedForCompare = [],
+  selectedForCompare = EMPTY_COMPARE,
   onToggleCompare,
   calculateHealth,
   countLabel = 'colonias',
@@ -80,20 +89,17 @@ export default function HiveComb({
 }: Props) {
   // Columnas por fila, igual que los media queries de `.map-panal` en index.css:
   //   móvil            < 768px  -> 6/5
-  //   escritorio/tablet >= 768px -> 9/8
-  // Dos tramos y no tres: el corte intermedio de tablet (768-1024px -> 7)
-  // hacía que cualquier ventana estrecha se quedara en 7 celdas y pareciera
-  // un fallo. Ambos cortes usan exactamente 768 para que CSS y JS cuenten
-  // siempre lo mismo.
+  //   tablet/escritorio >= 768px -> 9/8
+  //   escritorio ancho  >= 1280px -> 11/10
   // Las filas impares llevan siempre una celda menos: eso es lo que produce el
-  // desplazamiento de media celda del panal, y se mantiene en los dos tramos.
-  // Si el CSS cuenta 9 celdas y el JS agrupa 6, la rejilla queda más estrecha
-  // que el hueco reservado y aparecen huecos a los lados.
+  // desplazamiento de media celda del panal. Cada tramo debe coincidir EXACTO
+  // con su media query de CSS: si el CSS cuenta 11 celdas y el JS agrupa 9, la
+  // rejilla queda más estrecha que el hueco reservado y sobran huecos a lados.
   const getCols = () => {
-    if (typeof window === 'undefined') return { even: 9, odd: 8 } as const;
-    const w = window.innerWidth;
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
     if (w < 768) return { even: 6, odd: 5 } as const;
-    return { even: 9, odd: 8 } as const;
+    if (w < 1280) return { even: 9, odd: 8 } as const;
+    return { even: 11, odd: 10 } as const;
   };
   const [cols, setCols] = useState(getCols);
   // useEffect, no useMemo: con useMemo el valor de retorno (la función de
@@ -257,7 +263,7 @@ export default function HiveComb({
         transition={{ duration: 0.5, delay: 0.1 }}
       >
         <AnimatedTabs
-          className="mb-6 flex flex-wrap items-center gap-1.5"
+          className="mb-6 flex flex-wrap items-center gap-1.5 lg:flex-nowrap"
           ariaLabel="Filtrar por estado"
           items={chips}
           value={filter}

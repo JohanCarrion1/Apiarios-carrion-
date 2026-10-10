@@ -558,7 +558,7 @@ export default function Cotizaciones() {
 
   return (
     <div className="relative min-h-screen bg-[#1A140D]">
-      <div className="relative z-10 mx-auto max-w-6xl px-4 pb-28 pt-6">
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 pb-28 pt-6">
         {/* Cabecera */}
         <header className="mb-6 flex flex-wrap items-center gap-3">
           <button

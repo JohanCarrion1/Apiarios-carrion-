@@ -139,7 +139,7 @@ export default function SettingsModal({
                     })
                   }
                   className="w-full rounded-xl border border-line bg-ink px-4 py-2 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70"
-                  placeholder="Ej: Huaraz, Áncash"
+                  placeholder="Ej: Zona rural, Provincia, Departamento"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { backdropVariants, modalVariants } from '../lib/motion';
-import { IconX } from '../ui';
+import { IconMapPin, IconX } from '../ui';
 import { useAuth } from '../context/AuthContext';
-import { createApiary } from '../services/apiaryService';
+import { createApiary, HIVE_TYPE_OPTIONS, DEFAULT_HIVE_TYPE, type HiveType } from '../services/apiaryService';
 import { saveLastActiveApiaryId } from '../utils/storage';
+import MapPicker, { type LatLng } from './MapPicker';
+import { getCurrentPosition, reverseGeocode } from '../services/geolocation';
 
 interface CreateApiaryModalProps {
   open: boolean;
@@ -31,6 +33,10 @@ export default function CreateApiaryModal({
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [altitud, setAltitud] = useState('');
+  const [hiveType, setHiveType] = useState<HiveType>(DEFAULT_HIVE_TYPE);
+  const [coords, setCoords] = useState<LatLng | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [mapMode, setMapMode] = useState(false);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -40,6 +46,10 @@ export default function CreateApiaryModal({
     setName('');
     setLocation('');
     setAltitud('');
+    setHiveType(DEFAULT_HIVE_TYPE);
+    setCoords(null);
+    setGpsLoading(false);
+    setMapMode(false);
     setError('');
   };
 
@@ -67,15 +77,33 @@ export default function CreateApiaryModal({
       }
     }
 
+    let coordinates: { lat: number; lng: number; address?: string } | undefined;
+    if (coords) {
+      let address: string | undefined = location.trim() || undefined;
+      try {
+        if (!address) {
+          address = await reverseGeocode(coords.lat, coords.lng);
+        }
+      } catch (e) {
+        address = location.trim() || undefined;
+      }
+      coordinates = {
+        lat: coords.lat,
+        lng: coords.lng,
+        ...(address ? { address } : {}),
+      };
+    }
+
     try {
       setCreating(true);
       const apiaryId = await createApiary(
         user.uid,
         name,
         location,
+        coordinates,
         undefined,
-        undefined,
-        altitudNum
+        altitudNum,
+        hiveType,
       );
       saveLastActiveApiaryId(apiaryId, user.uid);
       resetForm();
@@ -101,7 +129,7 @@ export default function CreateApiaryModal({
           onChange={(e) => setName(e.target.value)}
           required
           autoFocus
-          placeholder="Ej: Apiario Caraz, La Dehesa..."
+          placeholder="Ej: Apiario El Mirador"
           className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
         />
       </div>
@@ -109,15 +137,98 @@ export default function CreateApiaryModal({
       {/* Ubicación */}
       <div>
         <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
-          Ubicación
+          Ubicación (texto)
         </label>
         <input
           type="text"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
-          placeholder="Ej: Cochac, Independencia, Áncash"
+          placeholder="Ej: Zona rural, Provincia, Departamento"
           className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
         />
+      </div>
+
+      {/* Coordenadas / Mapa */}
+      <div>
+        <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+          Coordenadas / punto en el mapa
+        </label>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setGpsLoading(true);
+                const pos = await getCurrentPosition();
+                setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setMapMode(true);
+                setError('');
+              } catch (err: any) {
+                setError(err?.message || 'No se pudo obtener la ubicación');
+              } finally {
+                setGpsLoading(false);
+              }
+            }}
+            disabled={gpsLoading}
+            className="flex items-center gap-2 rounded-xl border border-honey/40 bg-honey/10 px-3.5 py-2 text-xs font-bold text-honey transition-colors hover:bg-honey/20 disabled:opacity-60"
+          >
+            <IconMapPin className="h-3.5 w-3.5" />
+            {gpsLoading ? 'Capturando…' : 'GPS actual'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMapMode((v) => !v);
+              setError('');
+            }}
+            className="flex items-center gap-2 rounded-xl border border-line bg-ink px-3.5 py-2 text-xs font-bold text-husk transition-colors hover:border-honey/50 hover:text-honey"
+          >
+            <IconMapPin className="h-3.5 w-3.5" />
+            {mapMode ? 'Ocultar mapa' : 'Marcar en mapa'}
+          </button>
+        </div>
+        {(mapMode || coords) && (
+          <MapPicker
+            coordinates={coords}
+            onLocationSelect={(c) => setCoords(c)}
+            helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación."
+          />
+        )}
+        {coords && (
+          <p className="mt-2 font-mono text-xs text-husk">
+            {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+          </p>
+        )}
+      </div>
+
+      {/* Tipo de colmena */}
+      <div>
+        <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+          Tipo de colmena
+        </label>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {HIVE_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setHiveType(opt.value)}
+              className={`flex flex-col items-start rounded-xl border px-4 py-3 text-left transition-colors ${
+                hiveType === opt.value
+                  ? 'border-honey bg-honey/15'
+                  : 'border-line bg-ink hover:border-honey/40'
+              }`}
+            >
+              <span
+                className={`font-display text-sm font-bold ${
+                  hiveType === opt.value ? 'text-honey' : 'text-cream'
+                }`}
+              >
+                {opt.label}
+              </span>
+              <span className="text-[11px] text-husk">{opt.description}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Altitud (opcional) */}
@@ -129,7 +240,7 @@ export default function CreateApiaryModal({
           type="number"
           value={altitud}
           onChange={(e) => setAltitud(e.target.value)}
-          placeholder="Ej: 2100 (msnm)"
+          placeholder="Ej: 2500 (msnm)"
           min={-500}
           className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
         />
@@ -173,8 +284,8 @@ export default function CreateApiaryModal({
 
   if (variant === 'screen') {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-ink">
-        <div className="absolute inset-0">
+      <div className="fixed inset-0 z-10 overflow-y-auto overscroll-contain bg-ink">
+        <div className="pointer-events-none fixed inset-0">
           <svg className="absolute inset-0 w-full h-full opacity-[0.08]" aria-hidden="true">
             <defs>
               <pattern id="hex-pattern-onboarding" width="50" height="87" patternUnits="userSpaceOnUse" patternTransform="scale(2)">
@@ -187,22 +298,27 @@ export default function CreateApiaryModal({
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #b97d15 0%, transparent 70%)' }} />
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="relative z-10 w-full max-w-md"
-        >
-          <div className="card p-6 sm:p-8">
-            <div className="mb-6">
-              <h1 className="font-display text-3xl font-black tracking-tight text-cream">
-                {title}
-              </h1>
-              <p className="text-husk mt-2">{subtitle}</p>
+        {/* El scroll lo hace la raíz (anclada al viewport); este bloque solo
+            centra la tarjeta. El botón "Crear apiario" va en el flujo normal,
+            al final del formulario. */}
+        <div className="relative z-10 flex min-h-full items-center justify-center px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="w-full max-w-md"
+          >
+            <div className="card p-6 sm:p-8">
+              <div className="mb-6">
+                <h1 className="font-display text-3xl font-black tracking-tight text-cream">
+                  {title}
+                </h1>
+                <p className="text-husk mt-2">{subtitle}</p>
+              </div>
+              {formContent}
             </div>
-            {formContent}
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
     );
   }

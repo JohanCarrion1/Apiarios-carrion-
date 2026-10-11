@@ -135,7 +135,7 @@ export default function ApiarySelector() {
                     value={newApiaryName}
                     onChange={(e) => setNewApiaryName(e.target.value)}
                     required
-                    placeholder="Ej: Apiario La Dehesa"
+                    placeholder="Ej: Apiario El Mirador"
                     className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-cream placeholder:text-husk/50 focus:border-honey focus:outline-none"
                   />
                 </div>
@@ -147,7 +147,7 @@ export default function ApiarySelector() {
                     type="text"
                     value={newApiaryLocation}
                     onChange={(e) => setNewApiaryLocation(e.target.value)}
-                    placeholder="Ej: Cochac, Independencia, Áncash"
+                    placeholder="Ej: Zona rural, Provincia, Departamento"
                     className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-cream placeholder:text-husk/50 focus:border-honey focus:outline-none"
                   />
                 </div>

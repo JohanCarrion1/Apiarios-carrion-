@@ -77,17 +77,17 @@ service cloud.firestore {
     // REGLAS PARA APIARIOS
     // ============================================
     match /apiarios/{apiaryId} {
-      // El propietario o un admin de la tienda puede leer.
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
+      // Aislamiento por PROPIETARIO: cada usuario gestiona solo su apiario.
+      // El admin de tienda puede supervisar cualquiera (panel de colonias).
+      allow read, update, delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid
+        || isAdmin());
 
-      // Crear: el autor debe ser el dueño del documento.
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
+      // Al crear, el dueño tiene que ser el propio usuario: nadie puede crear
+      // un apiario a nombre de otro.
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid
+        || isAdmin());
 
       // ============================================
       // REGLAS PARA COLMENAS (subcolección de apiarios)
@@ -349,6 +349,16 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ================================================================
+    // REGLAS PARA CAJAS TRAMPA (documento por caja a nivel raíz)
+    // ================================================================
+    // Doc id = "TRP-001" con { userId, apiaryId, name, location, ... }.
+    // Idéntico a /colmenas (ver lógica de permisos arriba).
+    match /trapBoxes/{boxId} {
+      // Cualquier usuario autenticado puede leer y escribir.
+      allow read, write: if isSignedIn();
     }
   }
 }

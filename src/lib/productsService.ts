@@ -20,26 +20,18 @@ import { normalizeProductImageUrl } from './cloudinary';
  * Al ser una escritura, además no debe bloquear ni tirar abajo la UI: si falla
  * (sin sesión, sin permisos, offline) el catálogo sigue guardado en local y se
  * avisa por consola. El error NO se propaga al llamador.
+ *
+ * Antes había una "barrera de semilla" que saltaba el push cuando el catálogo
+ * coincidía con las semillas por id + imageUrl. Era demasiado permisiva: un
+ * cambio de SOLO precio (p. ej. Levantamarcos de S/300 a S/30) no alteraba esas
+ * dos columnas, así que no se subía a Firestore y en el siguiente arranque la
+ * hidratación volcaba el precio viejo del remoto sobre el local. El panel es la
+ * fuente de verdad del catálogo: cada guardado se sube, sin excepciones. El
+ * caso que la barrera protegía (no sembrar Firestore con el catálogo de
+ * arranque) ya lo cubre `hydrateProducts` en firestoreSync (solo sube el local
+ * si Firestore está vacío y el catálogo NO es pura semilla).
  */
 const pushToCloud = (products: StoreProduct[]): void => {
-  // Barrera: si el catálogo es EXACTAMENTE el semilla, no se sube. Significa que
-  // el admin no ha cambiado nada, y que en realidad lo que se tiene delante es el
-  // catálogo de arranque (con las 4 imágenes viejas hardcodeadas) en lugar del
-  // de Firestore: subirlo pisaría el catálogo real. La comparación es por
-  // id + imageUrl, que es lo único que distingue una semilla de su versión
-  // editada de forma relevante para este riesgo.
-  const esSemilla =
-    products.length === STORE_SEED_PRODUCTS.length &&
-    products.every((p, i) => {
-      const seed = STORE_SEED_PRODUCTS[i];
-      return seed && p.id === seed.id && (p.imageUrl || '') === (seed.imageUrl || '');
-    });
-  if (esSemilla) {
-    console.warn(
-      '[PRODUCTS] Catálogo idéntico al semilla: no se sube (evita pisar el catálogo de Firestore).'
-    );
-    return;
-  }
   void import('../services/productsSync')
     .then((m) => m.pushProductsToFirestore(products))
     .catch((error) => {

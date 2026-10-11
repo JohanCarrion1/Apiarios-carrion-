@@ -140,7 +140,7 @@ export default function FloweringForm({
                     type="text"
                     value={apiaryName}
                     onChange={(e) => setApiaryName(e.target.value)}
-                    placeholder="Nombre del apiario (ej: Huaraz)"
+                    placeholder="Nombre del apiario (ej: Apiario El Mirador)"
                     className="w-full rounded-xl border border-line bg-ink px-4 py-2 text-sm text-cream focus:border-honey/70"
                   />
                 )}

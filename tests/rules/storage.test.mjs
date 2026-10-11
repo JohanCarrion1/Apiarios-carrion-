@@ -15,6 +15,20 @@ const USUARIO = { uid: 'uid-a', email: 'ana@correo.com' };
 
 before(async () => {
   entorno = await crearEntorno();
+  // Calentamiento: el emulador de Storage no aplica storage.rules hasta la
+  // PRIMERA petición del proceso. Sin esto, el primer assert (el jpeg de más
+  // abajo) recibe storage/unauthorized de forma determinista aunque las reglas
+  // sean correctas. Un PUT descartable fuerza la carga del ruleset; si falla,
+  // es justo el intento que sirve de calentamiento.
+  try {
+    await entorno
+      .authenticatedContext(USUARIO.uid, { email: USUARIO.email })
+      .storage(BUCKET)
+      .ref(`comprobantes/${CARRIL}/.warmup.jpg`)
+      .put(archivo(1, 'image/jpeg'), { contentType: 'image/jpeg' });
+  } catch {
+    /* primer intento denegado mientras carga el ruleset: intencional */
+  }
 });
 after(async () => {
   await entorno.cleanup();

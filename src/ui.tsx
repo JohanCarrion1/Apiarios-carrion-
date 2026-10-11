@@ -226,6 +226,23 @@ export const IconRobot = ({ className }: IconProps) => (
   </svg>
 );
 
+/** Caja trampa (cajón de madera con listones y marca de trampa). */
+export const IconTrap = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M3.6 7.6h16.8v11a1.9 1.9 0 0 1-1.9 1.9H5.5a1.9 1.9 0 0 1-1.9-1.9Z" />
+    <path d="M3.6 7.6 6.1 3.6h11.8l2.5 4M8.4 7.6v12.9M15.6 7.6v12.9" />
+    <path d="m5.9 12.1 3 2.6m2-2.6 3 2.6m2-2.6 3 2.6" />
+  </svg>
+);
+
+/** Pin de ubicación (cabecera y estado vacío). */
+export const IconMapPin = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M12 21.5s7-6.1 7-11.1a7 7 0 1 0-14 0c0 5 7 11.1 7 11.1Z" />
+    <circle cx="12" cy="10.2" r="2.6" />
+  </svg>
+);
+
 /* ---------- compartidos ---------- */
 
 export function StatusPill({ status, small }: { status: 'saludable' | 'revision' | 'alerta' | 'sin_reina'; small?: boolean }) {

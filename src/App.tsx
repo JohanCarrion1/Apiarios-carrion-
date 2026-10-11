@@ -8,6 +8,7 @@ import {
 } from "./data";
 import { useClock, useReveal, useWeather } from "./hooks";
 import { getWeatherDescription } from "./services/weather";
+import { formatCoordinates } from "./services/geolocation";
 import { loadHives, saveHives, loadNuclei, saveNuclei, loadInspections, saveInspections, loadTasks, saveTasks, loadHarvests, saveHarvests, loadEvents, saveEvents, loadBreedingLots, saveBreedingLots, loadCuadernoEntries, saveCuadernoEntries, loadQueens, saveQueens, loadQueenHistory, saveQueenHistory, loadInventory, saveInventory, loadApiaries, saveLastActiveApiaryId, loadLastActiveApiaryId, onDataRestored, loadFecundadores, saveFecundadores, loadLastView, saveLastView } from './utils/storage';
 import { updateColonyStatus, onFirestoreHydrated } from './services/firestoreSync';
 import { formatHour } from './utils/formatTime';
@@ -25,6 +26,7 @@ import { IconBee,
   IconClipboard,
   IconDrop,
   IconFlower,
+  IconTrap,
   IconHex,
   IconPanel,
   IconPlus,
@@ -100,6 +102,8 @@ import { updateApiary, deleteApiary, type Apiary } from "./services/apiaryServic
 import BreedingSection from "./components/BreedingSection";
 import TransferHistorySection from "./components/TransferHistorySection";
 import PolinizacionSection from "./components/PolinizacionSection";
+import CajasTrampaSection from "./components/CajasTrampaSection";
+import type { TrapBox, TrapCapture } from "./types/trapBox";
 import { convertNucleoToColmena, transferHiveToApiary, transferNucleoToApiary, transferFecundadorToApiary, getNextHiveCode, getNextNucleoCode, addTransferRecord } from "./services/transfers";
 import { usePolinizacion } from "./lib/polinizacionService";
 import { sortByEntityCode } from "./utils/entityCode";
@@ -120,6 +124,7 @@ const NAV = [
   { id: "inventario", label: "Inventario", icon: IconPackage },
   { id: "transferencias", label: "Transferencias", icon: IconLayers },
   { id: "polinizacion", label: "Polinización", icon: IconFlower },
+  { id: "cajas-trampa", label: "Cajas Trampa", icon: IconTrap },
   { id: "asistente-ia", label: "Asistente IA", icon: IconRobot },
 ] as const;
 
@@ -500,6 +505,20 @@ export default function App() {
                 }
               />
               <Route
+                path="/dashboard/cajas-trampa"
+                element={
+                  <ProtectedRoute>
+                    <DataHydrationGate mode="progressive">
+                      <RouteFade>
+                        <Lazy>
+                          <CajasTrampaPage />
+                        </Lazy>
+                      </RouteFade>
+                    </DataHydrationGate>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/dashboard/:id"
                 element={
                   <ProtectedRoute>
@@ -632,6 +651,21 @@ function AsistenteIaPage() {
   const lastActiveId = loadLastActiveApiaryId(user.uid);
   const apiary = apiaries.find((a: any) => a.id === lastActiveId) ?? apiaries[0];
   return <Dashboard apiaryId={apiary.id} initialSection="asistente-ia" />;
+}
+
+/**
+ * Entrada directa a /dashboard/cajas-trampa: mismo patrón que AsistenteIaPage.
+ * Resuelve el último apiario activo (o el primero) y abre el dashboard con la
+ * sección de Cajas Trampa como sección inicial.
+ */
+function CajasTrampaPage() {
+  const { user } = useAuth();
+  if (!user) return null;
+  const apiaries = loadApiaries(user.uid);
+  if (apiaries.length === 0) return <Navigate to="/dashboard" replace />;
+  const lastActiveId = loadLastActiveApiaryId(user.uid);
+  const apiary = apiaries.find((a: any) => a.id === lastActiveId) ?? apiaries[0];
+  return <Dashboard apiaryId={apiary.id} initialSection="cajas-trampa" />;
 }
 
 // La pantalla "Mis Apiarios" deja de ser ruta de entrada: cualquier visita
@@ -2138,6 +2172,13 @@ function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSect
       navigate('/dashboard/asistente-ia');
       return;
     }
+    // Cajas Trampa también tiene ruta propia (/dashboard/cajas-trampa) para
+    // poder enlazarla/recargarla directamente.
+    if (id === 'cajas-trampa') {
+      navigateToSection('cajas-trampa');
+      navigate('/dashboard/cajas-trampa');
+      return;
+    }
     navigateToSection(id as ViewSection);
   };
 
@@ -2153,6 +2194,35 @@ function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSect
   const returnToSelection = () => {
     saveUltimaVista('/seleccionar', user?.uid);
     navigate('/seleccionar');
+  };
+
+  // PROMOCIÓN: captura de caja trampa → núcleo. Crea el núcleo en el apiario
+  // activo y devuelve su código para dejarlo anotado en la captura.
+  const handlePromoteTrapToNucleus = (box: TrapBox, capture: TrapCapture): string | null => {
+    if (!user || !apiaryId) return null;
+    const now = new Date().toISOString();
+    const nuevoNucleo: Hive = {
+      id: uid(),
+      code: getNextNucleoCode(nuclei),
+      name: box.name || 'Núcleo desde caja trampa',
+      location: formatCoordinates(box.location.lat, box.location.lng),
+      status: 'saludable',
+      hasQueen: false,
+      notes:
+        [
+          box.notes,
+          capture.notes,
+          `Capturado en caja trampa ${box.id} (${box.type}, ${capture.size})`,
+        ]
+          .filter(Boolean)
+          .join('\n') || undefined,
+      entityType: 'nucleo',
+      createdAt: now,
+      updatedAt: now,
+    };
+    setNuclei((prev) => sortByEntityCode([...prev, nuevoNucleo]));
+    pushToast('Núcleo creado', `${nuevoNucleo.code} — ${nuevoNucleo.name}`);
+    return nuevoNucleo.code;
   };
 
   return (
@@ -2456,6 +2526,21 @@ queenAlerts={{
                 key="polinizacion"
               >
                 <PolinizacionSection userId={user?.uid || ''} hives={hives} onShowToast={pushToast} />
+              </section>
+            )}
+
+            {activeSection === 'cajas-trampa' && (
+              <section
+                key="cajas-trampa"
+              >
+                <CajasTrampaSection
+                  userId={user?.uid || ''}
+                  apiaryId={apiaryId}
+                  apiaryName={apiaryName}
+                  apiaries={apiaries.map((a: Apiary) => ({ id: a.id, name: a.name }))}
+                  onShowToast={pushToast}
+                  onPromoteToNucleus={handlePromoteTrapToNucleus}
+                />
               </section>
             )}
 

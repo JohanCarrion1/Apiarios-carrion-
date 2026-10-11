@@ -1130,3 +1130,20 @@ export const enableFirestoreSync = (): void => {
 
 // Inicialización por defecto (módulo importado → handler disponible).
 enableFirestoreSync();
+
+// ============================================================
+// CAJAS TRAMPA (colección `trapBoxes`) — integración con el dashboard
+// ============================================================
+// La lógica (CRUD + listener en tiempo real + hook) vive en
+// `lib/trapBoxService.ts`. Se reexporta aquí, junto al resto de la integración
+// con Firestore, para que el dashboard la consuma desde un único punto.
+export {
+  TRAPBOXES_COLLECTION,
+  addTrapBox,
+  updateTrapBox,
+  deleteTrapBox,
+  getTrapBoxesByApiary,
+  renewTrapBait,
+  nextTrapBoxId,
+  useTrapBoxes,
+} from '../lib/trapBoxService';

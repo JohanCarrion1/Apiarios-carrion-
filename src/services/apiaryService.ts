@@ -4,6 +4,9 @@
 // Toda lectura/escritura pasa por la capa central de almacenamiento
 // versionada (utils/storage.ts) con backups rotativos y migración.
 import type { PhotoData } from './photos';
+import type { Apiary, ApiaryCoordinates, HiveType } from '../types/apiary';
+export type { Apiary, ApiaryCoordinates, HiveType } from '../types/apiary';
+export { HIVE_TYPE_OPTIONS, DEFAULT_HIVE_TYPE, hiveTypeLabel } from '../types/apiary';
 import {
   loadApiaries,
   saveApiaries,
@@ -17,22 +20,6 @@ import {
   saveTasks,
   removeApiaryData,
 } from '../utils/storage';
-
-// Interfaz para Apiario
-export interface Apiary {
-  id: string;
-  userId: string;
-  name: string;
-  location: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-  altitud?: number;
-  fotos?: PhotoData[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 // Interfaz para Hive con apiaryId
 export interface HiveWithApiary {
@@ -68,12 +55,14 @@ const getSuffix = (userId: string, apiaryId: string): string => `_${userId}_${ap
  * Crear un nuevo apiario
  */
 export async function createApiary(
-  userId: string, 
-  name: string, 
+  userId: string,
+  name: string,
   location: string,
-  coordinates?: { lat: number; lng: number },
+  coordinates?: ApiaryCoordinates,
   fotos?: PhotoData[],
-  altitud?: number
+  altitud?: number,
+  hiveType?: HiveType,
+  address?: string,
 ): Promise<string> {
   console.log('🔍 [LOCALSTORAGE] === INICIO createApiary ===');
   
@@ -89,20 +78,35 @@ export async function createApiary(
       id: generateId(),
       userId: userId,
       name: name.trim(),
-      location: location ? location.trim() : '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    // Solo se incluye `location` si hay texto real: si el usuario no da
+    // ubicación, el documento de Firestore no lleva el campo.
+    if (location && location.trim()) {
+      apiaryData.location = location.trim();
+    }
+
+    // La ubicación en texto del bienvenida se guarda como `address`.
+    if (address && address.trim()) {
+      apiaryData.address = address.trim();
+    }
+
     if (coordinates && coordinates.lat !== undefined && coordinates.lng !== undefined) {
       apiaryData.coordinates = {
         lat: Number(coordinates.lat),
-        lng: Number(coordinates.lng)
+        lng: Number(coordinates.lng),
+        ...(coordinates.address !== undefined ? { address: coordinates.address } : {}),
       };
     }
 
     if (typeof altitud === 'number' && !Number.isNaN(altitud)) {
       apiaryData.altitud = altitud;
+    }
+
+    if (hiveType) {
+      apiaryData.hiveType = hiveType;
     }
 
     if (fotos && fotos.length > 0) {

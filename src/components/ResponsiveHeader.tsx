@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconQueen, IconPackage, IconLayers, IconFlower, IconRobot } from '../ui';
+import { IconPanel, IconHex, IconChart, IconCalendar, IconDrop, IconClipboard, IconCheck, IconQueen, IconPackage, IconLayers, IconFlower, IconTrap, IconRobot } from '../ui';
 import { useAuth } from '../context/AuthContext';
 import { BRANDING } from '../lib/branding';
 import Logo from './Logo';
@@ -34,6 +34,7 @@ const menuItems: MenuItem[] = [
   { id: 'inventario', label: 'Inventario', icon: IconPackage },
   { id: 'transferencias', label: 'Transferencias', icon: IconLayers },
   { id: 'polinizacion', label: 'Polinización', icon: IconFlower },
+  { id: 'cajas-trampa', label: 'Cajas Trampa', icon: IconTrap },
   { id: 'asistente-ia', label: 'Asistente IA', icon: IconRobot },
 ];
 

@@ -81,14 +81,16 @@ export function sembrarAdmins(entorno, emails = [ADMIN.email], ownerEmail = ADMI
   );
 }
 
+// email_verified: true porque las cuentas reales de la app llegan aqui con el
+// correo verificado; isAdmin() ahora lo exige.
 export function comoAdmin(entorno) {
-  return entorno.authenticatedContext(ADMIN.uid, { email: ADMIN.email });
+  return entorno.authenticatedContext(ADMIN.uid, { email: ADMIN.email, email_verified: true });
 }
 export function comoAdminSecundario(entorno) {
-  return entorno.authenticatedContext(ADMIN_SECUNDARIO.uid, { email: ADMIN_SECUNDARIO.email });
+  return entorno.authenticatedContext(ADMIN_SECUNDARIO.uid, { email: ADMIN_SECUNDARIO.email, email_verified: true });
 }
 export function como(entorno, usuario) {
-  return entorno.authenticatedContext(usuario.uid, { email: usuario.email });
+  return entorno.authenticatedContext(usuario.uid, { email: usuario.email, email_verified: true });
 }
 export function comoAnonimo(entorno) {
   return entorno.unauthenticatedContext();
@@ -99,3 +101,15 @@ export function comoAnonimo(entorno) {
 export const fs = firebase.firestore;
 
 export { firebase };
+
+/**
+ * Sesion con el correo SIN verificar: el token dice el email, pero
+ * email_verified es false. Las reglas deben tratarla como NO admin aunque
+ * ese correo este en config/admins (vector: registrar el correo ajeno).
+ */
+export function comoSinVerificar(entorno, usuario = ADMIN) {
+  return entorno.authenticatedContext(usuario.uid, {
+    email: usuario.email,
+    email_verified: false,
+  });
+}

@@ -19,8 +19,15 @@ service cloud.firestore {
     // vez de reventar la evaluación (get().data sería null y `.emails`
     // denegaría en cascada). Se usan ternarios porque el motor de reglas NO
     // garantiza cortocircuito en `&&`.
+    // CORREGIDO (seguridad): el correo debe estar VERIFICADO. Firebase permite
+    // registrar correos ajenos sin verificarlos; sin este check, cualquiera podia
+    // crear una cuenta con el correo de un admin y colarse al panel porque el
+    // token "dice" ese email aunque nadie lo haya verificado. (Ver tests
+    // "admins con correo sin verificar" en tests/rules/firestore.test.mjs.)
     function isAdmin() {
-      return !isSignedIn() || !exists(/databases/$(database)/documents/config/admins)
+      return !isSignedIn()
+        || !exists(/databases/$(database)/documents/config/admins)
+        || request.auth.token.email_verified != true
         ? false
         : get(/databases/$(database)/documents/config/admins).data.emails
             .hasAny([request.auth.token.email]);
@@ -357,8 +364,16 @@ service cloud.firestore {
     // Doc id = "TRP-001" con { userId, apiaryId, name, location, ... }.
     // Idéntico a /colmenas (ver lógica de permisos arriba).
     match /trapBoxes/{boxId} {
-      // Cualquier usuario autenticado puede leer y escribir.
-      allow read, write: if isSignedIn();
+      // CORREGIDO (seguridad): antes esta regla permitia que CUALQUIER usuario
+      // autenticado leyera o escribiera cajas ajenas, incluida su ubicacion GPS.
+      // Ahora SI es identico a /colmenas: el propietario (userId) o un admin de
+      // tienda. (Ver tests "trapBoxes" en tests/rules/firestore.test.mjs.)
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }

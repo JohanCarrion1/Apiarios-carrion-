@@ -20,6 +20,7 @@ import {
   comoAdmin,
   comoAdminSecundario,
   comoAnonimo,
+  comoSinVerificar,
   fs,
 } from './helpers.mjs';
 
@@ -547,5 +548,79 @@ describe('productos', () => {
     await entorno.clearFirestore();
     const db = como(entorno, ADMIN).firestore();
     await assertFails(db.doc('products/p2').set({ nombre: 'Miel', precio: 1 }));
+  });
+});
+
+/* ================================================================
+   CAJAS TRAMPA — aislamiento por propietario (corregido)
+   ================================================================ */
+describe('trapBoxes', () => {
+  const caja = (over = {}) => ({
+    userId: USUARIO_A.uid,
+    apiaryId: 'api-1',
+    name: 'Trampa 1',
+    location: { lat: -12.05, lng: -77.04 },
+    ...over,
+  });
+
+  test('el dueño crea, lee y actualiza sus cajas trampa', async () => {
+    const db = como(entorno, USUARIO_A).firestore();
+    await assertSucceeds(db.doc('trapBoxes/TRP-001').set(caja()));
+    await assertSucceeds(db.doc('trapBoxes/TRP-001').get());
+    await assertSucceeds(db.doc('trapBoxes/TRP-001').update({ name: 'Renombrada' }));
+  });
+
+  test('OTRO usuario NO puede leer ni modificar cajas ajenas (ni su GPS)', async () => {
+    await sembrar(entorno, (db) => db.doc('trapBoxes/TRP-001').set(caja()));
+    const db = como(entorno, USUARIO_B).firestore();
+    await assertFails(db.doc('trapBoxes/TRP-001').get());
+    await assertFails(db.doc('trapBoxes/TRP-001').update({ name: 'hackeada' }));
+    await assertFails(db.doc('trapBoxes/TRP-001').delete());
+  });
+
+  test('nadie puede crear una caja a nombre de otro', async () => {
+    const db = como(entorno, USUARIO_B).firestore();
+    await assertFails(db.doc('trapBoxes/TRP-002').set(caja()));
+  });
+
+  test('el listado propio funciona con el filtro userId (no la colección entera)', async () => {
+    await sembrar(entorno, async (db) => {
+      await db.doc('trapBoxes/TRP-001').set(caja());
+      await db.doc('trapBoxes/TRP-B').set(caja({ userId: USUARIO_B.uid, name: 'Ajena' }));
+    });
+    const db = como(entorno, USUARIO_A).firestore();
+    // Esto es lo que hace el cliente para traer solo sus cajas.
+    await assertSucceeds(
+      db.collection('trapBoxes').where('userId', '==', USUARIO_A.uid).get()
+    );
+    // Pero NO puede volcar la colección completa.
+    await assertFails(db.collection('trapBoxes').get());
+  });
+
+  test('el admin de tienda supervisa cualquier caja', async () => {
+    await sembrar(entorno, (db) => db.doc('trapBoxes/TRP-001').set(caja()));
+    await assertSucceeds(comoAdmin(entorno).firestore().doc('trapBoxes/TRP-001').get());
+  });
+});
+
+/* ================================================================
+   CORREO SIN VERIFICAR — no basta con "decir" el email de un admin
+   ================================================================ */
+describe('admins con correo sin verificar', () => {
+  test('un correo de admin SIN verificar NO da acceso admin', async () => {
+    // Firebase permite crear una cuenta con un correo ajeno sin verificarlo:
+    // el token diría el email del admin, pero email_verified es false. Aunque
+    // ese correo esté en config/admins, la regla debe rechazarlo.
+    const db = comoSinVerificar(entorno).firestore();
+    await assertFails(db.doc('products/p1').set({ nombre: 'Miel', precio: 1 }));
+    await assertFails(db.doc('config/admins').get());
+  });
+
+  test('un usuario normal verificado sigue funcionando igual', async () => {
+    await sembrar(entorno, (db) =>
+      db.doc('apiarios/api-1').set({ userId: USUARIO_A.uid, nombre: 'Apiario A' })
+    );
+    const db = como(entorno, USUARIO_A).firestore();
+    await assertSucceeds(db.doc('apiarios/api-1').get());
   });
 });

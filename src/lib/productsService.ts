@@ -52,7 +52,13 @@ const pushToCloud = (products: StoreProduct[]): void => {
         message:
           code === 'permission-denied'
             ? 'Firestore rechazó el guardado (permisos). Verifica que tu correo esté en la lista de administradores.'
-            : 'No se pudo guardar en la nube. Revisa tu conexión: el cambio quedó solo en este dispositivo.',
+            : code === 'unavailable'
+              ? 'Sin conexión con Firestore: el cambio quedó solo en este dispositivo y se reintentará.'
+              : `Firestore rechazó el guardado (${code || 'error'})${
+                  (error as { productoRechazado?: string })?.productoRechazado
+                    ? ` en «${(error as { productoRechazado?: string }).productoRechazado}»`
+                    : ''
+                }. El cambio quedó solo en este dispositivo.`,
       });
     });
 };

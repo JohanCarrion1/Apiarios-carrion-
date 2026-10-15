@@ -21,7 +21,7 @@
 // habla con Firestore y devuelve/acepta `StoreProduct[]`; de la caché local se
 // encarga quien lo llama.
 // ============================================================
-import { collection, deleteDoc, doc, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { auth, db, isFirebaseAvailable } from '../lib/firebase';
 import type { StoreProduct } from '../types/store';
 
@@ -62,16 +62,43 @@ export async function pushProductsToFirestore(products: StoreProduct[]): Promise
     );
     return 0;
   }
-  const validos = products.filter((p) => p && typeof p.id === 'string' && p.id.length > 0);
+  // Firestore rechaza `undefined` (p. ej. subcategoria/badge opcionales): el
+  // roundtrip JSON los elimina. Sin esto, UN producto con un campo undefined
+  // tumba el batch completo y ningún precio se guarda.
+  const validos = products
+    .filter((p) => p && typeof p.id === 'string' && p.id.length > 0)
+    .map((p) => JSON.parse(JSON.stringify(p)) as StoreProduct);
   if (validos.length === 0) return 0;
 
   for (let i = 0; i < validos.length; i += BATCH_LIMIT) {
-    const batch = writeBatch(db!);
-    for (const p of validos.slice(i, i + BATCH_LIMIT)) {
-      // `merge: true` para no pisar campos que un doc tuviera de más.
-      batch.set(doc(db!, PRODUCTS_COLLECTION, p.id), { ...p, updatedAt: serverTimestamp() }, { merge: true });
+    const trozo = validos.slice(i, i + BATCH_LIMIT);
+    try {
+      const batch = writeBatch(db!);
+      for (const p of trozo) {
+        // `merge: true` para no pisar campos que un doc tuviera de más.
+        batch.set(doc(db!, PRODUCTS_COLLECTION, p.id), { ...p, updatedAt: serverTimestamp() }, { merge: true });
+      }
+      await batch.commit();
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      // Permisos/offline: reintentar uno a uno no sirve, que lo vea el llamador.
+      if (code === 'permission-denied' || code === 'unauthenticated' || code === 'unavailable') throw error;
+      // Un producto malo (campo inválido, imagen enorme) no debe bloquear al resto.
+      console.error('[PRODUCTS SYNC] Batch rechazado, reintentando producto por producto:', error);
+      let primerError: unknown = null;
+      let subidos = 0;
+      for (const p of trozo) {
+        try {
+          await setDoc(doc(db!, PRODUCTS_COLLECTION, p.id), { ...p, updatedAt: serverTimestamp() }, { merge: true });
+          subidos++;
+        } catch (e) {
+          console.error('[PRODUCTS SYNC] Producto rechazado:', p.id, p.nombre, e);
+          if (!primerError) primerError = Object.assign(e as object, { productoRechazado: p.nombre });
+        }
+      }
+      if (primerError) throw primerError;
+      if (subidos === 0) throw error;
     }
-    await batch.commit();
   }
   return validos.length;
 }

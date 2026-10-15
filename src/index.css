@@ -23,6 +23,8 @@
 
 html {
   scroll-behavior: smooth;
+  /* Declara que la app es oscura: desactiva el oscurecido automático del navegador. */
+  color-scheme: dark;
 }
 
 body {

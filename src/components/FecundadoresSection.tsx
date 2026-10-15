@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, type CSSProperties } from 'react';
+import { useHexGrid } from '../lib/useHexGrid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -93,21 +94,8 @@ export default function FecundadoresSection({
   // Las filas impares llevan siempre una celda menos: eso es lo que produce el
   // desplazamiento de media celda del panal. Cada tramo debe coincidir EXACTO
   // con su media query de CSS.
-  const getCols = () => {
-    const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
-    if (w < 768) return { even: 6, odd: 5 } as const;
-    if (w < 1280) return { even: 9, odd: 8 } as const;
-    return { even: 11, odd: 10 } as const;
-  };
-  const [cols, setCols] = useState(getCols);
-  // useEffect, no useMemo: con useMemo el valor de retorno (la función de
-  // limpieza) se descarta, así que el listener de 'resize' nunca se daba de
-  // baja y se acumulaba uno por cada montaje del componente.
-  useEffect(() => {
-    const onResize = () => setCols(getCols());
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  // Columnas según el ancho REAL del recuadro (ver lib/useHexGrid).
+  const { ref: gridRef, cols } = useHexGrid<HTMLDivElement>();
 
   const active = useMemo(() => fecundadores.filter(f => f.estado === 'activo'), [fecundadores]);
   const promoted = useMemo(
@@ -478,6 +466,7 @@ export default function FecundadoresSection({
 
           {/* Mapa hexagonal compacto (baby nucs · hexágonos al 70%) */}
           <div
+            ref={gridRef}
             className="card map-panal map-fecundadores relative overflow-visible"
             style={{ padding: 10 }}
           >

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback, type CSSProperties } from 'react';
+import { useHexGrid } from '../lib/useHexGrid';
 import { motion } from 'framer-motion';
 import {
   STATUS_COLORS,
@@ -95,21 +96,8 @@ export default function HiveComb({
   // desplazamiento de media celda del panal. Cada tramo debe coincidir EXACTO
   // con su media query de CSS: si el CSS cuenta 11 celdas y el JS agrupa 9, la
   // rejilla queda más estrecha que el hueco reservado y sobran huecos a lados.
-  const getCols = () => {
-    const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
-    if (w < 768) return { even: 6, odd: 5 } as const;
-    if (w < 1280) return { even: 9, odd: 8 } as const;
-    return { even: 11, odd: 10 } as const;
-  };
-  const [cols, setCols] = useState(getCols);
-  // useEffect, no useMemo: con useMemo el valor de retorno (la función de
-  // limpieza) se descarta, así que el listener de 'resize' nunca se daba de
-  // baja y se acumulaba uno por cada montaje del componente.
-  useEffect(() => {
-    const onResize = () => setCols(getCols());
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  // Columnas según el ancho REAL del recuadro (ver lib/useHexGrid).
+  const { ref: gridRef, cols } = useHexGrid<HTMLDivElement>();
 
   const isDim = useCallback(
     (h: Hive) =>
@@ -294,6 +282,7 @@ export default function HiveComb({
       {/* Mapa hexagonal compacto (panal: 6/5 móvil, 9/8 tablet y escritorio,
           con offset en las filas pares y solape vertical) */}
       <div
+        ref={gridRef}
         className="card map-panal relative overflow-visible"
         style={{ padding: 10 }}
       >

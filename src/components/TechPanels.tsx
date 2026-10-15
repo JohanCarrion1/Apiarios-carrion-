@@ -1,11 +1,13 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { differenceInDays, parseISO } from 'date-fns';
+import { differenceInDays, format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 import type { Hive, Inspection } from '../types/hive';
 import { hiveHasQueen } from '../types/hive';
 import type { Queen } from '../types/queen';
 import { QUEEN_YEAR_COLORS } from '../types/queen';
 import type { BreedingLot } from '../types/breeding';
+import { BREEDING_STATUS_LABELS } from '../types/breeding';
 
 /* ---------------------------------------------------------------------------
    Capa técnica (solo lectura): usa los datos reales de tus inspecciones, reinas
@@ -347,6 +349,8 @@ export function TechStatsCards({ hives, inspections }: { hives: Hive[]; inspecti
 }
 
 /* ---------- Cría de reinas: cronología biológica ---------- */
+/* Referencia estándar (días desde el injerto). Solo se muestra tal cual cuando
+   NO hay ningún lote en curso; con un lote real, las fechas salen del lote. */
 const CHRONO: { day: number; title: string; text: string }[] = [
   { day: 0, title: 'Injerto de larvas', text: 'Larvas de menos de 24 h en copas con jalea real.' },
   { day: 2, title: 'Aceptación', text: 'Revisa que las celdas estén cuidadas y con jalea abundante.' },
@@ -358,29 +362,113 @@ const CHRONO: { day: number; title: string; text: string }[] = [
   { day: 28, title: 'Evaluación', text: 'Revisa patrón de cría, temperamento y población.' },
 ];
 
+const STAGES: BreedingLot['estado'][] = ['enRealeras', 'enjauladas', 'nacidas', 'fecundando', 'aceptadas'];
+
+type ChronoStep = { key: string; title: string; text: string; est: Date; real?: Date; done: boolean };
+
+const safeDate = (iso?: string): Date | undefined => {
+  if (!iso) return undefined;
+  const d = parseISO(iso);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
+const plusDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000);
+
+/** Construye la cronología de UN lote con sus datos reales: fechas del lote,
+    historial de estados y aceptación registrada. Lo que el lote no registra
+    se estima desde sus propias fechas (no desde una tabla fija). */
+function buildChronology(lot: BreedingLot, today: Date): ChronoStep[] {
+  const start = safeDate(lot.fechaInicio) ?? today;
+  const enj = safeDate(lot.fechaEnjauladoEstimada) ?? plusDays(start, 10);
+  const nac = safeDate(lot.fechaNacimientoEstimada) ?? plusDays(start, 12);
+  const stage = Math.max(0, STAGES.indexOf(lot.estado));
+  const hist = (e: string) => {
+    const h = (lot.estadoHistorial || []).filter((x) => x.estado === e).pop();
+    return safeDate(h?.fecha);
+  };
+  const acc = lot.acceptance;
+  const accDate = safeDate(acc?.registeredAt) ?? hist('aceptacion');
+  const passed = (d: Date) => today.getTime() >= d.getTime();
+
+  return [
+    { key: 'injerto', title: 'Injerto de larvas', text: `${lot.cantidadPortacupulas || 0} copas con larvas de menos de 24 h · método ${lot.tipo}.`, est: start, real: start, done: true },
+    { key: 'acept', title: 'Aceptación',
+      text: acc ? `${acc.acceptedCount} de ${acc.totalCount} celdas aceptadas (${Math.round(acc.percentage)} %).` : 'Revisa que las celdas estén cuidadas y con jalea abundante; registra cuántas se aceptaron.',
+      est: plusDays(start, 2), real: accDate, done: !!acc || stage >= 1 || passed(plusDays(start, 2)) },
+    { key: 'oper', title: 'Operculado', text: 'Las celdas se cierran. Evita mover o sacudir el marco.', est: plusDays(start, 5), done: stage >= 1 || passed(plusDays(start, 5)) },
+    { key: 'enj', title: 'Enjaulado', text: 'Protege cada celda en jaula o pásalas a núcleos.', est: enj, real: hist('enjauladas'), done: stage >= 1 },
+    { key: 'nac', title: 'Nacimiento', text: 'Emergen las reinas vírgenes.', est: nac, real: hist('nacidas'), done: stage >= 2 },
+    { key: 'vuelo', title: 'Vuelos nupciales', text: 'Unos 5 días tras nacer salen a fecundarse con zánganos.', est: plusDays(nac, 5), real: hist('fecundando'), done: stage >= 3 },
+    { key: 'post', title: 'Inicio de postura', text: 'Primeros huevos 8 a 13 días después de nacer.', est: plusDays(nac, 8), real: hist('aceptadas'), done: stage >= 4 },
+    { key: 'eval', title: 'Evaluación', text: 'Revisa patrón de cría, temperamento y población.', est: plusDays(start, 28), done: stage >= 4 },
+  ];
+}
+
 export function QueenChronology({ lots }: { lots: BreedingLot[] }) {
-  const active = useMemo(() => {
-    const list = lots.filter((l) => l.estado !== 'perdidas' && l.estado !== 'aceptadas')
-      .sort((a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime());
-    return list[0];
-  }, [lots]);
-  const day = active ? Math.max(0, differenceInDays(new Date(), parseISO(active.fechaInicio))) : -1;
-  let cur = -1;
-  CHRONO.forEach((s, i) => { if (day >= s.day) cur = i; });
-  const fill = cur < 0 ? 0 : Math.round(((cur + 1) / CHRONO.length) * 100);
+  const today = useMemo(() => new Date(), []);
+  const activeLots = useMemo(
+    () => lots.filter((l) => l.estado !== 'perdidas' && l.estado !== 'aceptadas')
+      .sort((a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()),
+    [lots]
+  );
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const lot = activeLots.find((l) => l.id === pickedId) ?? activeLots[0];
+  const steps = useMemo(() => (lot ? buildChronology(lot, today) : []), [lot, today]);
+
+  // Sin lote en curso: referencia estándar por días, sin fechas.
+  if (!lot) {
+    return (
+      <TCard title="Cronología biológica" note="Cuando empieces un lote de cría, esta cronología se arma con sus fechas reales. Mientras tanto, la referencia estándar:">
+        <div className="relative mt-1 pl-6">
+          <span className="absolute bottom-2 left-[7px] top-2 w-0.5 bg-line" />
+          {CHRONO.map((c) => (
+            <div key={c.day} className="relative pb-3.5">
+              <span className="absolute -left-[22px] top-1 h-3 w-3 rounded-full border-2 border-line bg-ink" />
+              <p className="text-sm font-semibold text-cream"><span className="mr-2 font-mono text-[11px] tracking-wider text-honey">DÍA {c.day}</span>{c.title}</p>
+              <p className="text-[13px] text-husk">{c.text}</p>
+            </div>
+          ))}
+        </div>
+      </TCard>
+    );
+  }
+
+  const cur = steps.findIndex((x) => !x.done);
+  const doneCount = cur === -1 ? steps.length : cur;
+  const fill = Math.round((doneCount / steps.length) * 100);
+  const day = Math.max(0, differenceInDays(today, parseISO(lot.fechaInicio)));
+  const fmt = (d: Date) => format(d, "d 'de' MMM", { locale: es });
 
   return (
-    <TCard title="Cronología biológica" note={active ? <>Lote más reciente en curso ({active.tipo}): día <b className="text-cream">{day}</b> desde el injerto.</> : 'Sin lote activo. Referencia estándar de cría de reinas.'}>
+    <TCard title="Cronología biológica" note={<>Lote {lot.tipo} iniciado el {fmt(parseISO(lot.fechaInicio))}: día <b className="text-cream">{day}</b> desde el injerto · {BREEDING_STATUS_LABELS[lot.estado].toLowerCase()}. Las fechas salen de tu lote; «estimada» es lo que aún no registras.</>}>
+      {activeLots.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {activeLots.map((l) => (
+            <button key={l.id} onClick={() => setPickedId(l.id)}
+              className={`rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${l.id === lot.id ? 'border-honey bg-honey/15 text-honey' : 'border-line text-husk hover:border-honey/50'}`}>
+              {l.tipo} · {fmt(parseISO(l.fechaInicio))}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="relative mt-1 pl-6">
         <span className="absolute bottom-2 left-[7px] top-2 w-0.5 bg-line" />
-        <motion.span className="absolute left-[7px] top-2 w-0.5 bg-gradient-to-b from-honey to-deep" initial={{ height: 0 }} whileInView={{ height: `${fill * 0.92}%` }} viewport={{ once: true }} transition={{ duration: 1.3, ease: EASE }} />
-        {CHRONO.map((s, i) => {
-          const done = i < cur, now = i === cur;
+        <motion.span key={lot.id + fill} className="absolute left-[7px] top-2 w-0.5 bg-gradient-to-b from-honey to-deep" initial={{ height: 0 }} whileInView={{ height: `${fill * 0.92}%` }} viewport={{ once: true }} transition={{ duration: 1.3, ease: EASE }} />
+        {steps.map((st, i) => {
+          const done = st.done, now = i === cur;
+          const late = !done && today.getTime() > st.est.getTime() + 86400000;
+          const lateDays = late ? differenceInDays(today, st.est) : 0;
           return (
-            <div key={s.day} className="relative pb-3.5">
+            <div key={st.key} className="relative pb-3.5">
               <span className={`absolute -left-[22px] top-1 h-3 w-3 rounded-full border-2 ${done ? 'border-honey bg-honey' : now ? 'border-[#6fa8dc] bg-[#6fa8dc] shadow-[0_0_0_5px_rgba(111,168,220,.22)] animate-pulse' : 'border-line bg-ink'}`} />
-              <p className="text-sm font-semibold text-cream"><span className="mr-2 font-mono text-[11px] tracking-wider text-honey">DÍA {s.day}</span>{s.title}</p>
-              <p className={`text-[13px] ${now ? 'text-[#d7e4f7]' : 'text-husk'}`}>{s.text}</p>
+              <p className="text-sm font-semibold text-cream">
+                <span className="mr-2 font-mono text-[11px] tracking-wider text-honey">DÍA {Math.max(0, differenceInDays(st.real ?? st.est, parseISO(lot.fechaInicio)))}</span>{st.title}
+              </p>
+              <p className="font-mono text-[10px] uppercase tracking-wider text-husk">
+                {st.real ? <>registrado · {fmt(st.real)}</> : <>estimada · {fmt(st.est)}</>}
+                {late && <span className="ml-2 text-coral">· retraso {lateDays} d</span>}
+                {now && !late && <span className="ml-2 text-[#6fa8dc]">· etapa actual</span>}
+              </p>
+              <p className={`text-[13px] ${now ? 'text-[#d7e4f7]' : 'text-husk'}`}>{st.text}</p>
             </div>
           );
         })}

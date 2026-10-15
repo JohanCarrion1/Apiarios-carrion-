@@ -18,7 +18,6 @@ import { useScrollToTopOnMount } from '../hooks/useScrollToTopOnMount';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import StoreImage from './StoreImage';
 import { normalizeProductImageUrl } from '../lib/cloudinary';
-import OriginalBackground from './OriginalBackground';
 import Logo from './Logo';
 import QuantityInput from './QuantityInput';
 import { HeroAmbient, HoneyDrips } from './StoreFx';
@@ -1389,9 +1388,12 @@ export default function Store() {
   };
   return (
     <div className="relative min-h-screen" style={{ background: '#1a1410' }}>
-      {/* Fondo original EXACTO de la tienda: hexágonos finos 50px, gradiente
-          radial, abejas pequeñas, partículas de luz y brillo central. */}
-      <OriginalBackground />
+      {/* Fondo base de la tienda (el panal vivo va encima). */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        aria-hidden="true"
+        style={{ background: 'radial-gradient(ellipse at 50% 0%, #2a1f15 0%, #1a1410 60%, #120e08 100%)' }}
+      />
       {/* Panal vivo: hexágonos que se iluminan y abejas que persiguen el puntero. */}
       <LivingHive />
 

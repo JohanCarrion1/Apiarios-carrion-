@@ -18,6 +18,8 @@ import { usePedidos } from "../lib/pedidosService";
 import { emitGlobalToast } from "../lib/toastBus";
 import { useScrollToTopOnMount } from "../hooks/useScrollToTopOnMount";
 import Logo from "./Logo";
+import { SelectionBackdrop } from "./StoreFx";
+import LivingHive from "./LivingHive";
 import TermsModal from "./TermsModal";
 import {
   TERMS_VERSION,
@@ -339,31 +341,9 @@ export default function SelectionScreen() {
        deja el tope siempre alcanzable. `overflow-x-hidden` es solo para el eje
        horizontal. */
     <div className="relative flex min-h-dvh w-full justify-center overflow-x-hidden bg-ink">
-      {/* Fondo con patrón hexagonal */}
-      <div className="absolute inset-0">
-        <svg
-          className="absolute inset-0 w-full h-full opacity-[0.08]"
-          aria-hidden="true"
-        >
-          <defs>
-            <pattern
-              id="hex-pattern"
-              width="50"
-              height="87"
-              patternUnits="userSpaceOnUse"
-              patternTransform="scale(2)"
-            >
-              <path
-                d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z"
-                fill="none"
-                stroke="#f0a41c"
-                strokeWidth="0.8"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hex-pattern)" />
-        </svg>
-      </div>
+      {/* Fondo rediseñado: luz de miel, panal con desvanecido y abejas vivas */}
+      <SelectionBackdrop />
+      <LivingHive />
 
       {/* Cerrar sesión — esquina superior derecha.
           Absolutely posicionado respecto a la pantalla completa (no al bloque

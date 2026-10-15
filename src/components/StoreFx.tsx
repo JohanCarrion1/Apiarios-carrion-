@@ -92,7 +92,7 @@ export function SelectionBackdrop() {
     { l: '20%', t: '60%', s: 560, c: 'rgba(255,201,97,.08)', dx: 30, dy: -40, d: 22 },
   ];
   return (
-    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true"
+    <div className="pointer-events-none fixed inset-0 z-[1] overflow-hidden" aria-hidden="true"
       style={{ background: 'radial-gradient(ellipse at 50% 0%, #2a1f15 0%, #1a1410 55%, #120e08 100%)' }}>
       {orbs.map((o, i) => (
         <motion.div

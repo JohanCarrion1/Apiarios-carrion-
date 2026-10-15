@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
+import LivingHive from './LivingHive';
 
 /* Efectos decorativos de la tienda (solo visuales, no tocan datos).
    Respetan prefers-reduced-motion. */
@@ -104,5 +105,16 @@ export function SelectionBackdrop({ fixed = false }: { fixed?: boolean }) {
       ))}
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 55%, rgba(10,7,3,.55) 100%)' }} />
     </div>
+  );
+}
+
+/** Fondo de las secciones de administración (Cotizaciones, Catálogo, Pedidos):
+    el mismo de Control de Colmenas, con todo el panal brillando y sin abejas. */
+export function PanalBackdrop() {
+  return (
+    <>
+      <SelectionBackdrop fixed />
+      <LivingHive bees={false} />
+    </>
   );
 }

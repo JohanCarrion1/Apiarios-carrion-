@@ -10,6 +10,7 @@
 // por rol lo aplica `usePedidos` + firestore.rules.
 // ============================================================
 
+import { PanalBackdrop } from './StoreFx';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -147,7 +148,8 @@ export default function AdminPedidos() {
   }
 
   return (
-    <div className="relative min-h-screen bg-[#1A140D]">
+    <div className="relative min-h-screen">
+      <PanalBackdrop />
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-16 pb-28 pt-6">
         {/* Cabecera */}
         <header className="mb-6 flex flex-wrap items-center gap-3">

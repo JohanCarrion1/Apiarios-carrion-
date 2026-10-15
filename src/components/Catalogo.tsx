@@ -16,6 +16,7 @@
 // Acceso: SOLO usuarios presentes en la lista de admins (config/admins),
 // igual que /admin/cotizaciones. Ver firestore.rules.
 
+import { PanalBackdrop } from './StoreFx';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import { useNavigate } from 'react-router-dom';
@@ -1676,7 +1677,8 @@ export default function Catalogo() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1A140D] pb-28">
+    <div className="relative min-h-screen pb-28">
+      <PanalBackdrop />
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-16 pt-6">
         {/* ---- Cabecera ---- */}
         <header className="mb-6 flex flex-wrap items-center gap-3">

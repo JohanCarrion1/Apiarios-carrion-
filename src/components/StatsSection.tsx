@@ -20,6 +20,7 @@ import {
 import type { Hive, Inspection, Task } from '../types/hive';
 import { STATUS_COLORS } from '../types/hive';
 import { MONTHS } from '../data';
+import { TechStatsCards } from './TechPanels';
 import { getCurrentUserId, loadHives, loadHarvests, loadApiaries } from '../utils/storage';
 
 interface Harvest {
@@ -886,6 +887,9 @@ export default function StatsSection({
           </div>
         </div>
       </motion.div>
+
+      {/* Capa técnica: varroa vs umbral, fuerza y reinas por año */}
+      <TechStatsCards hives={[...hives, ...nuclei]} inspections={inspections} />
 
       {/* Evolución de Varroa */}
       <motion.div

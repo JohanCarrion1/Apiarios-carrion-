@@ -8,6 +8,7 @@ import { BREEDING_STATUS_LABELS, BREEDING_STATUS_COLORS, BREEDING_TYPE_LABELS } 
 import type { Queen } from '../types/queen';
 import { IconPlus, IconQueen, IconTrash } from '../ui';
 import BreedingForm from './BreedingForm';
+import { QueenChronology } from './TechPanels';
 import BreedingDetail from './BreedingDetail';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { useClosingPanel } from '../hooks/useClosingPanel';
@@ -384,6 +385,9 @@ export default function BreedingSection({
           tone={alertasCount > 0 ? 'text-coral' : 'text-sage'}
         />
       </div>
+
+      {/* Cronología biológica de la cría */}
+      <QueenChronology lots={breedingLots} />
 
       {/* Agenda y comparativa por método */}
       <div className="grid gap-3 sm:grid-cols-2">

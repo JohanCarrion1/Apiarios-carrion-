@@ -1,3 +1,4 @@
+import { ApiaryStrengthCard } from './TechPanels';
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
@@ -639,6 +640,9 @@ export default function Dashboard({
         </Card>
       </div>
       
+      {/* Fuerza técnica del apiario */}
+      <ApiaryStrengthCard hives={hives} inspections={inspections} />
+
       {/* 2. ALERTAS IMPORTANTES */}
       <Card delay={0.4}>
         <div className="flex items-center justify-between mb-4">

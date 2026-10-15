@@ -21,6 +21,8 @@ import { normalizeProductImageUrl } from '../lib/cloudinary';
 import OriginalBackground from './OriginalBackground';
 import Logo from './Logo';
 import QuantityInput from './QuantityInput';
+import { HeroAmbient, HoneyDrips } from './StoreFx';
+import LivingHive from './LivingHive';
 import { IconPlus } from '../ui';
 import {
   STORE_MACROS,
@@ -239,7 +241,7 @@ function ProductCard({
       whileHover={{ y: -4 }}
       whileTap={{ scale: 0.98 }}
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-      className="card group flex h-full min-h-[284px] flex-col overflow-hidden text-left sm:min-h-[318px]"
+      className="card card-sheen group flex h-full min-h-[284px] flex-col overflow-hidden text-left sm:min-h-[318px]"
     >
       <div className="relative">
         <StoreImage
@@ -925,9 +927,15 @@ function FloatingCartButton({ count, onClick }: { count: number; onClick: () => 
     >
       <span>🛒 Mi Pedido</span>
       {count > 0 && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11px] font-black text-honey">
+        <motion.span
+          key={count}
+          initial={{ scale: 1.7 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 14 }}
+          className="flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11px] font-black text-honey"
+        >
           {count}
-        </span>
+        </motion.span>
       )}
     </motion.button>
   );
@@ -1384,6 +1392,8 @@ export default function Store() {
       {/* Fondo original EXACTO de la tienda: hexágonos finos 50px, gradiente
           radial, abejas pequeñas, partículas de luz y brillo central. */}
       <OriginalBackground />
+      {/* Panal vivo: hexágonos que se iluminan y abejas que persiguen el puntero. */}
+      <LivingHive />
 
       {/* Aviso de almacenamiento lleno: permite liberar localStorage y recargar. */}
       {storageAlert && (
@@ -1479,6 +1489,8 @@ export default function Store() {
                   </div>
                 </div>
 
+                <HeroAmbient />
+
                 {/* Halo ámbar tenue sobre el hero (reemplaza la figura hexagonal grande) */}
                 <div
                   className="pointer-events-none absolute inset-0 z-0"
@@ -1486,6 +1498,8 @@ export default function Store() {
                   aria-hidden="true"
                 />
               </section>
+
+              <HoneyDrips />
 
               {/* Cifras del apiario (contadores al entrar en viewport) */}
               <CifrasApiario />

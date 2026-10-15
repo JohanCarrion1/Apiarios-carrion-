@@ -10,6 +10,7 @@ import type { BreedingLot } from '../types/breeding';
 // Queen imports removed — queen info block removed from detail; only badge remains in header
 import { IconCrown, IconPlus, IconNote, IconX, IconRefresh, IconLayers } from "../ui";
 import InspectionHistory from './InspectionHistory';
+import { HiveTechCard } from './TechPanels';
 import { collectInspectionPhotos } from '../services/inspectionPhotos';
 import type { PhotoData } from '../services/photos';
 
@@ -350,6 +351,9 @@ export default function HiveDetail({
               Registrar inspección
             </motion.button>
           </div>
+
+          {/* Ficha técnica (datos de la última inspección) */}
+          <HiveTechCard hive={hive} inspections={inspections} queen={queen} />
 
           {/* Equipamiento en tiempo real (SOLO colmenas) */}
           {!nucleus && onUpdateEquipment && (

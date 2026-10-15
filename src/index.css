@@ -943,3 +943,22 @@ html {
     padding-top: env(safe-area-inset-top);
   }
 }
+
+/* ---- Brillo de miel al pasar sobre una tarjeta de producto (solo visual) ---- */
+.card-sheen { position: relative; isolation: isolate; }
+.card-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 201, 97, 0.14) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (hover: hover) {
+  .card-sheen:hover::after { transform: translateX(120%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-sheen::after { display: none; }
+}

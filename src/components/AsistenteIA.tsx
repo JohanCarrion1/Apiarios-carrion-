@@ -595,6 +595,34 @@ export default function AsistenteIA({
     }
   };
 
+  // Modo normal: el asistente ocupa TODA la pantalla bajo la barra superior
+  // (sin tarjeta ni márgenes, como una app de chat). Su alto se mide desde donde
+  // empieza hasta el borde inferior visible, así el compositor queda pegado abajo
+  // aunque cambie la barra del navegador o aparezca el teclado.
+  const inlineRef = useRef<HTMLDivElement>(null);
+  const [inlineH, setInlineH] = useState<number | null>(null);
+  useEffect(() => {
+    if (fullscreen) return;
+    const medir = () => {
+      const el = inlineRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      const h = Math.max(320, Math.round(vh - Math.max(0, top)));
+      setInlineH((prev) => (prev === h ? prev : h));
+    };
+    medir();
+    const vv = window.visualViewport;
+    window.addEventListener('resize', medir);
+    vv?.addEventListener('resize', medir);
+    const t = window.setTimeout(medir, 250); // tras animaciones de entrada / carga de la cabecera
+    return () => {
+      window.removeEventListener('resize', medir);
+      vv?.removeEventListener('resize', medir);
+      window.clearTimeout(t);
+    };
+  }, [fullscreen]);
+
   const chat = (
     <>
       <Cabecera
@@ -770,7 +798,9 @@ export default function AsistenteIA({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="card relative flex h-[calc(100dvh-8rem)] flex-col overflow-hidden sm:h-[min(76vh,720px)]"
+            ref={inlineRef}
+            style={{ height: inlineH ?? 'calc(100dvh - 4.5rem)' }}
+            className="relative -mx-4 -mb-10 -mt-6 flex flex-col overflow-hidden border-t border-line/60 bg-ink/35 backdrop-blur-[2px] sm:-mx-6 sm:-mt-8 md:-mt-10 lg:-mx-12 xl:-mx-16"
           >
             {chat}
           </motion.div>

@@ -2574,7 +2574,7 @@ queenAlerts={{
           {!iaFullscreen && (
           <motion.footer 
             className={`flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 border-t border-line pt-8 text-xs text-husk ${
-              activeSection === 'asistente-ia' ? 'max-sm:hidden' : ''
+              activeSection === 'asistente-ia' ? 'hidden' : ''
             }`}
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}

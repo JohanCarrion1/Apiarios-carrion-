@@ -76,18 +76,72 @@ export default function LivingHive() {
       }
     };
 
+    /* Abeja con los trazos del logo de Apiarios Carrión (alas triangulares, tórax
+       hexagonal, cabeza, antenas, abdomen rayado y patas), dibujada en
+       coordenadas del logo (viewBox 120) y animada pieza por pieza:
+       aleteo rápido de las tres alas, antenas que tantean, patas que cuelgan
+       y abdomen que cabecea. Mira hacia donde vuela. */
+    const P = {
+      w1: new Path2D('M42 28 L18 8 L25 31 Z'),
+      w2: new Path2D('M39 37 L10 24 L23 43 Z'),
+      w3: new Path2D('M40 45 L18 48 L31 57 Z'),
+      thorax: new Path2D('M42 26 L56 21 L64 34 L56 46 L42 46 L36 36 Z'),
+      head: new Path2D('M62 18 Q74 15 76 27 Q77 36 67 38 Q60 39 59 30 Q58 22 62 18 Z'),
+      a1: new Path2D('M0 0 L6 -10'),
+      a2: new Path2D('M0 0 L8 -8'),
+      abd: new Path2D('M38 48 Q27 58 29 74 L31 85 Q44 75 46 59 L46 50'),
+      l1: new Path2D('M0 0 L-6 12'),
+      l2: new Path2D('M0 0 L6 11'),
+    };
+    const stripes = ['M32 60 L45 58', 'M31 68 L43 66', 'M33 76 L40 74'].map((d) => new Path2D(d));
+    const FACE = 0.705; // el logo mira ~40° hacia arriba-derecha: lo giramos para que mire a +x
+
     const drawBee = (ctx: CanvasRenderingContext2D, b: Bee, t: number) => {
-      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a); ctx.scale(b.s, b.s);
-      const f = Math.sin(t * 75 + b.ph) * 0.5 + 0.5;
-      ctx.shadowColor = 'rgba(242,167,27,.65)'; ctx.shadowBlur = 12;
-      ctx.fillStyle = 'rgba(255,244,214,.6)';
-      [-1, 1].forEach((g) => { ctx.beginPath(); ctx.ellipse(-1, g * (5 + f * 1.6), 6.5, 2.1 + f * 2.3, g * -0.55, 0, 6.283); ctx.fill(); });
-      ctx.shadowBlur = 6; ctx.fillStyle = '#F2A71B';
-      ctx.beginPath(); ctx.ellipse(0, 0, 7.5, 4.4, 0, 0, 6.283); ctx.fill();
-      ctx.shadowBlur = 0; ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, 7.5, 4.4, 0, 0, 6.283); ctx.clip();
-      ctx.fillStyle = '#1a1208'; ctx.fillRect(-4.2, -6, 2.2, 12); ctx.fillRect(0, -6, 2.2, 12); ctx.restore();
-      ctx.fillStyle = '#1a1208'; ctx.beginPath(); ctx.arc(8, 0, 2.7, 0, 6.283); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-7.4, 0); ctx.lineTo(-10, 0); ctx.strokeStyle = '#1a1208'; ctx.lineWidth = 1.2; ctx.stroke();
+      const k = b.s * 0.36;
+      ctx.save();
+      ctx.translate(b.x, b.y + Math.sin(t * 14 + b.ph) * 0.8);
+      ctx.rotate(b.a);
+      ctx.scale(k, k);
+      ctx.rotate(FACE);
+      ctx.translate(-50, -48);
+
+      const g = ctx.createLinearGradient(10, 5, 90, 100);
+      g.addColorStop(0, '#F3D78C'); g.addColorStop(0.5, '#D9A94F'); g.addColorStop(1, '#A97A25');
+      ctx.strokeStyle = g; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.shadowColor = 'rgba(243,200,100,.55)'; ctx.shadowBlur = 10 / k * 0.36;
+
+      // Alas: giran sobre su raíz; fase distinta para que se vea aleteo, no un bloque.
+      const flap = (path: Path2D, px: number, py: number, off: number, lw: number) => {
+        const ang = Math.sin(t * 42 + b.ph + off) * 0.3;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(ang); ctx.translate(-px, -py);
+        ctx.fillStyle = 'rgba(243,215,140,.12)'; ctx.lineWidth = lw; ctx.fill(path); ctx.stroke(path);
+        ctx.restore();
+      };
+      flap(P.w1, 41, 33, 0, 4); flap(P.w2, 39, 40, 0.9, 4); flap(P.w3, 40, 46, 1.8, 3.5);
+
+      // Patas (cuelgan y se balancean)
+      ctx.lineWidth = 4;
+      const leg = (path: Path2D, x: number, y: number, off: number) => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 9 + b.ph + off) * 0.22); ctx.stroke(path); ctx.restore();
+      };
+      leg(P.l1, 47, 46, 0); leg(P.l2, 55, 45, 1.6);
+
+      // Abdomen con sus rayas (cabecea apenas)
+      ctx.save(); ctx.translate(42, 48); ctx.rotate(Math.sin(t * 7 + b.ph) * 0.06); ctx.translate(-42, -48);
+      ctx.lineWidth = 4; ctx.stroke(P.abd); ctx.lineWidth = 3; stripes.forEach((s) => ctx.stroke(s));
+      ctx.restore();
+
+      // Tórax y cabeza (relleno oscuro para limpiar los cruces de líneas)
+      ctx.fillStyle = 'rgba(26,20,16,.92)';
+      ctx.lineWidth = 4; ctx.fill(P.thorax); ctx.stroke(P.thorax);
+      ctx.fill(P.head); ctx.stroke(P.head);
+
+      // Antenas tanteando
+      ctx.lineWidth = 3.5;
+      [[P.a1, 66, 16, 0], [P.a2, 73, 18, 1.3]].forEach(([path, x, y, off]) => {
+        ctx.save(); ctx.translate(x as number, y as number); ctx.rotate(Math.sin(t * 6 + b.ph + (off as number)) * 0.16);
+        ctx.stroke(path as Path2D); ctx.restore();
+      });
       ctx.restore();
     };
 

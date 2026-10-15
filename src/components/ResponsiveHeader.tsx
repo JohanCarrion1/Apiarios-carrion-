@@ -138,7 +138,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSecti
     <>
       {/* Header */}
       <header className={`sticky top-0 z-30 bg-pane/95 backdrop-blur-md border-b border-line ${isStandalone ? 'pwa-standalone-header' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-12 xl:px-16">
           {/* Logo — clic lleva al dashboard */}
           <motion.button
             onClick={() => {

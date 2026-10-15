@@ -2250,7 +2250,7 @@ function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSect
       <div className="relative z-10">
         {/* `relative` en <main> es el punto de referencia de los hijos
             absolutos de las secciones (paneles flotantes, menús). */}
-        <main className="relative w-full space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 lg:px-8 sm:pt-8 md:pt-10">
+        <main className="relative w-full space-y-12 sm:space-y-16 md:space-y-20 px-4 pb-10 pt-6 sm:px-6 lg:px-12 xl:px-16 sm:pt-8 md:pt-10">
           {activeSection === 'panel' && (
             <FadeInUp>
               <IntroHead temp={temp} wind={wind} activity={activity} apiaryName={apiaryName} apiaryLocation={apiaryLocation} />

@@ -85,7 +85,6 @@ export function HoneyDrips() {
 /** Fondo de la pantalla de selección: luz de miel que respira, resplandores
     que derivan despacio y viñeta; el panal lo dibuja LivingHive encima. */
 export function SelectionBackdrop({ fixed = false }: { fixed?: boolean }) {
-  const reduce = useReducedMotion();
   const orbs = [
     { l: '-10%', t: '-12%', s: 520, c: 'rgba(240,164,28,.16)', dx: 40, dy: 30, d: 16 },
     { l: '62%', t: '8%', s: 460, c: 'rgba(185,125,21,.14)', dx: -50, dy: 40, d: 19 },
@@ -99,7 +98,7 @@ export function SelectionBackdrop({ fixed = false }: { fixed?: boolean }) {
           key={i}
           className="absolute rounded-full blur-3xl"
           style={{ left: o.l, top: o.t, width: o.s, height: o.s, background: `radial-gradient(circle, ${o.c} 0%, transparent 70%)` }}
-          animate={reduce ? undefined : { x: [0, o.dx, 0], y: [0, o.dy, 0], scale: [1, 1.12, 1] }}
+          animate={{ x: [0, o.dx, 0], y: [0, o.dy, 0], scale: [1, 1.12, 1] }}
           transition={{ duration: o.d, repeat: Infinity, ease: 'easeInOut' }}
         />
       ))}

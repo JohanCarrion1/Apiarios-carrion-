@@ -22,7 +22,10 @@ export default function LivingHive({ bees: withBees = true }: { bees?: boolean }
     if (!bg || !fx) return;
     const bctx = bg.getContext('2d'), fctx = fx.getContext('2d');
     if (!bctx || !fctx) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Quien pidió menos movimiento (o tiene el ahorro de batería / "quitar animaciones"
+    // de Android, que el navegador reporta igual) NO ve el fondo congelado: es un adorno
+    // sin parpadeos ni desplazamientos bruscos, así que sigue vivo pero más lento y suave.
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.5 : 1;
 
     const grid = document.createElement('canvas');
     const gctx = grid.getContext('2d');
@@ -176,11 +179,7 @@ export default function LivingHive({ bees: withBees = true }: { bees?: boolean }
     window.addEventListener('resize', onResize);
 
     let cleanupMove = () => {};
-    if (reduce) {
-      if (withBees) for (let i = 0; i < 14; i++) lightAt(Math.random() * W, Math.random() * Math.min(H, 700), 0.9);
-      else for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if ((r * 7 + c * 3) % 5 === 0) glow.set(r * cols + c, { c, r, v: 0.5 });
-      drawGlow();
-    } else {
+    {
       const mv = (e: PointerEvent) => { if (!withBees) return; target = { x: e.clientX, y: e.clientY }; lastMove = performance.now(); };
       window.addEventListener('pointermove', mv, { passive: true });
       window.addEventListener('pointerdown', mv, { passive: true });
@@ -189,7 +188,7 @@ export default function LivingHive({ bees: withBees = true }: { bees?: boolean }
       let last = performance.now(), amb = 0;
       const frame = (now: number) => {
         if (!running) return;
-        const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+        const dt = Math.min(0.05, (now - last) / 1000) * calm; last = now; const t = (now / 1000) * calm;
         if (withBees) { amb += dt; if (amb > 0.3) { amb = 0; lightAt(Math.random() * W, Math.random() * H, 0.45); } }
         else {
           // Sin abejas: TODO el panal brilla. Dos ondas diagonales que se cruzan

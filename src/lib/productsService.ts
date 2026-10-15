@@ -32,11 +32,58 @@ import { normalizeProductImageUrl } from './cloudinary';
  * si Firestore está vacío y el catálogo NO es pura semilla).
  */
 const pushToCloud = (products: StoreProduct[]): void => {
+  setUnsynced(true);
   void import('../services/productsSync')
     .then((m) => m.pushProductsToFirestore(products))
+    .then((n) => {
+      if (n > 0) {
+        setUnsynced(false);
+        emitSync({ ok: true });
+      } else {
+        // 0 = sin sesión o catálogo vacío: el cambio quedó solo en este equipo.
+        emitSync({ ok: false, message: 'No hay sesión de administrador activa: el cambio quedó solo en este dispositivo. Vuelve a iniciar sesión.' });
+      }
+    })
     .catch((error) => {
       console.error('[PRODUCTS] No se pudo subir el catálogo a Firestore:', error);
+      const code = (error as { code?: string })?.code || '';
+      emitSync({
+        ok: false,
+        message:
+          code === 'permission-denied'
+            ? 'Firestore rechazó el guardado (permisos). Verifica que tu correo esté en la lista de administradores.'
+            : 'No se pudo guardar en la nube. Revisa tu conexión: el cambio quedó solo en este dispositivo.',
+      });
     });
+};
+
+/** Evento que informa si el último guardado llegó a la nube (admin lo muestra). */
+export const PRODUCTS_SYNC_EVENT = 'products-sync';
+const emitSync = (detail: { ok: boolean; message?: string }): void => {
+  try {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PRODUCTS_SYNC_EVENT, { detail }));
+  } catch {
+    /* noop */
+  }
+};
+
+/** Marca de "hay cambios locales aún sin subir": evita que la hidratación pise
+    con el precio viejo de la nube un cambio que todavía no llegó. */
+const UNSYNCED_KEY = 'apiarios_carrion_products_unsynced';
+const setUnsynced = (v: boolean): void => {
+  try {
+    if (v) localStorage.setItem(UNSYNCED_KEY, '1');
+    else localStorage.removeItem(UNSYNCED_KEY);
+  } catch {
+    /* noop */
+  }
+};
+export const hasUnsyncedChanges = (): boolean => {
+  try {
+    return localStorage.getItem(UNSYNCED_KEY) === '1';
+  } catch {
+    return false;
+  }
 };
 
 /** Clave única del catálogo: compatida por admin y tienda. */
@@ -400,6 +447,34 @@ export const reset = (): StoreProduct[] => {
   const saved = saveAll(seeded);
   pushToCloud(saved);
   return saved;
+};
+
+/**
+ * Trae el catálogo de Firestore (lectura pública: sirve también a visitantes
+ * sin sesión) y lo deja en la caché local, avisando a la tienda con
+ * 'products-changed'. NO vuelve a subirlo (no hay bucle).
+ *  - Si hay cambios locales sin subir, NO se pisan: se reintenta subirlos.
+ *  - Devuelve true si el catálogo local cambió.
+ */
+export const refreshFromCloud = async (): Promise<boolean> => {
+  const sync = await import('../services/productsSync');
+  if (hasUnsyncedChanges()) {
+    // Reintento de subida del cambio pendiente (p. ej. se editó sin sesión).
+    try {
+      const n = await sync.pushProductsToFirestore(getAll());
+      if (n > 0) setUnsynced(false);
+    } catch (error) {
+      console.warn('[PRODUCTS] Reintento de subida fallido; se conserva el cambio local:', error);
+    }
+    return false;
+  }
+  const remoto = await sync.pullProductsFromFirestore();
+  if (!remoto) return false;
+  const normalizado = remoto.map(normalizeStoreProduct);
+  const local = getAll();
+  if (JSON.stringify(local) === JSON.stringify(normalizado)) return false;
+  saveAll(normalizado); // guarda en local y dispara 'products-changed'
+  return true;
 };
 
 /** Suscribirse a cambios del catálogo ('products-changed'). Devuelve unsubscribe. */

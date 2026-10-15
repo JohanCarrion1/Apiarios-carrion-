@@ -1151,6 +1151,29 @@ export default function Store() {
     };
   }, []);
 
+  // El catálogo vive en Firestore (lectura pública): se trae al abrir la tienda
+  // y cada vez que la pestaña vuelve a estar visible, para que los precios que
+  // cambió el admin se vean sin recargar y también para visitantes sin sesión.
+  useEffect(() => {
+    let last = 0;
+    const refresh = () => {
+      const now = Date.now();
+      if (now - last < 15000) return;
+      last = now;
+      void productsService.refreshFromCloud().catch((error) =>
+        console.warn('[TIENDA] No se pudo actualizar el catálogo desde la nube:', error)
+      );
+    };
+    refresh();
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
   // Debugging: estado de imagen de cada producto al cargar/actualizar.
   useEffect(() => {
     products.forEach((p) => {

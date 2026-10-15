@@ -128,6 +128,7 @@ const emptyForm = () => ({
   categoria: 'Productos naturales' as StoreCategory,
   subcategoria: 'Mieles' as string,
   precio: 0,
+  precioTxt: '',
   unidad: '',
   stock: 0,
   descripcion: '',
@@ -155,6 +156,7 @@ function ProductFormModal({
           categoria: product.categoria,
           subcategoria: product.subcategoria ?? subcategoriasDe(product.categoria)[0],
           precio: product.precio,
+          precioTxt: String(product.precio ?? ''),
           unidad: product.unidad,
           stock: product.stock,
           descripcion: product.descripcion,
@@ -177,7 +179,9 @@ function ProductFormModal({
       setError('El nombre es obligatorio');
       return;
     }
-    if (!(form.precio > 0)) {
+    // El precio se escribe como texto (acepta "3,5" y "3.5") y se convierte aquí.
+    const precioNum = parseFloat(String(form.precioTxt).replace(',', '.'));
+    if (!Number.isFinite(precioNum) || !(precioNum > 0)) {
       setError('El precio debe ser mayor a 0');
       return;
     }
@@ -187,7 +191,7 @@ function ProductFormModal({
         nombre: sanitizeText(form.nombre, 120),
         categoria: form.categoria,
         subcategoria: form.subcategoria,
-        precio: Number(form.precio),
+        precio: Math.round(precioNum * 100) / 100,
         unidad: sanitizeText(form.unidad, 60) || 'Unidad',
         stock: Math.max(0, Number(form.stock) || 0),
         descripcion: sanitizeText(form.descripcion, 600),
@@ -274,7 +278,7 @@ function ProductFormModal({
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               <span className="mb-1.5 block text-xs text-husk">Precio (S/)*</span>
-              <input type="number" min={0} step="0.5" value={form.precio} onChange={(e) => set('precio', parseFloat(e.target.value) || 0)} className={inputCls} />
+              <input type="text" inputMode="decimal" autoComplete="off" value={form.precioTxt} onChange={(e) => set('precioTxt', e.target.value.replace(/[^0-9.,]/g, ''))} className={inputCls} placeholder="0.00" />
             </label>
             <label className="block">
               <span className="mb-1.5 block text-xs text-husk">Unidad de venta</span>
@@ -871,6 +875,17 @@ export default function AdminStore() {
   useEffect(() => {
     saveAdminOrders(orders);
   }, [orders]);
+
+  // Aviso visible cuando el guardado NO llegó a la nube (antes solo salía en
+  // la consola y el precio "volvía" al viejo al recargar).
+  useEffect(() => {
+    const onSync = (e: Event) => {
+      const d = (e as CustomEvent<{ ok: boolean; message?: string }>).detail;
+      if (d && d.ok === false) pushToast('Sin sincronizar con la tienda', d.message || 'El cambio quedó solo en este dispositivo');
+    };
+    window.addEventListener(productsService.PRODUCTS_SYNC_EVENT, onSync);
+    return () => window.removeEventListener(productsService.PRODUCTS_SYNC_EVENT, onSync);
+  }, []);
 
   // Si productsService tuvo que limpiar imágenes base64 (localStorage lleno o
   // >4MB), avisar al admin para que sepa que se usaron imágenes por defecto.

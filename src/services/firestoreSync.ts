@@ -68,7 +68,7 @@ import {
   saveHydratedAt,
   HYDRATION_TTL_MS,
 } from '../utils/storage';
-import { getAll as getLocalProducts, saveAll as saveLocalProducts } from '../lib/productsService';
+import { getAll as getLocalProducts, saveAll as saveLocalProducts, hasUnsyncedChanges, refreshFromCloud } from '../lib/productsService';
 import { pullProductsFromFirestore, pushProductsToFirestore } from './productsSync';
 import { STORE_SEED_PRODUCTS } from '../utils/storeSeed';
 import { normalizeStoreProduct } from '../types/store';
@@ -754,6 +754,13 @@ const hydrateUserData = async (userId: string, opts: { force?: boolean } = {}): 
  *     configurado. Las semillas no son un catálogo; son un placeholder.
  */
 const hydrateProducts = async (): Promise<void> => {
+  // Si hay un cambio de catálogo hecho en este equipo que aún no llegó a la
+  // nube (p. ej. un precio editado sin permisos/conexión), NO se pisa con lo
+  // remoto: se reintenta subirlo. Así el precio nuevo no "vuelve" al viejo.
+  if (hasUnsyncedChanges()) {
+    await refreshFromCloud();
+    return;
+  }
   const remoto = await pullProductsFromFirestore();
 
   if (remoto) {

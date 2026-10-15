@@ -107,3 +107,49 @@ export function SelectionBackdrop() {
     </div>
   );
 }
+
+/** Fondo luminoso de Control de colmenas, sin abejas. */
+export function HivesBackdrop() {
+  const reduce = useReducedMotion();
+  const hexes = [
+    { x: '0%', y: '0%', d: 0 }, { x: '25%', y: '12%', d: 0.6 },
+    { x: '50%', y: '0%', d: 1.2 }, { x: '75%', y: '12%', d: 1.8 },
+    { x: '100%', y: '0%', d: 2.4 }, { x: '12%', y: '42%', d: 0.9 },
+    { x: '37%', y: '54%', d: 1.5 }, { x: '62%', y: '42%', d: 2.1 },
+    { x: '87%', y: '54%', d: 2.7 }, { x: '0%', y: '84%', d: 1.2 },
+    { x: '25%', y: '96%', d: 1.8 }, { x: '50%', y: '84%', d: 2.4 },
+    { x: '75%', y: '96%', d: 3 }, { x: '100%', y: '84%', d: 3.6 },
+  ];
+  const orbs = [
+    { l: '-12%', t: '-15%', s: 520, c: 'rgba(240,164,28,.17)', dx: 35, dy: 24, d: 17 },
+    { l: '62%', t: '6%', s: 480, c: 'rgba(185,125,21,.15)', dx: -42, dy: 32, d: 20 },
+    { l: '18%', t: '58%', s: 560, c: 'rgba(255,201,97,.09)', dx: 28, dy: -34, d: 23 },
+  ];
+  return (
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true"
+      style={{ background: 'radial-gradient(ellipse at 50% 0%, #2a1f15 0%, #1a1410 55%, #120e08 100%)' }}>
+      {orbs.map((o, i) => (
+        <motion.div key={'glow-' + i} className="absolute rounded-full blur-3xl"
+          style={{ left: o.l, top: o.t, width: o.s, height: o.s, background: 'radial-gradient(circle, ' + o.c + ' 0%, transparent 70%)' }}
+          animate={reduce ? undefined : { x: [0, o.dx, 0], y: [0, o.dy, 0], scale: [1, 1.12, 1] }}
+          transition={{ duration: o.d, repeat: Infinity, ease: 'easeInOut' }} />
+      ))}
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id="hives-glowing-hexagons" width="76" height="66" patternUnits="userSpaceOnUse">
+            <path d="M38 0 L76 22 L76 44 L38 66 L0 44 L0 22 Z" fill="none" stroke="#F5A623" strokeWidth="1" />
+          </pattern>
+          <radialGradient id="hives-hex-glow"><stop offset="0%" stopColor="#FFC961" stopOpacity=".7" /><stop offset="100%" stopColor="#F5A623" stopOpacity="0" /></radialGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#hives-glowing-hexagons)" opacity=".22" />
+        {!reduce && hexes.map((h, i) => (
+          <motion.circle key={i} cx={h.x} cy={h.y} r="11" fill="url(#hives-hex-glow)"
+            animate={{ opacity: [.05, .7, .12, .05], scale: [.7, 1.35, .8] }}
+            transition={{ duration: 4.8, delay: h.d, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ transformBox: 'fill-box', transformOrigin: 'center' }} />
+        ))}
+      </svg>
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 42%, rgba(10,7,3,.52) 100%)' }} />
+    </div>
+  );
+}

@@ -216,8 +216,8 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                         }}
                         className={`rounded-xl border py-3 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                           !hasQueen
-                            ? 'border-[#bd93b8]/70 bg-[#bd93b8]/15 text-[#bd93b8]'
-                            : 'border-line text-husk hover:border-[#bd93b8]/50 hover:text-cream'
+                            ? 'border-[#c987c3]/70 bg-[#c987c3]/15 text-[#c987c3]'
+                            : 'border-line text-husk hover:border-[#c987c3]/50 hover:text-cream'
                         }`}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -287,7 +287,7 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3 rounded-xl border border-[#bd93b8]/40 bg-[#bd93b8]/10 text-[#bd93b8] text-xs leading-relaxed">
+                    <div className="p-3 rounded-xl border border-[#c987c3]/40 bg-[#c987c3]/10 text-[#c987c3] text-xs leading-relaxed">
                       ⚠️ Una colonia huérfana necesita reina o celda real pronto. Se marcará como estado SIN REINA.
                     </div>
                   )}
@@ -308,7 +308,7 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                         placeholder={entityType === 'nucleo' ? "Ej: N-01, N-02" : "Ej: C-01, C-02"}
                         required
                         disabled={autoCode && !hive}
-                        className="flex-1 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)] disabled:opacity-50"
+                        className="flex-1 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)] disabled:opacity-50"
                       />
                       {!hive && (
                         <motion.button
@@ -346,7 +346,7 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Ej: La Reina, Abeja Dorada"
-                      className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+                      className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
                     />
                   </div>
 
@@ -360,7 +360,7 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                       placeholder="Ej: Bancal norte, cerca del río"
-                      className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+                      className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
                     />
                   </div>
 
@@ -481,7 +481,7 @@ export default function AddHiveModal({ open, hive, existingCodes, entityType = '
                     </motion.button>
                     <motion.button
                       type="submit"
-                      className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-xl hover:bg-honeysoft transition-colors shadow-[0_4px_20px_rgba(240,164,28,.3)]"
+                      className="flex-1 px-4 py-3 text-sm font-semibold text-ink bg-honey rounded-xl hover:bg-honeysoft transition-colors shadow-[0_4px_20px_rgba(255,169,10,.3)]"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >

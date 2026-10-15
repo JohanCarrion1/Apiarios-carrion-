@@ -44,17 +44,17 @@ function getNotificationEmoji(notification: Notification): string {
 
 function getNotificationColor(notification: Notification): string {
   switch (notification.type) {
-    case 'inspection_reminder': return '#a3bf7f';
-    case 'treatment': return '#e4603f';
-    case 'harvest': return '#f0a41c';
-    case 'stock_alert': return '#e4603f';
-    case 'queen_alert': return '#bd93b8';
+    case 'inspection_reminder': return '#93cc68';
+    case 'treatment': return '#f4552b';
+    case 'harvest': return '#ffa90a';
+    case 'stock_alert': return '#f4552b';
+    case 'queen_alert': return '#c987c3';
     case 'alert':
     default: {
       const emoji = getNotificationEmoji(notification);
       if (emoji === '🌸') return '#4ade80';
-      if (emoji === '🐝') return '#bd93b8';
-      return '#f0a41c';
+      if (emoji === '🐝') return '#c987c3';
+      return '#ffa90a';
     }
   }
 }

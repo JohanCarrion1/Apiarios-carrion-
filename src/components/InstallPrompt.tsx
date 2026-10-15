@@ -90,7 +90,7 @@ export function InstallPrompt() {
             <div className="flex shrink-0 items-center gap-2">
               <motion.button
                 onClick={handleInstall}
-                className="flex items-center gap-1.5 rounded-full bg-honey px-3 py-2 text-xs font-bold text-ink shadow-[0_2px_10px_rgba(240,164,28,.35)] transition-colors hover:bg-honeysoft"
+                className="flex items-center gap-1.5 rounded-full bg-honey px-3 py-2 text-xs font-bold text-ink shadow-[0_2px_10px_rgba(255,169,10,.35)] transition-colors hover:bg-honeysoft"
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.94 }}
                 aria-label="Instalar aplicación"

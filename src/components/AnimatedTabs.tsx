@@ -51,7 +51,7 @@ export default function AnimatedTabs<T extends string>({
   className = 'flex flex-wrap items-center gap-1.5',
   buttonClassName = defaultButtonClass,
   contentClassName = 'relative z-10 flex w-auto items-center gap-1.5',
-  pillClassName = 'border border-honey bg-honey shadow-[0_0_20px_rgba(240,164,28,.4)]',
+  pillClassName = 'border border-honey bg-honey shadow-[0_0_20px_rgba(255,169,10,.4)]',
   hoverScale = 1,
 }: AnimatedTabsProps<T>) {
   // `useId` mantiene el layoutId único por instancia: Colmenas y Núcleos

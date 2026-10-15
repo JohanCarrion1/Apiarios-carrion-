@@ -738,7 +738,7 @@ function PublicBrandHeader({
           whileTap={{ scale: 0.92 }}
           aria-label="Volver al inicio"
           title="Volver al inicio"
-          className="flex w-auto flex-shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-honey px-2.5 py-1.5 text-xs font-medium leading-none text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(240,164,28,.35)]"
+          className="flex w-auto flex-shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-honey px-2.5 py-1.5 text-xs font-medium leading-none text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(255,169,10,.35)]"
         >
           {/* Una sola flecha (Lucide ArrowLeft) en móvil y escritorio */}
           <svg

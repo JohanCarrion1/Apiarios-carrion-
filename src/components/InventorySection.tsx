@@ -44,13 +44,13 @@ const MOVEMENT_LABEL: Record<InventoryMovementType, string> = {
 };
 
 const MOVEMENT_COLOR: Record<InventoryMovementType, string> = {
-  entrada: '#a3bf7f',
-  salida: '#f0a41c',
-  transferencia: '#bd93b8',
+  entrada: '#93cc68',
+  salida: '#ffa90a',
+  transferencia: '#c987c3',
 };
 
 const INPUT_CLS =
-  'w-full rounded-xl border border-line bg-ink/60 px-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]';
+  'w-full rounded-xl border border-line bg-ink/60 px-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]';
 
 type FormDraft = {
   nombre: string;
@@ -303,7 +303,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar por nombre…"
-              className="w-full rounded-xl border border-line bg-ink/50 py-3 pl-10 pr-4 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+              className="w-full rounded-xl border border-line bg-ink/50 py-3 pl-10 pr-4 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
             />
           </div>
           <button
@@ -362,7 +362,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
                         <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-husk">{item.unidad}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="font-display text-lg font-black leading-none" style={{ color: bajo ? '#e4603f' : '#f0a41c' }}>
+                        <p className="font-display text-lg font-black leading-none" style={{ color: bajo ? '#f4552b' : '#ffa90a' }}>
                           {formatInventoryQuantity(disp, item.unidad)} <span className="font-mono text-[10px] font-medium text-husk">{item.unidad}</span>
                         </p>
                         <p className="mt-1 font-mono text-[10px] text-husk">/ {formatInventoryQuantity(item.cantidadTotal, item.unidad)}</p>
@@ -407,7 +407,7 @@ export default function InventorySection({ items, onChange, onShowToast }: Props
       {/* Botón flotante "+" */}
       <motion.button
         onClick={openNew}
-        className="fixed right-5 bottom-24 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-honey text-ink shadow-[0_10px_30px_rgba(240,164,28,.45)] transition-all hover:bg-honeysoft active:scale-95 lg:bottom-5"
+        className="fixed right-5 bottom-24 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-honey text-ink shadow-[0_10px_30px_rgba(255,169,10,.45)] transition-all hover:bg-honeysoft active:scale-95 lg:bottom-5"
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.92 }}
         aria-label="Agregar ítem"
@@ -686,7 +686,7 @@ function DetailView({
             <div>
               <p className="text-xs font-mono uppercase tracking-wider text-husk">{item.unidad}</p>
               <p className="mt-0.5 text-husk">
-                <span className="font-display text-3xl font-black" style={{ color: bajo ? '#e4603f' : '#f0a41c' }}>
+                <span className="font-display text-3xl font-black" style={{ color: bajo ? '#f4552b' : '#ffa90a' }}>
                   {formatInventoryQuantity(disp, item.unidad)}
                 </span>
                 {' '}{item.unidad} disponibles

@@ -62,7 +62,7 @@ export default function LegalShell({
         <svg className="h-full w-full opacity-[0.05]">
           <defs>
             <pattern id="legal-hexes" width="50" height="87" patternUnits="userSpaceOnUse" patternTransform="scale(1.6)">
-              <path d="M25 7.5 43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#f0a41c" strokeWidth="0.7" />
+              <path d="M25 7.5 43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#ffa90a" strokeWidth="0.7" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#legal-hexes)" />

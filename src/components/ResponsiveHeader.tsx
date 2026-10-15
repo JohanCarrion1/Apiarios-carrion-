@@ -167,7 +167,7 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSecti
             {onHome && (
               <motion.button
                 onClick={onHome}
-                className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-honey px-2.5 py-1 min-h-[26px] text-[11px] font-medium leading-none shrink-0 text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(240,164,28,.35)]"
+                className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-honey px-2.5 py-1 min-h-[26px] text-[11px] font-medium leading-none shrink-0 text-ink transition-all duration-200 hover:bg-honeysoft active:scale-95 md:gap-2 md:px-4 md:py-2 md:text-sm md:leading-normal md:shadow-[0_2px_10px_rgba(255,169,10,.35)]"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.92 }}
                 aria-label="Volver a inicio"

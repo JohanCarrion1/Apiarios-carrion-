@@ -20,10 +20,10 @@ export const POLINIZACION_ESTADO_LABELS: Record<PolinizacionEstado, string> = {
 };
 
 export const POLINIZACION_ESTADO_COLORS: Record<PolinizacionEstado, string> = {
-  pendiente: '#f0a41c',
-  activo: '#a3bf7f',
+  pendiente: '#ffa90a',
+  activo: '#93cc68',
   completado: '#8fa3bf',
-  cancelado: '#e4603f',
+  cancelado: '#f4552b',
 };
 
 /** Cultivos soportados por el selector del formulario. */

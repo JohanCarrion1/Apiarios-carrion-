@@ -8,17 +8,33 @@
   --color-line: #392c19;
   --color-line2: #4d3b21;
   --color-cream: #f3e9d4;
-  --color-husk: #a3906a;
-  --color-honey: #f0a41c;
-  --color-honeysoft: #ffc961;
-  --color-deep: #b97d15;
-  --color-sage: #a3bf7f;
-  --color-coral: #e4603f;
-  --color-mauve: #bd93b8;
+  --color-husk: #b19a68;
+  --color-honey: #ffa90a;
+  --color-honeysoft: #ffd061;
+  --color-deep: #c98508;
+  --color-sage: #93cc68;
+  --color-coral: #f4552b;
+  --color-mauve: #c987c3;
 
   --font-display: "Fraunces", "Georgia", serif;
   --font-body: "Instrument Sans", "Trebuchet MS", sans-serif;
   --font-mono: "Spline Sans Mono", "Courier New", monospace;
+}
+
+/* Pantallas de gama ancha (Display P3: AMOLED de Samsung, iPhone, Pixel, Mac…):
+   los mismos tonos de la marca, pero usando el rango de color que el panel sí
+   puede mostrar. En un Samsung en modo "Vívido" el sistema ya amplifica el color;
+   en un panel sRGB / modo "Natural" los colores se ven más apagados. Esto cierra
+   esa brecha sin tocar el modo de pantalla del usuario. */
+@media (color-gamut: p3) {
+  :root {
+    --color-honey: color(display-p3 1 0.68 0.03);
+    --color-honeysoft: color(display-p3 1 0.82 0.4);
+    --color-deep: color(display-p3 0.82 0.52 0.04);
+    --color-sage: color(display-p3 0.55 0.82 0.4);
+    --color-coral: color(display-p3 0.97 0.35 0.18);
+    --color-mauve: color(display-p3 0.8 0.5 0.78);
+  }
 }
 
 html {
@@ -35,7 +51,7 @@ body {
 }
 
 ::selection {
-  background: rgba(240, 164, 28, 0.38);
+  background: rgba(255,169,10, 0.38);
   color: #fff7e6;
 }
 
@@ -699,7 +715,7 @@ button, a, input, select, textarea {
   outline: none;
 }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  box-shadow: 0 0 0 2px rgba(240, 164, 28, 0.55);
+  box-shadow: 0 0 0 2px rgba(255,169,10, 0.55);
   border-radius: 6px;
 }
 

@@ -198,13 +198,13 @@ export default function Login() {
         <svg className="absolute inset-0 w-full h-full opacity-[0.08]" aria-hidden="true">
           <defs>
             <pattern id="hex-pattern" width="50" height="87" patternUnits="userSpaceOnUse" patternTransform="scale(2)">
-              <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#f0a41c" strokeWidth="0.8" />
+              <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#ffa90a" strokeWidth="0.8" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#hex-pattern)" />
         </svg>
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #f0a41c 0%, transparent 70%)' }} />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #b97d15 0%, transparent 70%)' }} />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #c98508 0%, transparent 70%)' }} />
       </div>
 
       {/* Contenido */}
@@ -360,7 +360,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="tu@email.com"
-                  className="w-full rounded-xl border border-line bg-ink pl-10 pr-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-all duration-200 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+                  className="w-full rounded-xl border border-line bg-ink pl-10 pr-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-all duration-200 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
                 />
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function Login() {
                   required
                   minLength={6}
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-line bg-ink pl-10 pr-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-all duration-200 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+                  className="w-full rounded-xl border border-line bg-ink pl-10 pr-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-all duration-200 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
                 />
               </div>
             </div>
@@ -418,7 +418,7 @@ export default function Login() {
             <motion.button
               type="submit"
               disabled={loading || loadingProvider !== null || (isRegistering && !aceptaTerminos)}
-              className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(240,164,28,.4)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(255,169,10,.4)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               whileHover={{ scale: loading || loadingProvider ? 1 : 1.02 }}
               whileTap={{ scale: loading || loadingProvider ? 1 : 0.98 }}
             >

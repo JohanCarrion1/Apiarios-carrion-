@@ -518,7 +518,7 @@ export default function FecundadoresSection({
             {promoted.map(f => (
               <div key={f.id} className="card p-4 opacity-80 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => openDetail(f.id)}>
                 <div className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: '#a3bf7f' }} />
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: '#93cc68' }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[10px] font-mono font-semibold text-cream uppercase">{f.code}</span>

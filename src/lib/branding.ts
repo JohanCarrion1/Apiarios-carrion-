@@ -19,8 +19,8 @@ export const BRANDING = {
   nombreEmpresa: 'Apiarios Carrión',
   ubicacion: 'Huaraz · Perú',
   colores: {
-    primario: '#f0a41c',
-    secundario: '#b97d15',
-    acento: '#ffc961',
+    primario: '#ffa90a',
+    secundario: '#c98508',
+    acento: '#ffd061',
   },
 } as const;

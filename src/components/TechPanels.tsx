@@ -20,7 +20,7 @@ import type { BreedingLot } from '../types/breeding';
 export const VARROA_THRESHOLD = 3;
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const COL = { ok: '#a3bf7f', warn: '#f0a41c', bad: '#e4603f', blue: '#6fa8dc' };
+const COL = { ok: '#93cc68', warn: '#ffa90a', bad: '#f4552b', blue: '#6fa8dc' };
 export const varroaColor = (v: number) => (v > VARROA_THRESHOLD ? COL.bad : v >= 2 ? COL.warn : COL.ok);
 
 export type Strength = 'Fuerte' | 'Media' | 'Débil';
@@ -109,8 +109,8 @@ function VarroaSpark({ values }: { values: number[] }) {
   const ty = h - pad - (VARROA_THRESHOLD / max) * (h - pad * 2);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" aria-label="Tendencia de varroa">
-      <line x1="0" x2={w} y1={ty} y2={ty} stroke="#f0a41c" strokeDasharray="4 4" strokeOpacity=".6" />
-      <motion.path d={d} fill="none" stroke="#f0a41c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+      <line x1="0" x2={w} y1={ty} y2={ty} stroke="#ffa90a" strokeDasharray="4 4" strokeOpacity=".6" />
+      <motion.path d={d} fill="none" stroke="#ffa90a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
         initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: EASE }} />
       {pts.map((p, i) => (
         <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={varroaColor(values[i])} />

@@ -46,16 +46,16 @@ export const QUEEN_STATUS_LABELS: Record<QueenStatus, string> = {
 };
 
 export const QUEEN_STATUS_COLORS: Record<QueenStatus, string> = {
-  activa: '#a3bf7f',
-  perdida: '#e4603f',
-  cambiada: '#f0a41c',
+  activa: '#93cc68',
+  perdida: '#f4552b',
+  cambiada: '#ffa90a',
   enjaulada: '#6fa8dc',
 };
 
 export const QUEEN_YEAR_COLORS: Record<QueenYearColor, string> = {
   blanco: '#e8e4da',
-  amarillo: '#ffc961',
-  rojo: '#e4603f',
+  amarillo: '#ffd061',
+  rojo: '#f4552b',
   verde: '#7fb069',
   azul: '#6fa8dc',
 };
@@ -111,13 +111,13 @@ export function getQueenAlert(
 ): { nivel: 'joven' | 'recambio' | 'vieja'; label: string; cls: string; color: string } | null {
   const { semanas } = getQueenAge(queen, now);
   if (semanas < 4) {
-    return { nivel: 'joven', label: 'Reina joven', cls: 'bg-sage/15 border-sage/40 text-sage', color: '#a3bf7f' };
+    return { nivel: 'joven', label: 'Reina joven', cls: 'bg-sage/15 border-sage/40 text-sage', color: '#93cc68' };
   }
   if (semanas >= 6 && semanas <= 12) {
-    return { nivel: 'recambio', label: 'Considerar recambio', cls: 'bg-honey/15 border-honey/40 text-honey', color: '#f0a41c' };
+    return { nivel: 'recambio', label: 'Considerar recambio', cls: 'bg-honey/15 border-honey/40 text-honey', color: '#ffa90a' };
   }
   if (semanas > 12) {
-    return { nivel: 'vieja', label: 'Reina vieja', cls: 'bg-coral/15 border-coral/40 text-coral', color: '#e4603f' };
+    return { nivel: 'vieja', label: 'Reina vieja', cls: 'bg-coral/15 border-coral/40 text-coral', color: '#f4552b' };
   }
   return null;
 }

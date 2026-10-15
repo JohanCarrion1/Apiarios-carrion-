@@ -272,7 +272,7 @@ export default function Dashboard({
       kg: Math.round(kg * 100) / 100,
       count: inMonth.length,
       isCurrent,
-      fill: isCurrent ? '#ffb84d' : '#f0a41c',
+      fill: isCurrent ? '#ffb84d' : '#ffa90a',
     };
   });
   const hasHarvestData = harvests.length > 0;
@@ -567,7 +567,7 @@ export default function Dashboard({
                            'Sin reina'}
                         </span>
                         {polinizacionCodes.includes(hive.code) && (
-                          <span className="ml-1 flex h-6 items-center rounded-full bg-[#a3bf7f]/15 px-2 text-xs" title="En polinización">🌸</span>
+                          <span className="ml-1 flex h-6 items-center rounded-full bg-[#93cc68]/15 px-2 text-xs" title="En polinización">🌸</span>
                         )}
                       </div>
                     </div>
@@ -932,14 +932,14 @@ export default function Dashboard({
                 <BarChart data={productionData}>
                   <XAxis 
                     dataKey="label" 
-                    stroke="#a3906a" 
+                    stroke="#b19a68" 
                     style={{ fontSize: '11px' }}
                     interval={0}
                     angle={-30}
                     textAnchor="end"
                     height={50}
                   />
-                  <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} allowDecimals={false} />
+                  <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} allowDecimals={false} />
                   <Tooltip 
                     content={({ active, payload }) => {
                       if (!active || !payload || payload.length === 0) return null;

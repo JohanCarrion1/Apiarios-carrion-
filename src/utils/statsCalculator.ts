@@ -158,10 +158,10 @@ export const getStatusDistributionData = () => {
   };
 
   const STATUS_COLORS = {
-    saludable: '#a3bf7f',
-    revision: '#f0a41c',
-    alerta: '#e4603f',
-    sin_reina: '#bd93b8',
+    saludable: '#93cc68',
+    revision: '#ffa90a',
+    alerta: '#f4552b',
+    sin_reina: '#c987c3',
   };
 
   return [

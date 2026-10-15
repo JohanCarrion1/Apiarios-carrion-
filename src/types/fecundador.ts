@@ -72,10 +72,10 @@ export const FECUNDADOR_STATE_LABELS: Record<FecundadorQueenState, string> = {
 };
 
 export const FECUNDADOR_STATE_COLORS: Record<FecundadorQueenState, string> = {
-  celda_real: '#f0a41c',
+  celda_real: '#ffa90a',
   virgen: '#6fa8dc',
-  fecundada: '#bd93b8',
-  en_puesta: '#a3bf7f',
+  fecundada: '#c987c3',
+  en_puesta: '#93cc68',
 };
 
 // Índice de la etapa actual dentro del ciclo (0-3)

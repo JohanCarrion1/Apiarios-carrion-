@@ -9,13 +9,13 @@ import { backdropVariants, modalVariants } from '../lib/motion';
 
 // Tipos de miel con iconos y colores
 const HONEY_TYPES = [
-  { id: 'milflores', name: 'Milflores', icon: '🌸', color: '#f0a41c' },
+  { id: 'milflores', name: 'Milflores', icon: '🌸', color: '#ffa90a' },
   { id: 'azahar', name: 'Azahar', icon: '🍊', color: '#ffb84d' },
-  { id: 'romero', name: 'Romero', icon: '🌿', color: '#a3bf7f' },
+  { id: 'romero', name: 'Romero', icon: '🌿', color: '#93cc68' },
   { id: 'eucalipto', name: 'Eucalipto', icon: '🌳', color: '#6fa8dc' },
   { id: 'castano', name: 'Castano', icon: '🌰', color: '#8b6f47' },
-  { id: 'brezo', name: 'Brezo', icon: '💜', color: '#bd93b8' },
-  { id: 'personalizado', name: 'Personalizado', icon: '✨', color: '#f0a41c' },
+  { id: 'brezo', name: 'Brezo', icon: '💜', color: '#c987c3' },
+  { id: 'personalizado', name: 'Personalizado', icon: '✨', color: '#ffa90a' },
 ];
 
 interface Harvest {
@@ -509,7 +509,7 @@ export default function Production({ hives, suffix = '' }: Props) {
                   transition={{ delay: index * 0.05 }}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: type?.color || '#f0a41c' }} />
+                    <span className="w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: type?.color || '#ffa90a' }} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span className="rounded-md border border-line bg-ink px-2 py-0.5 font-mono text-[11px] font-semibold text-cream">

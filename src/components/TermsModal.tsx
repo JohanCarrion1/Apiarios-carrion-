@@ -297,7 +297,7 @@ export default function TermsModal({
               disabled={!todos || guardando}
               whileHover={todos && !guardando ? { scale: 1.02 } : undefined}
               whileTap={todos && !guardando ? { scale: 0.98 } : undefined}
-              className="w-full rounded-xl bg-honey py-3.5 font-bold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(240,164,28,.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-line disabled:text-husk disabled:shadow-none"
+              className="w-full rounded-xl bg-honey py-3.5 font-bold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(255,169,10,.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-line disabled:text-husk disabled:shadow-none"
             >
               {guardando
                 ? "Guardando…"

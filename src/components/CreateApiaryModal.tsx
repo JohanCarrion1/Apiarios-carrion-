@@ -130,7 +130,7 @@ export default function CreateApiaryModal({
           required
           autoFocus
           placeholder="Ej: Apiario El Mirador"
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
       </div>
 
@@ -144,7 +144,7 @@ export default function CreateApiaryModal({
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           placeholder="Ej: Zona rural, Provincia, Departamento"
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
       </div>
 
@@ -242,7 +242,7 @@ export default function CreateApiaryModal({
           onChange={(e) => setAltitud(e.target.value)}
           placeholder="Ej: 2500 (msnm)"
           min={-500}
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
       </div>
 
@@ -289,13 +289,13 @@ export default function CreateApiaryModal({
           <svg className="absolute inset-0 w-full h-full opacity-[0.08]" aria-hidden="true">
             <defs>
               <pattern id="hex-pattern-onboarding" width="50" height="87" patternUnits="userSpaceOnUse" patternTransform="scale(2)">
-                <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#f0a41c" strokeWidth="0.8" />
+                <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#ffa90a" strokeWidth="0.8" />
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#hex-pattern-onboarding)" />
           </svg>
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #f0a41c 0%, transparent 70%)' }} />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #b97d15 0%, transparent 70%)' }} />
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }} />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #c98508 0%, transparent 70%)' }} />
         </div>
 
         {/* El scroll lo hace la raíz (anclada al viewport); este bloque solo

@@ -3,9 +3,9 @@ import type { Hive, Inspection, Task } from "../types/hive";
 import { IconCheck, IconClipboard, IconPlus } from "../ui";
 
 const PRIORITY_COLOR: Record<Task['priority'], string> = {
-  alta: "#e4603f",
-  media: "#f0a41c",
-  baja: "#a3906a",
+  alta: "#f4552b",
+  media: "#ffa90a",
+  baja: "#b19a68",
 };
 
 interface Props {
@@ -94,7 +94,7 @@ export default function Panels({ inspections, hives, tasks, onToggle, onAdd }: P
               <button onClick={() => onToggle(t.id)} className="group flex w-full items-start gap-3.5 py-3.5 text-left">
                 <span
                   className="hexclip mt-0.5 flex h-[22px] w-5 shrink-0 items-center justify-center transition-all duration-200 group-hover:scale-110"
-                  style={{ background: t.completed ? "#f0a41c" : "#2d2214" }}
+                  style={{ background: t.completed ? "#ffa90a" : "#2d2214" }}
                 >
                   {t.completed && <IconCheck className="h-3 w-3 text-ink" />}
                 </span>

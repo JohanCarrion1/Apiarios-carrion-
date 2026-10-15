@@ -315,11 +315,11 @@ export default function HiveDetail({
                   {statusLabel}
                 </span>
                 {hiveHasQueen(hive) ? (
-                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#a3bf7f] bg-[#a3bf7f14] border border-[#a3bf7f35]">
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#93cc68] bg-[#93cc6814] border border-[#93cc6835]">
                     👑 Con reina
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#bd93b8] bg-[#bd93b814] border border-[#bd93b835]">
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#c987c3] bg-[#c987c314] border border-[#c987c335]">
                     ⚠️ Sin reina
                   </span>
                 )}
@@ -343,7 +343,7 @@ export default function HiveDetail({
             </motion.button>
             <motion.button
               onClick={() => onInspect(hive.id)}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-honey px-3 py-2.5 text-sm font-semibold text-ink shadow-[0_4px_18px_rgba(240,164,28,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-[0.97]"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-honey px-3 py-2.5 text-sm font-semibold text-ink shadow-[0_4px_18px_rgba(255,169,10,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-[0.97]"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
             >

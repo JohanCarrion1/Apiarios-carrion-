@@ -46,7 +46,7 @@ function Slider({
   max,
   step = 1,
   unit,
-  accent = '#ffc961',
+  accent = '#ffd061',
   onChange,
 }: {
   label: string;
@@ -286,15 +286,15 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
                   <label
                     className={`flex cursor-pointer select-none items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm transition-all ${
                       orphanColony
-                        ? 'border-[#bd93b8]/60 bg-[#bd93b8]/10 text-[#bd93b8]'
-                        : 'border-line bg-ink/50 text-husk hover:border-[#bd93b8]/40 hover:text-cream'
+                        ? 'border-[#c987c3]/60 bg-[#c987c3]/10 text-[#c987c3]'
+                        : 'border-line bg-ink/50 text-husk hover:border-[#c987c3]/40 hover:text-cream'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={orphanColony}
                       onChange={(e) => setOrphanColony(e.target.checked)}
-                      className="h-4 w-4 shrink-0 accent-[#bd93b8]"
+                      className="h-4 w-4 shrink-0 accent-[#c987c3]"
                     />
                     <span className="font-semibold">Colonia huérfana (sin reina)</span>
                     {orphanColony && <span className="ml-auto text-xs">⚠️ Estado SIN REINA</span>}
@@ -369,7 +369,7 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
                     max={5}
                     step={0.1}
                     unit="%"
-                    accent={varroa < 1.5 ? '#a3bf7f' : varroa < 2.5 ? '#f0a41c' : '#e4603f'}
+                    accent={varroa < 1.5 ? '#93cc68' : varroa < 2.5 ? '#ffa90a' : '#f4552b'}
                     onChange={setVarroa}
                   />
                 </div>
@@ -425,7 +425,7 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
                   <motion.button
                     type="submit"
                     disabled={photosUploading || submitting}
-                    className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(240,164,28,.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
+                    className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(255,169,10,.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >

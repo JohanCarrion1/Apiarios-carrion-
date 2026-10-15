@@ -290,7 +290,7 @@ export default function FecundadorInspectionModal({
                         type="checkbox"
                         checked={promover}
                         onChange={(e) => setPromover(e.target.checked)}
-                        className="h-4 w-4 shrink-0 accent-[#a3bf7f]"
+                        className="h-4 w-4 shrink-0 accent-[#93cc68]"
                       />
                       <span className="font-semibold">
                         Promover a núcleo tras esta inspección
@@ -328,7 +328,7 @@ export default function FecundadorInspectionModal({
                   <motion.button
                     type="submit"
                     disabled={photosUploading || submitting}
-                    className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(240,164,28,.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
+                    className="w-full rounded-xl bg-honey py-3.5 font-semibold text-ink transition-all duration-200 hover:bg-honeysoft hover:shadow-[0_8px_30px_rgba(255,169,10,.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >

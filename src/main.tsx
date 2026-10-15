@@ -46,10 +46,10 @@ class ErrorBoundary extends React.Component<
           fontFamily: 'system-ui, -apple-system, sans-serif'
         }}>
           <div style={{ maxWidth: '600px', textAlign: 'center' }}>
-            <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#e4603f' }}>
+            <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#f4552b' }}>
               ⚠️ Error de la Aplicación
             </h1>
-            <p style={{ marginBottom: '1rem', color: '#a3906a' }}>
+            <p style={{ marginBottom: '1rem', color: '#b19a68' }}>
               La aplicación encontró un error inesperado.
             </p>
             <div style={{
@@ -60,7 +60,7 @@ class ErrorBoundary extends React.Component<
               textAlign: 'left',
               border: '1px solid #392c19'
             }}>
-              <p style={{ color: '#e4603f', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              <p style={{ color: '#f4552b', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                 Error:
               </p>
               <pre style={{ 
@@ -80,10 +80,10 @@ class ErrorBoundary extends React.Component<
               textAlign: 'left',
               border: '1px solid #392c19'
             }}>
-              <p style={{ color: '#f0a41c', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              <p style={{ color: '#ffa90a', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                 💡 Posibles soluciones:
               </p>
-              <ul style={{ color: '#a3906a', textAlign: 'left', paddingLeft: '1.5rem' }}>
+              <ul style={{ color: '#b19a68', textAlign: 'left', paddingLeft: '1.5rem' }}>
                 <li>Verifica que las variables de entorno estén configuradas en el archivo .env</li>
                 <li>Ejecuta <code style={{ backgroundColor: '#2d2214', padding: '2px 6px', borderRadius: '4px' }}>npm run dev</code> nuevamente</li>
                 <li>Revisa la consola del navegador (F12) para más detalles</li>
@@ -93,7 +93,7 @@ class ErrorBoundary extends React.Component<
             <button
               onClick={() => window.location.reload()}
               style={{
-                backgroundColor: '#f0a41c',
+                backgroundColor: '#ffa90a',
                 color: '#131009',
                 padding: '0.75rem 1.5rem',
                 borderRadius: '8px',

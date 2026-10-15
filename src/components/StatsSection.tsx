@@ -532,10 +532,10 @@ export default function StatsSection({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={rankingData} layout="vertical" margin={{ left: 8, right: 16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#392c19" horizontal={false} />
-                <XAxis type="number" stroke="#a3906a" style={{ fontSize: '12px' }} unit=" kg" />
-                <YAxis type="category" dataKey="colmena" stroke="#a3906a" style={{ fontSize: '12px' }} width={80} />
+                <XAxis type="number" stroke="#b19a68" style={{ fontSize: '12px' }} unit=" kg" />
+                <YAxis type="category" dataKey="colmena" stroke="#b19a68" style={{ fontSize: '12px' }} width={80} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="kg" name="kg totales" fill="#f0a41c" radius={[0, 8, 8, 0]} />
+                <Bar dataKey="kg" name="kg totales" fill="#ffa90a" radius={[0, 8, 8, 0]} />
               </BarChart>
             </ResponsiveContainer>
             </div>
@@ -621,22 +621,22 @@ export default function StatsSection({
                 <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
                 <XAxis
                 dataKey="mes"
-                stroke="#a3906a"
+                stroke="#b19a68"
                 style={{ fontSize: 10 }}
                 interval={0}
                 angle={-45}
                 textAnchor="end"
                 height={60}
               />
-                <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
+                <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Line
                   type="monotone"
                   dataKey="produccion"
-                  stroke="#f0a41c"
+                  stroke="#ffa90a"
                   strokeWidth={3}
-                  dot={{ fill: '#f0a41c', r: 5 }}
-                  activeDot={{ r: 7, fill: '#ffc961' }}
+                  dot={{ fill: '#ffa90a', r: 5 }}
+                  activeDot={{ r: 7, fill: '#ffd061' }}
                   name="Producción"
                 />
               </LineChart>
@@ -665,22 +665,22 @@ export default function StatsSection({
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
               <XAxis
                 dataKey="mes"
-                stroke="#a3906a"
+                stroke="#b19a68"
                 style={{ fontSize: 10 }}
                 interval={0}
                 angle={-45}
                 textAnchor="end"
                 height={60}
               />
-              <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} />
               <Tooltip content={<CustomTooltip />} />
               <Line
                 type="monotone"
                 dataKey="produccion"
-                stroke="#f0a41c"
+                stroke="#ffa90a"
                 strokeWidth={3}
-                dot={{ fill: '#f0a41c', r: 5 }}
-                activeDot={{ r: 7, fill: '#ffc961' }}
+                dot={{ fill: '#ffa90a', r: 5 }}
+                activeDot={{ r: 7, fill: '#ffd061' }}
                 name="Producción"
               />
             </LineChart>
@@ -755,20 +755,20 @@ export default function StatsSection({
             <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
             <XAxis
                 dataKey="mes"
-                stroke="#a3906a"
+                stroke="#b19a68"
                 style={{ fontSize: 10 }}
                 interval={0}
                 angle={-45}
                 textAnchor="end"
                 height={60}
               />
-            <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
+            <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: '12px' }} />
             {hasPrevYear && (
-              <Bar dataKey="anterior" name="Año anterior" stackId="a" fill="#b97d15" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="anterior" name="Año anterior" stackId="a" fill="#c98508" radius={[0, 0, 0, 0]} />
             )}
-            <Bar dataKey="actual" name="Año actual" stackId="a" fill="#f0a41c" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="actual" name="Año actual" stackId="a" fill="#ffa90a" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
         </div>
@@ -793,16 +793,16 @@ export default function StatsSection({
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
               <XAxis
               dataKey="año"
-              stroke="#a3906a"
+              stroke="#b19a68"
               style={{ fontSize: 10 }}
               interval={0}
               angle={-45}
               textAnchor="end"
               height={60}
             />
-              <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="produccion" fill="#f0a41c" radius={[8, 8, 0, 0]} name="Producción" />
+              <Bar dataKey="produccion" fill="#ffa90a" radius={[8, 8, 0, 0]} name="Producción" />
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -914,19 +914,19 @@ export default function StatsSection({
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
               <XAxis
                 dataKey="fecha"
-                stroke="#a3906a"
+                stroke="#b19a68"
                 style={{ fontSize: 10 }}
                 angle={-45}
                 textAnchor="end"
                 height={60}
               />
-              <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} unit="%" />
+              <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} unit="%" />
               <Tooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
                 dataKey="varroa"
-                stroke="#e4603f"
-                fill="#e4603f"
+                stroke="#f4552b"
+                fill="#f4552b"
                 fillOpacity={0.3}
                 strokeWidth={2}
                 name="Varroa"
@@ -957,16 +957,16 @@ export default function StatsSection({
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" />
               <XAxis
                 dataKey="mes"
-                stroke="#a3906a"
+                stroke="#b19a68"
                 style={{ fontSize: 10 }}
                 interval={0}
                 angle={-45}
                 textAnchor="end"
                 height={60}
               />
-              <YAxis stroke="#a3906a" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#b19a68" style={{ fontSize: '12px' }} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="inspecciones" fill="#a3bf7f" radius={[8, 8, 0, 0]} name="Inspecciones" />
+              <Bar dataKey="inspecciones" fill="#93cc68" radius={[8, 8, 0, 0]} name="Inspecciones" />
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -1015,10 +1015,10 @@ export default function StatsSection({
           <ResponsiveContainer width="100%" height={Math.max(160, apiaryEfficiency.length * 52)}>
             <BarChart data={apiaryEfficiency} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#392c19" horizontal={false} />
-              <XAxis type="number" stroke="#a3906a" style={{ fontSize: '12px' }} unit=" kg" />
-              <YAxis type="category" dataKey="name" stroke="#a3906a" style={{ fontSize: '12px' }} width={110} />
+              <XAxis type="number" stroke="#b19a68" style={{ fontSize: '12px' }} unit=" kg" />
+              <YAxis type="category" dataKey="name" stroke="#b19a68" style={{ fontSize: '12px' }} width={110} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="total" name="kg totales" fill="#a3bf7f" radius={[0, 8, 8, 0]} />
+              <Bar dataKey="total" name="kg totales" fill="#93cc68" radius={[0, 8, 8, 0]} />
             </BarChart>
           </ResponsiveContainer>
           </div>

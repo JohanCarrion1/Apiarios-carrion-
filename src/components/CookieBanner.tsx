@@ -110,7 +110,7 @@ export default function CookieBanner() {
                 <motion.button
                   onClick={accept}
                   whileTap={{ scale: 0.96 }}
-                  className="rounded-full bg-honey px-5 py-2.5 text-xs font-black text-ink shadow-[0_2px_12px_rgba(240,164,28,.35)] transition-colors hover:bg-honeysoft"
+                  className="rounded-full bg-honey px-5 py-2.5 text-xs font-black text-ink shadow-[0_2px_12px_rgba(255,169,10,.35)] transition-colors hover:bg-honeysoft"
                 >
                   Aceptar todas
                 </motion.button>

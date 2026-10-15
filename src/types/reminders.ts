@@ -34,11 +34,11 @@ export const REMINDER_KIND_LABELS: Record<ReminderKind, string> = {
 };
 
 export const REMINDER_COLORS: Record<ReminderKind, string> = {
-  inspection: '#a3bf7f', // verde
-  harvest: '#f0a41c', // ámbar
-  treatment: '#e4603f', // rojo
-  task: '#bd93b8', // púrpura
-  breeding: '#bd93b8', // púrpura
+  inspection: '#93cc68', // verde
+  harvest: '#ffa90a', // ámbar
+  treatment: '#f4552b', // rojo
+  task: '#c987c3', // púrpura
+  breeding: '#c987c3', // púrpura
   flowering: '#4ade80', // verde claro
   recurring: '#f97316', // naranja
 };
@@ -112,8 +112,8 @@ export interface FloweringEntryDraft {
 // Plantillas de floración del documento CALENDARIO.md
 export const FLOWERING_PRESETS = [
   { species: 'Eucalipto', startMonth: 2, endMonth: 3, apiaryName: 'Huaraz', color: '#4ade80' },
-  { species: 'Romero', startMonth: 5, endMonth: 6, apiaryName: 'Huaraz', color: '#a3bf7f' },
+  { species: 'Romero', startMonth: 5, endMonth: 6, apiaryName: 'Huaraz', color: '#93cc68' },
   { species: 'Laurel', startMonth: 8, endMonth: 9, apiaryName: 'Caraz', color: '#34d399' },
 ];
 
-export const FLOWERING_COLORS = ['#4ade80', '#a3bf7f', '#34d399', '#6fa8dc', '#f0a41c', '#bd93b8'];
+export const FLOWERING_COLORS = ['#4ade80', '#93cc68', '#34d399', '#6fa8dc', '#ffa90a', '#c987c3'];

@@ -1107,7 +1107,7 @@ export default function AdminStore() {
             <button
               onClick={() => navigate('/tienda', { state: { tab: 'tienda' } })}
               title="Volver a la tienda"
-              className="flex h-11 items-center gap-2 rounded-xl bg-honey px-4 text-sm font-semibold text-ink shadow-[0_4px_20px_rgba(240,164,28,.3)] transition-colors hover:bg-honeysoft"
+              className="flex h-11 items-center gap-2 rounded-xl bg-honey px-4 text-sm font-semibold text-ink shadow-[0_4px_20px_rgba(255,169,10,.3)] transition-colors hover:bg-honeysoft"
             >
               <ShoppingCart className="h-4 w-4" />
               <span>Volver a tienda</span>

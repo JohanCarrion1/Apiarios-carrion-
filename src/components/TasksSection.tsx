@@ -14,9 +14,9 @@ interface Props {
 }
 
 const PRIORITY_COLOR: Record<Task['priority'], string> = {
-  alta: "#e4603f",
-  media: "#f0a41c",
-  baja: "#a3906a",
+  alta: "#f4552b",
+  media: "#ffa90a",
+  baja: "#b19a68",
 };
 
 const PRIORITY_LABEL: Record<Task['priority'], string> = {
@@ -249,7 +249,7 @@ export default function TasksSection({ tasks, hives, onToggle, onSaveTask, onDel
                   >
                     <span
                       className="hexclip mt-0.5 flex h-[22px] w-5 shrink-0 items-center justify-center transition-all duration-200 group-hover:scale-110"
-                      style={{ background: task.completed ? "#f0a41c" : "#2d2214" }}
+                      style={{ background: task.completed ? "#ffa90a" : "#2d2214" }}
                     >
                       {task.completed && <IconCheck className="h-3 w-3 text-ink" />}
                     </span>
@@ -310,7 +310,7 @@ export default function TasksSection({ tasks, hives, onToggle, onSaveTask, onDel
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickTask(); } }}
             placeholder="Ej: Revisar colmena C-03, Aplicar tratamiento varroa..."
-            className="min-w-0 flex-1 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+            className="min-w-0 flex-1 rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 transition-colors focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
           />
           <motion.button
             type="button"

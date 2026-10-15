@@ -14,11 +14,11 @@ interface Props {
 }
 
 const TYPE_COLORS: Record<TransferType, string> = {
-  nucleo_a_colmena: '#f0a41c',
-  nucleo_apiario: '#a3bf7f',
+  nucleo_a_colmena: '#ffa90a',
+  nucleo_apiario: '#93cc68',
   colmena_apiario: '#6fa8dc',
-  fecundador_a_nucleo: '#bd93b8',
-  fecundador_apiario: '#bd93b8',
+  fecundador_a_nucleo: '#c987c3',
+  fecundador_apiario: '#c987c3',
 };
 
 const TYPE_LABELS: Record<TransferType, string> = {

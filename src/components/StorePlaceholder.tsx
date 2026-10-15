@@ -20,13 +20,13 @@ export default function StorePlaceholder() {
         <svg className="absolute inset-0 w-full h-full opacity-[0.08]" aria-hidden="true">
           <defs>
             <pattern id="hex-pattern" width="50" height="87" patternUnits="userSpaceOnUse" patternTransform="scale(2)">
-              <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#f0a41c" strokeWidth="0.8" />
+              <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#ffa90a" strokeWidth="0.8" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#hex-pattern)" />
         </svg>
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #f0a41c 0%, transparent 70%)' }} />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #b97d15 0%, transparent 70%)' }} />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #c98508 0%, transparent 70%)' }} />
       </div>
 
       {/* Contenido */}
@@ -137,7 +137,7 @@ export default function StorePlaceholder() {
               onClick={handleBackToSelection}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.98 }}
-              className="px-8 py-4 rounded-xl bg-honey text-ink font-semibold text-lg hover:bg-honeysoft transition-colors shadow-[0_4px_20px_rgba(240,164,28,.3)]"
+              className="px-8 py-4 rounded-xl bg-honey text-ink font-semibold text-lg hover:bg-honeysoft transition-colors shadow-[0_4px_20px_rgba(255,169,10,.3)]"
             >
               Volver a Selección
             </motion.button>

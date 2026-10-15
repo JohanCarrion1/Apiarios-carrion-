@@ -119,7 +119,7 @@ export default function UserWelcomeModal({
           required
           autoFocus
           placeholder="Ej: Apiario El Mirador"
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
       </div>
 
@@ -133,7 +133,7 @@ export default function UserWelcomeModal({
           value={ubicacion}
           onChange={(e) => setUbicacion(e.target.value)}
           placeholder="Ej: Zona rural, Provincia, Departamento"
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
       </div>
 
@@ -177,7 +177,7 @@ export default function UserWelcomeModal({
           onChange={(e) => setAltitud(e.target.value)}
           placeholder="Ej: 2500"
           min={-500}
-          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(240,164,28,.12)]"
+          className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
       </div>
 
@@ -221,7 +221,7 @@ export default function UserWelcomeModal({
       // usuario hace scroll natural hasta él. `inset-0` evita el recorte que
       // provocaba `100vh` con la barra del navegador en móvil.
       <div className="fixed inset-0 z-10 overflow-y-auto overscroll-contain bg-ink">
-        <div className="pointer-events-none fixed top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #f0a41c 0%, transparent 70%)' }} />
+        <div className="pointer-events-none fixed top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }} />
         <div className="flex min-h-full items-center justify-center px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <motion.div
             initial={{ opacity: 0, y: 30 }}

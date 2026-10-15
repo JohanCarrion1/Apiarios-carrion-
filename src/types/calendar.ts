@@ -68,12 +68,12 @@ export interface NotificationSettings {
 
 // Colores para tipos de eventos
 export const EVENT_COLORS: Record<EventType, string> = {
-  inspection: '#a3bf7f', // verde
-  harvest: '#f0a41c', // ámbar
-  treatment: '#e4603f', // rojo
-  task: '#bd93b8', // púrpura
+  inspection: '#93cc68', // verde
+  harvest: '#ffa90a', // ámbar
+  treatment: '#f4552b', // rojo
+  task: '#c987c3', // púrpura
   reminder: '#6fa8dc', // azul
-  custom: '#f0a41c', // ámbar por defecto
+  custom: '#ffa90a', // ámbar por defecto
 };
 
 // Color naranja para eventos de recordatorio/tarea recurrente
@@ -99,8 +99,8 @@ export const PRIORITY_LABELS: Record<EventPriority, string> = {
 
 // Colores para prioridades
 export const PRIORITY_COLORS: Record<EventPriority, string> = {
-  low: '#a3906a',
-  medium: '#f0a41c',
-  high: '#e4603f',
+  low: '#b19a68',
+  medium: '#ffa90a',
+  high: '#f4552b',
   urgent: '#dc2626',
 };

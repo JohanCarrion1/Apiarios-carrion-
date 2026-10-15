@@ -188,7 +188,7 @@ export default function FecundadorDetail({
           </motion.button>
           <motion.button
             onClick={onRegisterInspection}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-honey px-3 py-2.5 text-sm font-semibold text-ink shadow-[0_4px_18px_rgba(240,164,28,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-[0.97]"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-honey px-3 py-2.5 text-sm font-semibold text-ink shadow-[0_4px_18px_rgba(255,169,10,.35)] transition-all duration-200 hover:bg-honeysoft active:scale-[0.97]"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
           >
@@ -272,7 +272,7 @@ export default function FecundadorDetail({
             </p>
           )
         ) : fecundador.promotion && (
-          <div className="rounded-xl border p-3" style={{ borderColor: '#a3bf7f66', background: '#a3bf7f12' }}>
+          <div className="rounded-xl border p-3" style={{ borderColor: '#93cc6866', background: '#93cc6812' }}>
             <p className="tick-label mb-1">Promovido a núcleo</p>
             <p className="font-display text-2xl font-black text-sage">{fecundador.promotion.nucleoCode}</p>
             <p className="text-xs text-husk mt-1">{formatDay(fecundador.promotion.fecha.slice(0, 10))}</p>
@@ -322,11 +322,11 @@ export default function FecundadorDetail({
                     style={{
                       background:
                         h.tipo === 'creado'
-                          ? '#f0a41c'
+                          ? '#ffa90a'
                           : h.tipo === 'promovido'
-                            ? '#a3bf7f'
+                            ? '#93cc68'
                             : h.tipo === 'eliminado'
-                              ? '#e4603f'
+                              ? '#f4552b'
                               : h.tipo === 'inspeccion'
                                 ? '#6fa8dc'
                                 : FECUNDADOR_STATE_COLORS[h.tipo],

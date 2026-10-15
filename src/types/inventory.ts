@@ -110,7 +110,7 @@ export const inventoryLevel = (item: InventoryItem): 'bajo' | 'medio' | 'ok' => 
 
 export const inventoryLevelColor = (item: InventoryItem): string => {
   const level = inventoryLevel(item);
-  if (level === 'bajo') return '#e4603f'; // coral
-  if (level === 'medio') return '#f0a41c'; // honey
-  return '#a3bf7f'; // sage
+  if (level === 'bajo') return '#f4552b'; // coral
+  if (level === 'medio') return '#ffa90a'; // honey
+  return '#93cc68'; // sage
 };

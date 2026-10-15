@@ -28,9 +28,9 @@ export const TRAP_STATUS_LABELS: Record<TrapBoxStatus, string> = {
 };
 
 export const TRAP_STATUS_COLORS: Record<TrapBoxStatus, string> = {
-  available: '#a3bf7f',
-  occupied: '#f0a41c',
-  bait_expired: '#e4603f',
+  available: '#93cc68',
+  occupied: '#ffa90a',
+  bait_expired: '#f4552b',
 };
 
 export const TRAP_CAPTURE_SIZES: TrapCaptureSize[] = ['small', 'medium', 'large'];

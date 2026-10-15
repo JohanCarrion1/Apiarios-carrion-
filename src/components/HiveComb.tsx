@@ -117,7 +117,7 @@ export default function HiveComb({
   const polinizacionCount = hives.filter(h => polinizacionCodes.includes(h.code)).length;
 
   const chips: { key: HiveStatus | "todas" | "transferidas" | "polinizacion"; label: string; n: number; color?: string }[] = [
-    { key: "todas", label: allChipLabel, n: hives.length, color: "#f0a41c" },
+    { key: "todas", label: allChipLabel, n: hives.length, color: "#ffa90a" },
     { key: "saludable", label: "SALUDABLE", n: healthyCount, color: STATUS_COLORS.saludable },
     { key: "revision", label: "REVISIÓN", n: revisionCount, color: STATUS_COLORS.revision },
     { key: "alerta", label: "ALERTA", n: alertCount, color: STATUS_COLORS.alerta },

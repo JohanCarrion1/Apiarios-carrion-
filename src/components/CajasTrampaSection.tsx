@@ -49,9 +49,9 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 const STATUS_DOT: Record<string, string> = {
-  available: '#a3bf7f',
-  occupied: '#f0a41c',
-  bait_expired: '#e4603f',
+  available: '#93cc68',
+  occupied: '#ffa90a',
+  bait_expired: '#f4552b',
 };
 
 export default function CajasTrampaSection({

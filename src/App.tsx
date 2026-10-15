@@ -143,13 +143,13 @@ function Ambient() {
       <svg className="pointer-events-none fixed inset-0 z-0 h-full w-full opacity-[0.05]" aria-hidden="true">
         <defs>
           <pattern id="hexes" width="28" height="49" patternUnits="userSpaceOnUse" patternTransform="scale(2.4)">
-            <path d="M13.99 9.25l13 7.5v15l-13 7.5-13-7.5v-15z" fill="none" stroke="#f0a41c" strokeWidth="0.5" />
+            <path d="M13.99 9.25l13 7.5v15l-13 7.5-13-7.5v-15z" fill="none" stroke="#ffa90a" strokeWidth="0.5" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#hexes)" />
       </svg>
-      <div className="glow-a pointer-events-none fixed -left-44 -top-44 z-0 h-[36rem] w-[36rem] rounded-full opacity-[0.13]" style={{ background: "radial-gradient(circle, #f0a41c 0%, transparent 65%)" }} />
-      <div className="glow-b pointer-events-none fixed -bottom-52 -right-40 z-0 h-[40rem] w-[40rem] rounded-full opacity-[0.1]" style={{ background: "radial-gradient(circle, #b97d15 0%, transparent 65%)" }} />
+      <div className="glow-a pointer-events-none fixed -left-44 -top-44 z-0 h-[36rem] w-[36rem] rounded-full opacity-[0.13]" style={{ background: "radial-gradient(circle, #ffa90a 0%, transparent 65%)" }} />
+      <div className="glow-b pointer-events-none fixed -bottom-52 -right-40 z-0 h-[40rem] w-[40rem] rounded-full opacity-[0.1]" style={{ background: "radial-gradient(circle, #c98508 0%, transparent 65%)" }} />
       {[
         { top: "14%", dur: "46s", delay: "-8s", cls: "h-5 w-5 opacity-30" },
         { top: "44%", dur: "60s", delay: "-31s", cls: "h-4 w-4 opacity-25" },
@@ -239,7 +239,7 @@ function IntroHead({ temp, wind, activity, apiaryName, apiaryLocation }: { temp:
               cy="20"
               r="16"
               fill="none"
-              stroke="#f0a41c"
+              stroke="#ffa90a"
               strokeWidth="4"
               strokeLinecap="round"
               pathLength={100}

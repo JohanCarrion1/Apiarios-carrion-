@@ -28,15 +28,15 @@ export function HeroAmbient() {
           animate={reduce ? { opacity: 0.35, scale: 1 } : { opacity: [0, 0.4, 0.28], scale: 1, y: [0, -12, 0], rotate: [0, 12, 0] }}
           transition={reduce ? { duration: 0.6 } : { duration: 9 + i, delay: h.d, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <path d="M50 6l38 22v44L50 94 12 72V28z" fill="rgba(240,164,28,.05)" stroke="#f0a41c" strokeOpacity=".5" strokeWidth="2" />
+          <path d="M50 6l38 22v44L50 94 12 72V28z" fill="rgba(255,169,10,.05)" stroke="#ffa90a" strokeOpacity=".5" strokeWidth="2" />
         </motion.svg>
       ))}
 
       <svg viewBox="0 0 800 140" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-24 w-full sm:h-32">
         <motion.path
           d="M0 120 L90 78 L150 100 L260 30 L330 84 L420 52 L520 108 L610 40 L700 92 L800 64 L800 140 L0 140 Z"
-          fill="rgba(240,164,28,.045)"
-          stroke="#f0a41c"
+          fill="rgba(255,169,10,.045)"
+          stroke="#ffa90a"
           strokeOpacity=".5"
           strokeWidth="1.6"
           vectorEffect="non-scaling-stroke"
@@ -44,9 +44,9 @@ export function HeroAmbient() {
           animate={{ pathLength: 1, fillOpacity: 1 }}
           transition={{ duration: 2.2, ease: EASE, delay: 0.3 }}
         />
-        <motion.circle cx="610" cy="40" r="5" fill="#f0a41c" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 2.3, duration: 0.4 }} />
+        <motion.circle cx="610" cy="40" r="5" fill="#ffa90a" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 2.3, duration: 0.4 }} />
         {!reduce && (
-          <motion.circle cx="610" cy="40" r="5" fill="none" stroke="#f0a41c" initial={{ scale: 1, opacity: 0.8 }} animate={{ scale: 3.4, opacity: 0 }} transition={{ delay: 2.4, duration: 1.8, repeat: Infinity }} style={{ transformOrigin: '610px 40px' }} />
+          <motion.circle cx="610" cy="40" r="5" fill="none" stroke="#ffa90a" initial={{ scale: 1, opacity: 0.8 }} animate={{ scale: 3.4, opacity: 0 }} transition={{ delay: 2.4, duration: 1.8, repeat: Infinity }} style={{ transformOrigin: '610px 40px' }} />
         )}
       </svg>
       <motion.span
@@ -87,7 +87,7 @@ export function HoneyDrips() {
     que derivan despacio y viñeta; el panal lo dibuja LivingHive encima. */
 export function SelectionBackdrop({ fixed = false }: { fixed?: boolean }) {
   const orbs = [
-    { l: '-10%', t: '-12%', s: 520, c: 'rgba(240,164,28,.16)', dx: 40, dy: 30, d: 16 },
+    { l: '-10%', t: '-12%', s: 520, c: 'rgba(255,169,10,.16)', dx: 40, dy: 30, d: 16 },
     { l: '62%', t: '8%', s: 460, c: 'rgba(185,125,21,.14)', dx: -50, dy: 40, d: 19 },
     { l: '20%', t: '60%', s: 560, c: 'rgba(255,201,97,.08)', dx: 30, dy: -40, d: 22 },
   ];

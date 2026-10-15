@@ -1057,7 +1057,7 @@ export default function AdminStore() {
   return (
     <div className="relative min-h-screen bg-[#1A140D]">
       <FondoVivo />
-      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 pb-28">
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-16 pb-28">
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between gap-3 py-5">
           <div className="flex min-w-0 items-center gap-3">

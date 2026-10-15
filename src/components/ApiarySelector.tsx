@@ -97,7 +97,7 @@ export default function ApiarySelector() {
   }
 
   return (
-    <div className="min-h-screen bg-ink p-4 sm:p-8">
+    <div className="min-h-screen bg-ink p-4 sm:p-8 lg:px-12 xl:px-16">
       <div className="w-full">
         {/* Header */}
         <motion.div

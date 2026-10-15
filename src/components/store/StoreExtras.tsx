@@ -55,7 +55,7 @@ function Cifra({ valor, prefijo, sufijo, decimales = 0, titulo, detalle }: (type
 
 export function CifrasApiario() {
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
       <div
         className="relative overflow-hidden rounded-2xl border border-honey/15 bg-[#241C12] px-5 py-8 sm:px-10 sm:py-10"
         aria-label="Cifras del apiario"
@@ -91,7 +91,7 @@ export function SabiasQue() {
   const dato = DATOS_MIEL_DEMO[i];
 
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
       <div
         className="relative overflow-hidden rounded-2xl border border-line bg-pane/60 px-5 py-8 sm:px-10 sm:py-10"
         onMouseEnter={() => setPausado(true)}
@@ -174,7 +174,7 @@ export function Testimonios() {
   };
 
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
       <div className="mb-8 text-center">
         <p className="tick-label mb-2 flex items-center justify-center gap-3">
           <span className="h-px w-8 bg-honey/60" />
@@ -282,7 +282,7 @@ export function Testimonios() {
    ============================================================ */
 export function Garantias() {
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {GARANTIAS_DEMO.map((g, i) => (
           <motion.div
@@ -314,7 +314,7 @@ export function PreguntasFrecuentes() {
   const [abierto, setAbierto] = useState<string | null>(PREGUNTAS_DEMO[0]?.id ?? null);
 
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
       <div className="mb-8 text-center">
         <p className="tick-label mb-2 flex items-center justify-center gap-3">
           <span className="h-px w-8 bg-honey/60" />

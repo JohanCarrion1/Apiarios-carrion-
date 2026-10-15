@@ -15,7 +15,7 @@ const LEGAL_LINKS = [
 export default function StoreFooter() {
   return (
     <footer className="relative z-10 border-t border-honey/10 bg-[#14100a]">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-8">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
           <p className="tick-label text-[11px] tracking-wide text-husk/70">
             © 2026 Apiarios Carrión · Huaraz, Áncash — Perú

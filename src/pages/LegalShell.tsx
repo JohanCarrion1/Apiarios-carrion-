@@ -71,7 +71,7 @@ export default function LegalShell({
 
       <div className="relative z-10">
         {/* Barra superior */}
-        <div className="flex w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 pt-5">
+        <div className="flex w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-12 xl:px-16 pt-5">
           <Link
             to="/"
             className="flex items-center gap-2"
@@ -92,7 +92,7 @@ export default function LegalShell({
         </div>
 
         {/* Encabezado de la página */}
-        <header className="w-full px-4 sm:px-6 lg:px-8 pt-8 pb-6 text-center sm:pt-12">
+        <header className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 pt-8 pb-6 text-center sm:pt-12">
           <p className="tick-label mb-3 flex items-center justify-center gap-3">
             <span className="h-px w-8 bg-honey/60" />
             {badge}
@@ -103,11 +103,11 @@ export default function LegalShell({
         </header>
 
         {/* Contenido */}
-        <main className="w-full space-y-5 px-4 sm:px-6 lg:px-8 pb-12">{children}</main>
+        <main className="w-full space-y-5 px-4 sm:px-6 lg:px-12 xl:px-16 pb-12">{children}</main>
 
         {/* Footer */}
         <footer className="border-t border-honey/10 bg-[#14100a]">
-          <div className="w-full px-4 sm:px-6 lg:px-8 py-6 text-center">
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-6 text-center">
             <p className="tick-label text-[11px] text-husk/70">© 2026 Apiarios Carrión · Huaraz, Áncash — Perú</p>
           </div>
         </footer>

@@ -1417,7 +1417,7 @@ export default function Store() {
 
       <div className="relative z-10">
         {/* Header público (logo + hamburguesa→X), visible en todas las pestañas */}
-        <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16">
           <PublicBrandHeader
             open={menuOpen}
             onMenu={() => setMenuOpen((o) => !o)}
@@ -1435,7 +1435,7 @@ export default function Store() {
             {tab === 'inicio' && (
               <>
                 <section id="inicio" className="relative overflow-hidden pb-16">
-                <div className="w-full px-4 sm:px-6 lg:px-8">
+                <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16">
                   <div className="relative z-10 flex flex-col items-center gap-8 py-10 text-center sm:py-16 lg:py-20">
                     <motion.p
                       className="tick-label mb-5 flex items-center justify-center gap-3"
@@ -1507,7 +1507,7 @@ export default function Store() {
               <CifrasApiario />
 
               {/* 1 — Propuestas de valor */}
-              <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+              <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                   {VALUE_PROPS.map((v, i) => (
                     <motion.div
@@ -1532,7 +1532,7 @@ export default function Store() {
               <SabiasQue />
 
               {/* 2 — Del panal a tu mesa */}
-              <section className="w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+              <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 sm:py-14">
                 <div className="mb-10 text-center">
                   <p className="tick-label mb-2 flex items-center justify-center gap-3">
                     <span className="h-px w-8 bg-honey/60" />
@@ -1602,7 +1602,7 @@ export default function Store() {
               <PreguntasFrecuentes />
 
               {/* 4 — CTA final */}
-              <section className="w-full px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
+              <section className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-14 sm:py-20">
                 <div className="card relative overflow-hidden rounded-2xl px-6 py-10 text-center sm:px-12 sm:py-14">
                   <div
                     className="pointer-events-none absolute inset-0 opacity-[0.06]"
@@ -1642,7 +1642,7 @@ href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WA_MENSAJE_CON
             )}
 
         {tab === 'oficio' && (
-              <section id="oficio" className="w-full px-4 sm:px-6 lg:px-8 py-10 pb-28 sm:py-14">
+              <section id="oficio" className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 pb-28 sm:py-14">
             <div>
               <p className="tick-label mb-3 flex items-center justify-center gap-3 lg:justify-start">
                 <span className="h-px w-8 bg-honey/60" />
@@ -1714,7 +1714,7 @@ href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WA_MENSAJE_CON
             )}
 
             {tab === 'tienda' && (
-              <div id="tienda" className="w-full px-4 sm:px-6 lg:px-8 pb-32">
+              <div id="tienda" className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 pb-32">
           {/* Header */}
         <header className="flex flex-wrap items-center justify-between gap-3 py-5 sm:py-6">
           <div className="min-w-0">
@@ -1906,7 +1906,7 @@ href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WA_MENSAJE_CON
             )}
 
             {tab === 'contacto' && (
-              <section id="contacto" className="w-full px-4 sm:px-6 lg:px-8 py-10 pb-28 sm:py-14">
+              <section id="contacto" className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-10 pb-28 sm:py-14">
                 <div>
                   <p className="tick-label mb-3 flex items-center justify-center gap-3 lg:justify-start">
                     <span className="h-px w-8 bg-honey/60" />

@@ -1677,7 +1677,7 @@ export default function Catalogo() {
 
   return (
     <div className="min-h-screen bg-[#1A140D] pb-28">
-      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-16 pt-6">
         {/* ---- Cabecera ---- */}
         <header className="mb-6 flex flex-wrap items-center gap-3">
           <button

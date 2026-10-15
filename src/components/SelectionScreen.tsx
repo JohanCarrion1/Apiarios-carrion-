@@ -406,7 +406,7 @@ export default function SelectionScreen() {
           padre, el scroll se quedaba sin tope superior. `py-10` deja aire
           para que no se pegue a los bordes en pantallas cortas, y `max-w-4xl`
           lo mantiene centrado en desktop. */}
-      <div className="relative z-10 m-auto flex w-full max-w-4xl items-center justify-center px-4 py-10 sm:py-14">
+      <div className="relative z-10 m-auto flex w-full max-w-6xl items-center justify-center px-4 py-10 sm:py-14">
         <div className="w-full">
           {/* Header */}
           <div className="text-center mb-12">
@@ -488,16 +488,16 @@ export default function SelectionScreen() {
           )}
 
           {/* Tarjetas de selección */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex flex-wrap justify-center gap-5 sm:gap-6">
             {/* Tienda */}
             <motion.button
               onClick={handleSelectStore}
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 }}
-              whileHover={{ scale: 1.05, y: -8 }}
+              whileHover={{ scale: 1.02, y: -6 }}
               whileTap={{ scale: 0.98 }}
-              className="card p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
+              className="card w-full md:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)] p-6 sm:p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
             >
               <div className="flex flex-col items-center text-center">
                 <motion.div
@@ -555,9 +555,9 @@ export default function SelectionScreen() {
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
-              whileHover={{ scale: 1.05, y: -8 }}
+              whileHover={{ scale: 1.02, y: -6 }}
               whileTap={{ scale: 0.98 }}
-              className="card p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
+              className="card w-full md:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)] p-6 sm:p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
             >
               <div className="flex flex-col items-center text-center">
                 <motion.div
@@ -614,9 +614,9 @@ export default function SelectionScreen() {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7 }}
-                whileHover={{ scale: 1.05, y: -8 }}
+                whileHover={{ scale: 1.02, y: -6 }}
                 whileTap={{ scale: 0.98 }}
-                className="card p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
+                className="card w-full md:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)] p-6 sm:p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
               >
                 <div className="flex flex-col items-center text-center">
                   <motion.div
@@ -662,9 +662,9 @@ export default function SelectionScreen() {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.75 }}
-                whileHover={{ scale: 1.05, y: -8 }}
+                whileHover={{ scale: 1.02, y: -6 }}
                 whileTap={{ scale: 0.98 }}
-                className="card p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
+                className="card w-full md:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)] p-6 sm:p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
               >
                 <div className="flex flex-col items-center text-center">
                   <motion.div
@@ -710,9 +710,9 @@ export default function SelectionScreen() {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.8 }}
-                whileHover={{ scale: 1.05, y: -8 }}
+                whileHover={{ scale: 1.02, y: -6 }}
                 whileTap={{ scale: 0.98 }}
-                className="card relative p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
+                className="card relative w-full md:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)] p-6 sm:p-8 text-left group cursor-pointer border-2 border-transparent hover:border-honey/50 active:border-honey transition-all"
               >
                 {/* Badge rojo de pedidos pendientes */}
                 {pendientesCount > 0 && (

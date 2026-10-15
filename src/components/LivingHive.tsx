@@ -5,7 +5,13 @@ import { useEffect, useRef } from 'react';
    durante unos segundos después de moverlo o tocar la pantalla.
    Es solo decorativo (pointer-events: none) y respeta prefers-reduced-motion. */
 
-type Bee = { x: number; y: number; a: number; sp: number; ph: number; s: number };
+type Bee = {
+  x: number; y: number; a: number; sp: number; ph: number; s: number;
+  flip: number; // 1 = panza abajo, -1 = invertida; se interpola para que gire de verdad al cambiar de lado
+  hold: number; // distancia a la que se queda de su objetivo al perseguir
+  chain: boolean; // true: persigue a la abeja de adelante (va "por atrás"); false: persigue el puntero de cerca
+  dir: 1 | -1; // sentido en que orbita al alcanzar su objetivo
+};
 
 export default function LivingHive() {
   const bgRef = useRef<HTMLCanvasElement>(null);
@@ -54,8 +60,15 @@ export default function LivingHive() {
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) hexPath(gctx, cxOf(c, r), cyOf(r), R - 1);
       gctx.stroke();
       glow.clear();
-      const n = W < 520 ? 3 : 5;
-      bees = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H * 0.8, a: Math.random() * 6.28, sp: 48 + Math.random() * 34, ph: Math.random() * 20, s: 1.05 + Math.random() * 0.45 }));
+      // 4 abejas más que antes (7 en celular, 9 en pantalla grande). Las 4 primeras
+      // persiguen el puntero de cerca; las demás van detrás, en fila, siguiendo a la de adelante.
+      const n = W < 520 ? 7 : 9;
+      const holds = [18, 30, 44, 60];
+      bees = Array.from({ length: n }, (_, i) => ({
+        x: Math.random() * W, y: Math.random() * H * 0.8, a: Math.random() * 6.28, sp: 48 + Math.random() * 34,
+        ph: Math.random() * 20, s: 1.05 + Math.random() * 0.45, flip: 1,
+        hold: i < 4 ? holds[i] : 48 + (i - 4) * 6, chain: i >= 4, dir: i % 2 ? 1 : -1,
+      }));
     };
 
     const lightAt = (x: number, y: number, strength: number) => {
@@ -101,7 +114,7 @@ export default function LivingHive() {
       ctx.save();
       ctx.translate(b.x, b.y + Math.sin(t * 14 + b.ph) * 0.8);
       ctx.rotate(b.a);
-      ctx.scale(k, k);
+      ctx.scale(k, k * b.flip);
       ctx.rotate(FACE);
       ctx.translate(-50, -48);
 
@@ -178,14 +191,18 @@ export default function LivingHive() {
         const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
         amb += dt; if (amb > 0.3) { amb = 0; lightAt(Math.random() * W, Math.random() * H, 0.45); }
         fctx.setTransform(DPR, 0, 0, DPR, 0, 0); fctx.clearRect(0, 0, W, H);
+        const chasing = !!target && now - lastMove < 3600;
         bees.forEach((b, i) => {
-          const follow = i === 0 && target && now - lastMove < 2600;
-          if (follow && target) {
-            const dx = target.x - b.x, dy = target.y - b.y, dist = Math.hypot(dx, dy), want = Math.atan2(dy, dx);
+          if (chasing && target) {
+            // Cerca: va al puntero. Atrás: va a la abeja anterior de la fila.
+            const lead = b.chain && i > 0 ? bees[i - 1] : target;
+            const wob = Math.sin(t * 2.2 + b.ph) * 0.35; // vaivén para que no vuelen en línea recta perfecta
+            const dx = lead.x - b.x, dy = lead.y - b.y, dist = Math.hypot(dx, dy), want = Math.atan2(dy, dx) + wob * Math.min(1, dist / 160);
             const diff = Math.atan2(Math.sin(want - b.a), Math.cos(want - b.a));
-            b.a += Math.max(-6 * dt, Math.min(6 * dt, diff * 8 * dt));
-            b.sp = dist < 26 ? 70 : Math.min(220, 60 + dist * 2.2);
-            if (dist < 26) b.a += dt * 4;
+            const turn = b.chain ? 7 : 10;
+            b.a += Math.max(-turn * dt, Math.min(turn * dt, diff * 9 * dt));
+            if (dist > b.hold) b.sp = Math.min(b.chain ? 210 : 250, 60 + (dist - b.hold) * 2.6);
+            else { b.sp = 64; b.a += b.dir * dt * 4.2; } // alcanzó su sitio: orbita alrededor
           } else {
             b.a += (Math.sin(t * 0.9 + b.ph) + Math.sin(t * 1.7 + b.ph * 2.3)) * dt * 1.5;
             b.sp += (48 + Math.sin(t + b.ph) * 18 - b.sp) * dt;
@@ -195,6 +212,9 @@ export default function LivingHive() {
               b.a += d2 * dt * 2.6;
             }
           }
+          // Si va hacia la izquierda, se voltea (panza abajo) en vez de volar de cabeza.
+          const wantFlip = Math.cos(b.a) < 0 ? -1 : 1;
+          b.flip += (wantFlip - b.flip) * Math.min(1, dt * 12);
           b.x += Math.cos(b.a) * b.sp * dt; b.y += Math.sin(b.a) * b.sp * dt;
           b.x = Math.max(-20, Math.min(W + 20, b.x)); b.y = Math.max(-20, Math.min(H + 20, b.y));
           lightAt(b.x, b.y, 1);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useMemo, useRef, lazy, startTransition, Suspense, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, MotionConfig } from "framer-motion";
+import { HivesBackdrop } from "./components/StoreFx";
 import { toastVariants } from "./lib/motion";
 import {
   uid,
@@ -2228,6 +2229,7 @@ function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSect
   return (
     <div className="relative min-h-screen pb-20 lg:pb-0">
       <Ambient />
+      {activeSection === 'colmenas' && <HivesBackdrop />}
 
       {/* Header Responsive (se oculta en pantalla completa del Asistente IA) */}
       {!(activeSection === 'asistente-ia' && iaFullscreen) && (

@@ -72,6 +72,7 @@ import { getAll as getLocalProducts, saveAll as saveLocalProducts, hasUnsyncedCh
 import { pullProductsFromFirestore, pushProductsToFirestore } from './productsSync';
 import { STORE_SEED_PRODUCTS } from '../utils/storeSeed';
 import { normalizeStoreProduct } from '../types/store';
+import { prepararChatsParaNube, conservarFotosLocales } from '../lib/chatSync';
 
 const APIARIOS_COLLECTION = 'apiarios';
 const APIARIO_DATA_COLLECTION = 'apiarioData';
@@ -372,7 +373,11 @@ export const handleSyncEvent = async (evt: StoreSyncEvent): Promise<void> => {
   // Campos objeto/escalar de userData: notifySync normaliza a array, así que
   // el valor real viaja en items[0] (o llega vacío al borrar la clave).
   if (USER_DOC_ENTITIES.has(entity)) {
-    await updateUserDataDoc(userId, { [entity]: removed ? null : (items[0] ?? null) });
+    let valor: unknown = removed ? null : (items[0] ?? null);
+    // El historial del asistente se limpia antes de subirlo (sin `undefined`,
+    // sin fotos base64, con tope de tamaño): si no, Firestore rechaza todo.
+    if (entity === 'conversacionesIA' && valor) valor = prepararChatsParaNube(valor);
+    await updateUserDataDoc(userId, { [entity]: valor });
     return;
   }
 
@@ -568,12 +573,13 @@ const hydrateUserFields = async (
     Array.isArray((chat as { conversaciones?: unknown }).conversaciones)
   ) {
     if (!wasWrittenDuringHydration('conversacionesIA', { userId })) {
-      saveData('conversacionesIA', chat, { userId, sync: false });
+      const localPrevio = loadData<unknown>('conversacionesIA', null, { userId });
+      saveData('conversacionesIA', conservarFotosLocales(chat, localPrevio), { userId, sync: false });
     }
   } else {
     const local = loadData<{ conversaciones?: unknown[] } | null>('conversacionesIA', null, { userId });
     if (local && Array.isArray(local.conversaciones) && local.conversaciones.length > 0) {
-      push.conversacionesIA = local;
+      push.conversacionesIA = prepararChatsParaNube(local);
     }
   }
 

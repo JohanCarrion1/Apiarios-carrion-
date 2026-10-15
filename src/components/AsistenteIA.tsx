@@ -280,6 +280,8 @@ export default function AsistenteIA({
   const [seleccionFotos, setSeleccionFotos] = useState<string[]>([]);
   const [expandida, setExpandida] = useState<string | null>(null);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  // Confirmación de borrado: id de la conversación, 'todas' o null.
+  const [confirmarBorrado, setConfirmarBorrado] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -344,7 +346,10 @@ export default function AsistenteIA({
 
   // Cerrar el historial con la tecla Escape.
   useEffect(() => {
-    if (!historialAbierto) return;
+    if (!historialAbierto) {
+      setConfirmarBorrado(null);
+      return;
+    }
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') setHistorialAbierto(false);
     };
@@ -489,6 +494,16 @@ export default function AsistenteIA({
         activaId: prev.activaId === id ? restantes[0].id : prev.activaId,
       };
     });
+  };
+
+  const eliminarTodas = () => {
+    const conv = crearConversacion();
+    setEstado({ conversaciones: [conv], activaId: conv.id });
+    setInput('');
+    setAdjuntos([]);
+    setExpandida(null);
+    setConfirmarBorrado(null);
+    setHistorialAbierto(false);
   };
 
   const usarChip = (texto: string) => {
@@ -752,18 +767,75 @@ export default function AsistenteIA({
                           {fechaCorta(conv.actualizada)} · {conv.mensajes.length} mensajes
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => eliminarConversacion(conv.id)}
-                        aria-label="Eliminar conversación"
-                        title="Eliminar"
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-husk opacity-0 transition-colors hover:text-coral focus:opacity-100 group-hover:opacity-100"
-                      >
-                        <IconTrash className="h-3.5 w-3.5" />
-                      </button>
+                      {confirmarBorrado === conv.id ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              eliminarConversacion(conv.id);
+                              setConfirmarBorrado(null);
+                            }}
+                            className="rounded-md bg-coral/15 px-2 py-1 text-[11px] font-semibold text-coral transition-colors hover:bg-coral/25"
+                          >
+                            Eliminar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmarBorrado(null)}
+                            className="rounded-md px-2 py-1 text-[11px] text-husk transition-colors hover:text-cream"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmarBorrado(conv.id)}
+                          aria-label={`Eliminar conversación ${conv.titulo}`}
+                          title="Eliminar"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-husk transition-colors hover:bg-coral/10 hover:text-coral"
+                        >
+                          <IconTrash className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="border-t border-line px-3 py-3">
+                {confirmarBorrado === 'todas' ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-husk">
+                      Se borrarán todas tus conversaciones, también de la nube. No se puede deshacer.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={eliminarTodas}
+                        className="flex-1 rounded-lg bg-coral/15 px-3 py-2 text-xs font-semibold text-coral transition-colors hover:bg-coral/25"
+                      >
+                        Sí, eliminar todas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmarBorrado(null)}
+                        className="rounded-lg border border-line px-3 py-2 text-xs text-cream transition-colors hover:border-honey/50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmarBorrado('todas')}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-husk transition-colors hover:bg-coral/10 hover:text-coral"
+                  >
+                    <IconTrash className="h-4 w-4" />
+                    Eliminar todas las conversaciones
+                  </button>
+                )}
               </div>
             </motion.aside>
 

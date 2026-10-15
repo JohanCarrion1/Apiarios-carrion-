@@ -13,7 +13,7 @@ type Bee = {
   dir: 1 | -1; // sentido en que orbita al alcanzar su objetivo
 };
 
-export default function LivingHive() {
+export default function LivingHive({ bees: withBees = true }: { bees?: boolean }) {
   const bgRef = useRef<HTMLCanvasElement>(null);
   const fxRef = useRef<HTMLCanvasElement>(null);
 
@@ -62,7 +62,7 @@ export default function LivingHive() {
       glow.clear();
       // 4 abejas más que antes (7 en celular, 9 en pantalla grande). Las 4 primeras
       // persiguen el puntero de cerca; las demás van detrás, en fila, siguiendo a la de adelante.
-      const n = W < 520 ? 7 : 9;
+      const n = withBees ? (W < 520 ? 7 : 9) : 0;
       const holds = [18, 30, 44, 60];
       bees = Array.from({ length: n }, (_, i) => ({
         x: Math.random() * W, y: Math.random() * H * 0.8, a: Math.random() * 6.28, sp: 48 + Math.random() * 34,
@@ -177,10 +177,11 @@ export default function LivingHive() {
 
     let cleanupMove = () => {};
     if (reduce) {
-      for (let i = 0; i < 14; i++) lightAt(Math.random() * W, Math.random() * Math.min(H, 700), 0.9);
+      if (withBees) for (let i = 0; i < 14; i++) lightAt(Math.random() * W, Math.random() * Math.min(H, 700), 0.9);
+      else for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if ((r * 7 + c * 3) % 5 === 0) glow.set(r * cols + c, { c, r, v: 0.5 });
       drawGlow();
     } else {
-      const mv = (e: PointerEvent) => { target = { x: e.clientX, y: e.clientY }; lastMove = performance.now(); };
+      const mv = (e: PointerEvent) => { if (!withBees) return; target = { x: e.clientX, y: e.clientY }; lastMove = performance.now(); };
       window.addEventListener('pointermove', mv, { passive: true });
       window.addEventListener('pointerdown', mv, { passive: true });
       cleanupMove = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerdown', mv); };
@@ -189,7 +190,20 @@ export default function LivingHive() {
       const frame = (now: number) => {
         if (!running) return;
         const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
-        amb += dt; if (amb > 0.3) { amb = 0; lightAt(Math.random() * W, Math.random() * H, 0.45); }
+        if (withBees) { amb += dt; if (amb > 0.3) { amb = 0; lightAt(Math.random() * W, Math.random() * H, 0.45); } }
+        else {
+          // Sin abejas: TODO el panal brilla. Dos ondas diagonales que se cruzan
+          // más un destello propio por celda, para que nunca se vea uniforme.
+          for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+            const x = cxOf(c, r), y = cyOf(r);
+            const w1 = Math.sin(x * 0.011 + y * 0.007 - t * 0.9);
+            const w2 = Math.sin(x * -0.006 + y * 0.012 + t * 0.62 + 1.7);
+            const tw = Math.sin(t * 1.3 + (r * 31 + c * 17) % 23);
+            const v = 0.5 + 0.28 * w1 + 0.2 * w2 + 0.12 * tw;
+            if (v > 0.52) glow.set(r * cols + c, { c, r, v: Math.min(1, (v - 0.5) * 1.9) });
+            else glow.delete(r * cols + c);
+          }
+        }
         fctx.setTransform(DPR, 0, 0, DPR, 0, 0); fctx.clearRect(0, 0, W, H);
         const chasing = !!target && now - lastMove < 3600;
         bees.forEach((b, i) => {
@@ -220,7 +234,7 @@ export default function LivingHive() {
           lightAt(b.x, b.y, 1);
           drawBee(fctx, b, t);
         });
-        glow.forEach((o, k) => { o.v -= dt * 0.55; if (o.v <= 0.02) glow.delete(k); });
+        if (withBees) glow.forEach((o, k) => { o.v -= dt * 0.55; if (o.v <= 0.02) glow.delete(k); });
         drawGlow();
         raf = requestAnimationFrame(frame);
       };
@@ -240,7 +254,7 @@ export default function LivingHive() {
       running = false; cancelAnimationFrame(raf); window.clearTimeout(rt);
       window.removeEventListener('resize', onResize); cleanupMove();
     };
-  }, []);
+  }, [withBees]);
 
   return (
     <>

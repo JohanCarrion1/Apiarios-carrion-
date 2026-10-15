@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, useMemo, useRef, lazy, startTransition, Suspense, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, MotionConfig } from "framer-motion";
-import { HivesBackdrop } from "./components/StoreFx";
 import { toastVariants } from "./lib/motion";
 import {
   uid,
@@ -57,6 +56,8 @@ import { SettingsProvider, useSettings } from "./context/SettingsContext";
 import { ActiveApiaryProvider } from "./context/ActiveApiaryContext";
 
 import { ResponsiveHeader } from "./components/ResponsiveHeader";
+import { SelectionBackdrop } from "./components/StoreFx";
+import LivingHive from "./components/LivingHive";
 import { FadeInUp } from "./components/Animations";
 import { InstallPrompt, PWAUpdateToast } from "./components/InstallPrompt";
 import GlobalToasts from "./components/GlobalToasts";
@@ -136,7 +137,7 @@ const isViewSection = (v: string | null | undefined): v is ViewSection =>
 
 /* ---------- ambiente ---------- */
 
-function Ambient({ hideBees = false }: { hideBees?: boolean }) {
+function Ambient() {
   return (
     <>
       <svg className="pointer-events-none fixed inset-0 z-0 h-full w-full opacity-[0.05]" aria-hidden="true">
@@ -149,7 +150,7 @@ function Ambient({ hideBees = false }: { hideBees?: boolean }) {
       </svg>
       <div className="glow-a pointer-events-none fixed -left-44 -top-44 z-0 h-[36rem] w-[36rem] rounded-full opacity-[0.13]" style={{ background: "radial-gradient(circle, #f0a41c 0%, transparent 65%)" }} />
       <div className="glow-b pointer-events-none fixed -bottom-52 -right-40 z-0 h-[40rem] w-[40rem] rounded-full opacity-[0.1]" style={{ background: "radial-gradient(circle, #b97d15 0%, transparent 65%)" }} />
-      {!hideBees && [
+      {[
         { top: "14%", dur: "46s", delay: "-8s", cls: "h-5 w-5 opacity-30" },
         { top: "44%", dur: "60s", delay: "-31s", cls: "h-4 w-4 opacity-25" },
         { top: "72%", dur: "52s", delay: "-19s", cls: "h-6 w-6 opacity-20" },
@@ -2228,8 +2229,9 @@ function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSect
 
   return (
     <div className="relative min-h-screen pb-20 lg:pb-0">
-      <Ambient hideBees={activeSection === 'colmenas'} />
-      {activeSection === 'colmenas' && <HivesBackdrop />}
+      {/* Mismo fondo que la pantalla de selección, sin abejas: todo el panal brilla. */}
+      <SelectionBackdrop fixed />
+      <LivingHive bees={false} />
 
       {/* Header Responsive (se oculta en pantalla completa del Asistente IA) */}
       {!(activeSection === 'asistente-ia' && iaFullscreen) && (

@@ -26,6 +26,7 @@
 // con el dashboard (App.tsx oculta su header/footer en ese modo) y botón
 // "Salir" que navega de vuelta al panel principal.
 
+import Logo from './Logo';
 import {
   useEffect,
   useMemo,
@@ -972,15 +973,9 @@ const IconMenu = ({ className }: { className?: string }) => (
 );
 
 function Cabecera({
-  fullscreen,
-  esPremium,
-  esAdmin,
-  usadas,
   historialAbierto,
   onToggleHistory,
   onNueva,
-  onToggleFullscreen,
-  onExit,
 }: {
   fullscreen: boolean;
   esPremium: boolean;
@@ -992,24 +987,6 @@ function Cabecera({
   onToggleFullscreen?: () => void;
   onExit?: () => void;
 }) {
-  const usadasCapped = Math.min(usadas, MAX_CONSULTAS_DIA);
-  const badge = (compacto: boolean) =>
-    esAdmin ? (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-honey/40 bg-honey/10 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest text-honey sm:text-[11px]">
-        ∞ {compacto ? 'Ilimitado' : 'consultas ilimitadas'}
-      </span>
-    ) : (
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest sm:text-[11px] ${
-          esPremium
-            ? 'border-coral/50 bg-coral/10 text-coral'
-            : 'border-honey/40 bg-honey/10 text-honey'
-        }`}
-      >
-        {compacto ? `${usadasCapped}/${MAX_CONSULTAS_DIA}` : `${usadasCapped}/${MAX_CONSULTAS_DIA} consultas gratuitas hoy`}
-      </span>
-    );
-
   const botonMenu = (
     <button
       type="button"
@@ -1040,74 +1017,15 @@ function Cabecera({
     </button>
   );
 
-  const botonMaximizar = (
-    <button
-      type="button"
-      onClick={onToggleFullscreen}
-      title={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-      aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-ink text-cream transition-colors hover:border-honey/50 hover:text-honey"
-    >
-      {fullscreen ? <IconCompress className="h-4 w-4" /> : <IconExpand className="h-4 w-4" />}
-    </button>
-  );
-
-  const botonSalir = (
-    <button
-      type="button"
-      onClick={onExit}
-      title={fullscreen ? 'Salir al dashboard' : 'Salir'}
-      aria-label="Salir del asistente y volver al dashboard"
-      className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-honey/50 bg-transparent px-2.5 text-xs font-semibold text-honey transition-colors hover:bg-honey/10 sm:px-3"
-    >
-      <IconArrowLeft className="h-3.5 w-3.5" />
-      <span className="hidden sm:inline">{fullscreen ? 'Salir al dashboard' : 'Salir'}</span>
-      <span className="sm:hidden">Salir</span>
-    </button>
-  );
-
   return (
     <div className="shrink-0 border-b border-line">
-      {/* Escritorio (sm+): una sola fila con badge centrado. */}
-      <div className="hidden items-center gap-3 px-5 py-3 sm:flex">
+      <div className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
         {botonMenu}
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-honey/40 bg-honey/10 text-honey">
-            <IconRobot className="h-4 w-4" />
-          </span>
-          <h2 className="truncate font-display text-lg font-bold tracking-tight text-cream">
-            Asistente Apícola IA
-          </h2>
-        </div>
-
-        <div className="flex flex-1 justify-center">{badge(false)}</div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
-          {botonNueva}
-          {botonMaximizar}
-          {botonSalir}
-        </div>
-      </div>
-
-      {/* Móvil (<sm): dos filas para que el título nunca se trunque. */}
-      <div className="flex flex-col gap-2 px-3 py-2.5 sm:hidden">
-        <div className="flex items-center gap-2">
-          {botonMenu}
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-honey/40 bg-honey/10 text-honey">
-            <IconRobot className="h-4 w-4" />
-          </span>
-          <h2 className="min-w-0 flex-1 truncate font-display text-sm font-bold tracking-tight text-cream">
-            Asistente Apícola IA
-          </h2>
-          {botonSalir}
-        </div>
-        <div className="flex items-center gap-2">
-          {badge(true)}
-          <div className="ml-auto flex items-center gap-1.5">
-            {botonNueva}
-            {botonMaximizar}
-          </div>
-        </div>
+        <Logo variant="icon" className="h-9 w-9 shrink-0" />
+        <h2 className="min-w-0 flex-1 truncate font-display text-base font-bold tracking-tight text-cream sm:text-lg">
+          Asistente Apícola IA
+        </h2>
+        {botonNueva}
       </div>
     </div>
   );
@@ -1249,8 +1167,8 @@ function Compositor({
           onKeyDown={onKeyDown}
           rows={1}
           maxLength={2000}
-          placeholder="Pregúntame sobre tus colmenas... ej: ¿cómo va la C-99?"
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-line/70 bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/50 outline-none transition-colors focus:border-honey/70"
+          placeholder="Pregunta sobre tus colmenas"
+          className="max-h-32 min-h-11 min-w-0 flex-1 resize-none rounded-2xl border border-line/70 bg-ink px-3.5 py-3 text-[13px] sm:px-4 sm:text-sm text-cream placeholder:text-husk/50 outline-none transition-colors focus:border-honey/70"
         />
 
         <button

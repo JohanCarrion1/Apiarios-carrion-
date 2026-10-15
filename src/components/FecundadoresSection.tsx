@@ -156,7 +156,7 @@ export default function FecundadoresSection({
   // montan las primeras `visibleCount` celdas. `visibleFecundadores` (lista
   // completa filtrada) sigue contando para los chips y el encabezado. Se
   // reinicia al primer bloque cuando cambia búsqueda, filtro o lista.
-  const PAGE_SIZE = 24;
+  const PAGE_SIZE = 50;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);

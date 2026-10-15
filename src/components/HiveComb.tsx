@@ -70,7 +70,7 @@ export default function HiveComb({
   onFilter, 
   query, 
   entityType = 'colmena',
-  pageSize = 24,
+  pageSize = 50,
   polinizacionCodes = EMPTY_CODES,
   favorites = EMPTY_FAVORITES,
   onToggleFavorite,

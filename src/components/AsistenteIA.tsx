@@ -41,6 +41,8 @@ import type { Hive, Inspection } from '../types/hive';
 import type { Fecundador } from '../types/fecundador';
 import { IconRobot, IconX, IconTrash } from '../ui';
 import { useAuth } from '../context/AuthContext';
+import ChatMarkdown from './ChatMarkdown';
+import { uploadImage } from '../lib/cloudinary';
 import { isEmailAdmin } from '../lib/adminAccess';
 import {
   consultarChat,
@@ -103,6 +105,10 @@ interface ImagenUI {
   /** true si es una URL directa (Cloudinary): se envía sin convertir a base64. */
   esUrl: boolean;
   origen: 'camara' | 'galeria' | 'inspeccion';
+  /** URL en Cloudinary: es la que se guarda en el chat (y en la nube). */
+  urlNube?: string;
+  /** true mientras la foto se sube a la nube. */
+  subiendo?: boolean;
 }
 
 const MAX_ADJUNTOS = 3;
@@ -419,7 +425,24 @@ export default function AsistenteIA({
     }
     try {
       const url = await procesarArchivo(file);
-      agregarAdjunto({ url, esUrl: false, origen });
+      agregarAdjunto({ url, esUrl: false, origen, subiendo: true });
+      // Misma ruta que las fotos de inspecciones: se sube a Cloudinary y el
+      // chat guarda la URL, así la foto se ve en cualquier dispositivo.
+      // `url` (reducida, en base64) sigue siendo lo que se envía a la IA.
+      uploadImage(file, 'asistente-ia')
+        .then((urlNube) =>
+          setAdjuntos((prev) =>
+            prev.map((a) => (a.url === url ? { ...a, urlNube, subiendo: false } : a))
+          )
+        )
+        .catch(() => {
+          setAdjuntos((prev) => prev.map((a) => (a.url === url ? { ...a, subiendo: false } : a)));
+          onShowToast?.(
+            'No se pudo guardar la foto en la nube; se usará solo en este dispositivo.',
+            undefined,
+            'error'
+          );
+        });
     } catch {
       onShowToast?.('No se pudo procesar la imagen', undefined, 'error');
     }
@@ -526,6 +549,10 @@ export default function AsistenteIA({
   const enviarMensaje = async () => {
     const texto = input.trim();
     if (enviando || (!texto && adjuntos.length === 0)) return;
+    if (adjuntos.some((a) => a.subiendo)) {
+      onShowToast?.('Espera un momento, se está subiendo la foto…');
+      return;
+    }
     if (bloqueado) {
       onShowToast?.('Límite diario alcanzado, vuelve mañana', undefined, 'error');
       return;
@@ -541,7 +568,7 @@ export default function AsistenteIA({
       rol: 'user',
       texto: texto || '(Analiza esta imagen)',
       fecha: Date.now(),
-      imagenes: imagenesAdjuntas.length ? imagenesAdjuntas.map((a) => a.url) : undefined,
+      imagenes: imagenesAdjuntas.length ? imagenesAdjuntas.map((a) => a.urlNube ?? a.url) : undefined,
     };
     const historial = [...mensajes, userMsg].slice(-MAX_MENSAJES);
     actualizarMensajes(historial);
@@ -1149,8 +1176,16 @@ function Compositor({
               <img
                 src={img.url}
                 alt={`Adjunto ${i + 1}`}
-                className="h-16 w-16 rounded-lg border border-line object-cover"
+                className={`h-16 w-16 rounded-lg border border-line object-cover ${
+                  img.subiendo ? 'opacity-60' : ''
+                }`}
               />
+              {img.subiendo && (
+                <span
+                  aria-label="Subiendo foto"
+                  className="absolute inset-0 m-auto h-5 w-5 animate-spin rounded-full border-2 border-honey border-t-transparent"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => onQuitarAdjunto(i)}
@@ -1246,7 +1281,9 @@ function Compositor({
         <button
           type="button"
           onClick={onEnviar}
-          disabled={enviando || bloqueado || (!input.trim() && adjuntos.length === 0)}
+          disabled={
+            enviando || bloqueado || adjuntos.some((a) => a.subiendo) || (!input.trim() && adjuntos.length === 0)
+          }
           aria-label="Enviar mensaje"
           className="flex h-11 w-11 items-center justify-center rounded-xl bg-honey text-lg text-ink transition-colors hover:bg-honeysoft disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -1331,7 +1368,13 @@ function Burbuja({
             <span aria-hidden>⚠️</span> Alerta crítica
           </span>
         )}
-        <p className="whitespace-pre-wrap">{mensaje.texto}</p>
+        {esUsuario ? (
+          <p className="whitespace-pre-wrap">{mensaje.texto}</p>
+        ) : (
+          <ChatMarkdown
+            texto={mensaje.texto.replace(/^\**ALERTA\s*:\s*(?:S[ÍIií]|NO)\**[ \t]*\n*/iu, '')}
+          />
+        )}
       </div>
 
       <span className="mt-1 px-1 font-mono text-[10px] text-husk/80">

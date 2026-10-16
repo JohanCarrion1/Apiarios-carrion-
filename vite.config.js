@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 const GEMINI_MODEL = "gemini-3.5-flash";
-const MAPBOX_STYLE = "mapbox/satellite-streets-v12";
+const MAPBOX_STYLE = "mapbox/satellite-v9";
 
 function securityHeaders() {
   return {
@@ -185,7 +185,7 @@ function installMapTilesMiddleware(middlewares, token) {
 
     try {
       const mapboxUrl =
-        `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/512/${z}/${x}/${y}@2x` +
+        `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/${z}/${x}/${y}` +
         `?access_token=${encodeURIComponent(token)}`;
       const r = await fetch(mapboxUrl);
       if (!r.ok) {
@@ -196,7 +196,7 @@ function installMapTilesMiddleware(middlewares, token) {
       }
       const buf = Buffer.from(await r.arrayBuffer());
       res.statusCode = 200;
-      res.setHeader("Content-Type", r.headers.get("content-type") || "image/png");
+      res.setHeader("Content-Type", r.headers.get("content-type") || "image/jpeg");
       res.setHeader("Cache-Control", "public, max-age=86400");
       res.end(buf);
     } catch {

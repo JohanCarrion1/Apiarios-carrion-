@@ -1,9 +1,11 @@
 // ============================================================
-// MAP PICKER — selector de ubicación reutilizable (Leaflet + OSM)
+// MAP PICKER — selector de ubicación (Leaflet + Mapbox Satellite)
 // ============================================================
-// Muestra un mapa con un marcador. El usuario puede tocar el mapa,
-// arrastrar el marcador o usar su ubicación GPS. Cada cambio llama a
-// `onLocationSelect` con las coordenadas elegidas.
+// Muestra un mapa satélite de Mapbox con un marcador. El usuario puede
+// tocar el mapa, arrastrar el marcador o usar su ubicación GPS.
+//
+// Tiles: Mapbox Satellite Streets (requiere VITE_MAPBOX_ACCESS_TOKEN).
+// Reverse geocoding: /api/geocode (MAPBOX_ACCESS_TOKEN en el servidor).
 import { useEffect, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -11,7 +13,6 @@ import 'leaflet/dist/leaflet.css';
 import { getCurrentPosition } from '../services/geolocation';
 import { IconMapPin } from '../ui';
 
-// Fix para el icono por defecto de Leaflet en Vite
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -28,40 +29,33 @@ export interface LatLng {
   lng: number;
 }
 
-/** Mapas base disponibles. `streets` = OpenStreetMap; `satellite` = Esri. */
-export type MapBasemap = 'streets' | 'satellite';
+/** Token público de Mapbox (pk.*) para las tiles en el navegador. */
+const MAPBOX_TOKEN = String(
+  (import.meta as ImportMeta & { env?: Record<string, string> }).env
+    ?.VITE_MAPBOX_ACCESS_TOKEN || '',
+).trim();
 
-const BASEMAPS: Record<MapBasemap, { url: string; attribution: string }> = {
-  streets: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution:
-      'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-  },
-};
+/** Satélite + etiquetas de calles (Mapbox). */
+const MAPBOX_SATELLITE_URL =
+  'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}@2x?access_token=' +
+  encodeURIComponent(MAPBOX_TOKEN);
+
+const MAPBOX_ATTRIBUTION =
+  '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' +
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 interface MapPickerProps {
-  /** Coordenadas actuales (controlado). Si es null no hay marcador. */
   coordinates?: LatLng | null;
-  /** Se llama al tocar el mapa, arrastrar el marcador o usar el GPS. */
   onLocationSelect: (coords: LatLng) => void;
-  /** Centro inicial cuando no hay coordenadas. */
   defaultCenter?: LatLng;
   defaultZoom?: number;
-  /** Clase de altura del contenedor del mapa. */
   heightClass?: string;
-  /** Mostrar el botón "Usar mi ubicación". */
   showLocateButton?: boolean;
   helpText?: string;
   className?: string;
   disabled?: boolean;
-  /** Mapa base: calles (OSM) o satélite (Esri World Imagery). */
-  basemap?: MapBasemap;
-  /** Zoom con la rueda del ratón. `false` deja que la página haga scroll. */
+  /** @deprecated Ya solo hay satélite Mapbox; se ignora. */
+  basemap?: string;
   scrollWheelZoom?: boolean;
 }
 
@@ -99,7 +93,6 @@ export default function MapPicker({
   helpText = 'Toca el mapa o arrastra el marcador para ajustar la ubicación.',
   className,
   disabled = false,
-  basemap = 'streets',
   scrollWheelZoom = true,
 }: MapPickerProps) {
   const [pos, setPos] = useState<LatLng | null>(
@@ -108,7 +101,6 @@ export default function MapPicker({
   const [locating, setLocating] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  // Sincroniza cambios externos (p. ej. botón GPS del padre).
   useEffect(() => {
     if (!coordinates) return;
     setPos((prev) =>
@@ -132,45 +124,66 @@ export default function MapPicker({
       pick(next);
       const accuracy = position.coords.accuracy;
       if (accuracy && accuracy > 100) {
-        setNote(`Precisión aproximada (±${Math.round(accuracy)} m). Ajusta el marcador si hace falta.`);
+        setNote(
+          `Precisión aproximada (±${Math.round(accuracy)} m). Ajusta el marcador si hace falta.`,
+        );
       }
     } catch (err) {
-      setNote((err as { message?: string } | undefined)?.message || 'No se pudo obtener la ubicación.');
+      setNote(
+        (err as { message?: string } | undefined)?.message ||
+          'No se pudo obtener la ubicación.',
+      );
     } finally {
       setLocating(false);
     }
   };
 
   const center = pos ?? defaultCenter ?? FALLBACK_CENTER;
-  const tiles = BASEMAPS[basemap];
+  const hasToken = MAPBOX_TOKEN.length > 0;
 
   return (
     <div className={className}>
       <div className={`relative overflow-hidden rounded-xl border border-line ${heightClass}`}>
-        <MapContainer
-          center={[center.lat, center.lng]}
-          zoom={defaultZoom}
-          scrollWheelZoom={scrollWheelZoom}
-          className="h-full w-full"
-        >
-          <TileLayer key={basemap} attribution={tiles.attribution} url={tiles.url} />
-          {pos && (
-            <Marker
-              position={[pos.lat, pos.lng]}
-              draggable={!disabled}
-              eventHandlers={{
-                dragend: (e) => {
-                  const ll = (e.target as L.Marker).getLatLng();
-                  pick({ lat: ll.lat, lng: ll.lng });
-                },
-              }}
+        {!hasToken ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-ink px-4 text-center">
+            <p className="text-sm text-coral">Falta el token de Mapbox para el mapa satélite.</p>
+            <p className="text-xs text-husk">
+              Configura <code className="text-honey">VITE_MAPBOX_ACCESS_TOKEN</code> en Vercel y
+              vuelve a desplegar.
+            </p>
+          </div>
+        ) : (
+          <MapContainer
+            center={[center.lat, center.lng]}
+            zoom={defaultZoom}
+            scrollWheelZoom={scrollWheelZoom}
+            className="h-full w-full"
+          >
+            <TileLayer
+              attribution={MAPBOX_ATTRIBUTION}
+              url={MAPBOX_SATELLITE_URL}
+              tileSize={512}
+              zoomOffset={-1}
+              maxZoom={22}
             />
-          )}
-          <ClickHandler onPick={disabled ? () => {} : pick} />
-          <Recenter position={pos} zoom={defaultZoom} />
-        </MapContainer>
+            {pos && (
+              <Marker
+                position={[pos.lat, pos.lng]}
+                draggable={!disabled}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const ll = (e.target as L.Marker).getLatLng();
+                    pick({ lat: ll.lat, lng: ll.lng });
+                  },
+                }}
+              />
+            )}
+            <ClickHandler onPick={disabled ? () => {} : pick} />
+            <Recenter position={pos} zoom={defaultZoom} />
+          </MapContainer>
+        )}
 
-        {pos && (
+        {pos && hasToken && (
           <div className="pointer-events-none absolute left-2 top-2 z-[400] rounded-lg bg-ink/85 px-2.5 py-1 font-mono text-[11px] text-cream backdrop-blur">
             {pos.lat.toFixed(6)}, {pos.lng.toFixed(6)}
           </div>

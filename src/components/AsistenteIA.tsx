@@ -42,6 +42,8 @@ import type { Fecundador } from '../types/fecundador';
 import { IconRobot, IconX, IconTrash } from '../ui';
 import { useAuth } from '../context/AuthContext';
 import ChatMarkdown from './ChatMarkdown';
+import { construirContextoGlobal, type DatosApp } from '../services/aiContext';
+import { loadAnnualGoal, loadBasePrice, loadWeatherCache } from '../utils/storage';
 import { uploadImage } from '../lib/cloudinary';
 import { isEmailAdmin } from '../lib/adminAccess';
 import {
@@ -49,13 +51,12 @@ import {
   isAiConfigured,
   sujetoDesdeColmena,
   sujetoDesdeFecundador,
-  resumirInspecciones,
-  produccionDesdeCosechas,
   temporadaActual,
   construirContextoChat,
   detectarUnidadEnMensaje,
   AI_CONNECTION_ERROR,
   AI_LIMIT_ERROR,
+  AI_BLOCKED_ERROR,
   type ApiarioContexto,
   type MensajeChat,
   type SujetoContexto,
@@ -83,6 +84,8 @@ interface Props {
   fecundadores?: Fecundador[];
   inspections?: Inspection[];
   harvests?: Array<{ hiveId?: string; date?: string; honeyKg?: number }>;
+  /** Resto de datos de la app: el asistente los recibe todos como contexto global. */
+  datos?: Omit<DatosApp, 'apiario' | 'hives' | 'nuclei' | 'fecundadores' | 'inspections' | 'harvests' | 'focoId' | 'weather' | 'basePrice' | 'annualGoal'>;
   onShowToast?: (title: string, desc?: string, type?: 'success' | 'error') => void;
   /** Modo inmersivo: el chat ocupa toda la pantalla. */
   fullscreen?: boolean;
@@ -266,6 +269,7 @@ export default function AsistenteIA({
   fecundadores = [],
   inspections = [],
   harvests = [],
+  datos,
   onShowToast,
   fullscreen = false,
   onToggleFullscreen,
@@ -534,6 +538,9 @@ export default function AsistenteIA({
     textareaRef.current?.focus();
   };
 
+  const construirSujetoId = (textoBusqueda: string): string | undefined =>
+    detectarUnidadEnMensaje(textoBusqueda, hives, nuclei, fecundadores)?.id;
+
   const construirSujeto = (textoBusqueda: string): SujetoContexto | undefined => {
     const unidad = detectarUnidadEnMensaje(textoBusqueda, hives, nuclei, fecundadores);
     if (!unidad) return undefined;
@@ -601,8 +608,19 @@ export default function AsistenteIA({
       const contexto = construirContextoChat({
         apiario,
         sujeto: construirSujeto(textoBusqueda),
-        inspecciones: resumirInspecciones(inspections, [...hives, ...nuclei], 3),
-        produccion: produccionDesdeCosechas(harvests, [...hives, ...nuclei]),
+        global: construirContextoGlobal({
+          apiario,
+          hives,
+          nuclei,
+          fecundadores,
+          inspections,
+          harvests,
+          ...datos,
+          basePrice: loadBasePrice(),
+          annualGoal: loadAnnualGoal(),
+          weather: loadWeatherCache(userId),
+          focoId: construirSujetoId(textoBusqueda),
+        }),
       });
 
       const resultado = await consultarChat({ mensajes: mensajesApi, contexto });
@@ -617,7 +635,10 @@ export default function AsistenteIA({
       // Los administradores no consumen el límite diario.
       if (!esAdmin) setUsadas(registrarConsulta(userId));
     } catch (err) {
-      const msg = err instanceof Error && err.message === AI_LIMIT_ERROR ? AI_LIMIT_ERROR : AI_CONNECTION_ERROR;
+      const msg =
+        err instanceof Error && (err.message === AI_LIMIT_ERROR || err.message === AI_BLOCKED_ERROR)
+          ? err.message
+          : AI_CONNECTION_ERROR;
       actualizarMensajes((prev) =>
         [
           ...prev,

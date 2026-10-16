@@ -2562,6 +2562,7 @@ queenAlerts={{
                   fecundadores={fecundadores}
                   inspections={inspections}
                   harvests={harvests}
+                  datos={{ tasks, treatments, breedingLots, queens, events, floweringEntries, cuadernoEntries, inventory }}
                   onShowToast={pushToast}
                   fullscreen={iaFullscreen}
                   onToggleFullscreen={() => setIaFullscreen((v) => !v)}

@@ -31,6 +31,7 @@ export const AI_CONNECTION_ERROR = 'Error de conexión. Intenta de nuevo.';
 // Se muestra cuando el proxy devuelve 429 (todas las claves del servidor
 // agotaron su cuota). Distinto de un fallo de red para que el usuario sepa que
 // debe esperar, no reintentar en bucle.
+export const AI_BLOCKED_ERROR = 'No pude responder a eso. Prueba a reformular la pregunta.';
 export const AI_LIMIT_ERROR = 'El asistente alcanzó su límite de uso. Intenta de nuevo en un rato.';
 
 /** Ruta del proxy propio que guarda la clave de Gemini en el servidor. */
@@ -117,19 +118,22 @@ export function isAiConfigured(): boolean {
  * System prompt: experto apícola de altura (Andes peruanos, 3000+ msnm).
  * Flexible: responde tanto preguntas generales como sobre colmenas concretas.
  */
-const SYSTEM_PROMPT = `Eres el asistente apícola de "Apiarios Carrión", un apiario en los Andes peruanos (Áncash, ~3000 msnm). Hablas con el apicultor como un colega con mucha experiencia en apicultura de altura: cercano, claro y directo, en español natural. Nada de presentaciones ni frases grandilocuentes ("como apicultor con años de experiencia…"): ve al grano.
+const SYSTEM_PROMPT = `Eres el asistente de Apiarios Carrión, la app con la que el apicultor lleva sus colmenas, núcleos, fecundadores, cría de reinas, cosechas, tratamientos, tareas e inventario en los Andes peruanos. Conoces la apicultura de altura a fondo y hablas como lo haría una persona sabia, cercana y honesta que de verdad conoce este apiario: natural, conversacional, en español, de tú a tú.
+
+Tienes el resumen COMPLETO y actual de los datos de la app (viene abajo, se actualiza en cada mensaje). Úsalo de forma global: cruza la información en vez de mirar cada dato suelto. Por ejemplo, varroa alta + tratamiento en curso + período de espera + próxima floración + clima + stock de productos + tareas pendientes. Detecta lo que al apicultor se le puede estar pasando por alto (unidades sin inspeccionar hace semanas, tareas atrasadas, reinas viejas, colmenas sin reina, stock bajo, cosechas que chocan con un período de espera).
 
 Cómo responder:
-- Responde primero lo que te preguntaron. Pregunta corta, respuesta corta; solo te extiendes si el tema lo pide.
-- Usa los datos de contexto (colmenas C-01, núcleos N-05, fecundadores F-12, inspecciones, producción) y cítalos con sus cifras reales. Si falta un dato, dilo en lugar de suponerlo. Nunca inventes registros.
-- Si hay fotos, descríbelas con lo que realmente se ve: cría, reina, signos de enfermedad (varroa, nosema, loque), población, reservas de miel y polen, estado del cuadro.
-- Cuando recomiendes algo, di qué hacer, cuándo y por qué, adaptado a la altura y a la temporada.
-- Si algo es serio, dilo con calma y sin dramatizar.
-- Menciona que es orientativo solo cuando des una recomendación de tratamiento o de riesgo, en una frase corta; no lo repitas en cada mensaje.
+- Ve directo a lo que te preguntaron; sin saludo de relleno, sin presentarte y sin recitar dónde está el apiario ni la altitud ni la temporada, salvo que cambie la recomendación.
+- Piensa como asesor: qué está pasando, por qué importa y qué hacer, en orden de prioridad (lo urgente primero), con el cuándo y el cómo concretos. Si hay varias opciones, recomienda una y di por qué.
+- Apóyate en las cifras reales de los datos y cita las unidades por su código (C-19, N-01, F-03). Si la pregunta es general ("¿cómo ves las colmenas?"), da un panorama claro: qué va bien, qué preocupa y qué harías primero.
+- Si falta un dato para aconsejar bien, dilo y haz como máximo una pregunta. Nunca inventes registros ni cifras que no estén en los datos.
+- Si hay fotos, describe lo que realmente se ve (cría, reina, signos de enfermedad, población, reservas, estado del cuadro) y relaciónalo con los datos de esa unidad.
+- Si algo es serio, dilo con calma y claridad, sin dramatizar.
+- NO termines con notas, avisos ni descargos tipo "recuerda que esto es orientativo": la app ya muestra ese aviso. Tampoco cierres con resúmenes ni con frases de cortesía vacías.
 
-Formato: texto limpio y fácil de leer en el celular. Párrafos cortos. Usa **negrita** solo para lo realmente importante, listas con "- " solo cuando son pasos o varios elementos comparables, y títulos "## " únicamente en respuestas largas. Evita tablas y no abuses de emojis.
+Formato: legible en el celular. Párrafos cortos. **Negrita** solo para lo realmente importante, listas con "- " solo cuando son pasos o varios elementos comparables, títulos "## " solo en respuestas largas. Sin tablas y con pocos emojis.
 
-Formato obligatorio (lo procesa la aplicación, no se lo muestra al usuario): empieza SIEMPRE tu respuesta con una única línea con el formato exacto "ALERTA: SÍ" si detectas algo crítico (enfermedad grave, ausencia de reina o riesgo sanitario) o "ALERTA: NO" en caso contrario. Después, en una línea nueva, continúa con tu respuesta.`;
+Formato obligatorio (lo procesa la aplicación, el usuario no lo ve): empieza SIEMPRE tu respuesta con una única línea exacta "ALERTA: SÍ" si detectas algo crítico (enfermedad grave, ausencia de reina, varroa muy alta o riesgo sanitario) o "ALERTA: NO" en caso contrario. Después, en una línea nueva, tu respuesta.`;
 
 function temporadaDe(fecha: Date): string {
   const mes = fecha.getMonth(); // 0 = enero
@@ -349,6 +353,8 @@ export interface ContextoChatParams {
   produccion?: ProduccionContexto;
   /** Nota libre adicional (p. ej. si el usuario mencionó varias unidades). */
   nota?: string;
+  /** Resumen global de los datos de la app (ver `aiContext.ts`). */
+  global?: string;
 }
 
 /**
@@ -382,6 +388,8 @@ export function construirContextoChat(p: ContextoChatParams): string {
       }`
     );
   }
+
+  if (p.global?.trim()) partes.push(p.global.trim());
 
   if (p.nota?.trim()) partes.push(p.nota.trim());
 
@@ -523,17 +531,30 @@ async function construirContents(
   return contents;
 }
 
+/** Estados HTTP transitorios del proxy/Gemini: vale la pena reintentar. */
+const ESTADOS_REINTENTABLES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MAX_INTENTOS = 3;
+/** Error definitivo: reintentar no sirve. */
+class ErrorFatal extends Error {}
+const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /**
  * Lanza la conversación al asistente a través del proxy. Devuelve el texto de
- * la respuesta y si la IA marcó una alerta crítica. Timeout de 45 s. Cualquier
- * fallo de red/API se traduce a un error amigable.
+ * la respuesta y si la IA marcó una alerta crítica.
+ *
+ * Gemini devuelve 503/429 de forma intermitente cuando está saturado, y el
+ * mismo mensaje funciona un segundo después. Por eso se reintenta hasta 3
+ * veces (con espera creciente) ante errores transitorios, respuestas vacías o
+ * fallos de red, y solo entonces se muestra el error. Cada intento tiene su
+ * propio timeout de 45 s.
  */
 export async function consultarChat(params: ChatParams): Promise<RespuestaAsistente> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-
   const systemText = [SYSTEM_PROMPT, params.contexto].filter(Boolean).join('\n\n');
-  const enviar = (contents: GeminiContent[]): Promise<Response> =>
+  const hayRemota = params.mensajes.some((m) =>
+    (m.imagenes ?? []).some((img) => !/^data:/.test(img.url))
+  );
+
+  const enviar = (contents: GeminiContent[], signal: AbortSignal): Promise<Response> =>
     fetch(AI_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -542,45 +563,64 @@ export async function consultarChat(params: ChatParams): Promise<RespuestaAsiste
         contents,
         // `thinkingBudget: 0` desactiva el "thinking" de gemini-3.x. Sin esto,
         // el modelo puede gastar TODO el presupuesto de salida pensando y
-        // devolver `parts` sin texto, que el cliente interpreta como
-        // "Error de conexión". `maxOutputTokens` se sube a 2048 para que las
-        // respuestas (con contexto de apiario e imágenes) no se corten.
+        // devolver `parts` sin texto.
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
-      signal: controller.signal,
+      signal,
     });
 
-  try {
-    const hayRemota = params.mensajes.some((m) =>
-      (m.imagenes ?? []).some((img) => !/^data:/.test(img.url))
-    );
+  let remotasInline = false;
+  let ultimoError = AI_CONNECTION_ERROR;
 
-    let contents = await construirContents(params.mensajes, controller.signal, false);
-    let res = await enviar(contents);
+  for (let intento = 0; intento < MAX_INTENTOS; intento += 1) {
+    if (intento > 0) await esperar(900 * intento);
 
-    // Si el modelo rechaza los `file_data` de Cloudinary, se reintenta
-    // descargando las imágenes a base64 (inline_data).
-    if (!res.ok && hayRemota) {
-      contents = await construirContents(params.mensajes, controller.signal, true);
-      res = await enviar(contents);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    try {
+      let contents = await construirContents(params.mensajes, controller.signal, remotasInline);
+      let res = await enviar(contents, controller.signal);
+
+      // Si el modelo rechaza los `file_data` de Cloudinary, se reintenta
+      // descargando las imágenes a base64 (inline_data).
+      if (!res.ok && hayRemota && !remotasInline) {
+        remotasInline = true;
+        contents = await construirContents(params.mensajes, controller.signal, true);
+        res = await enviar(contents, controller.signal);
+      }
+
+      if (!res.ok) {
+        ultimoError = res.status === 429 ? AI_LIMIT_ERROR : AI_CONNECTION_ERROR;
+        if (ESTADOS_REINTENTABLES.has(res.status)) continue;
+        throw new ErrorFatal(ultimoError); // 400/401/403/413…: reintentar no ayuda
+      }
+
+      const data = (await res.json()) as GeminiResponse;
+      const contenido = (data.candidates?.[0]?.content?.parts ?? [])
+        .map((p) => p.text ?? '')
+        .join('')
+        .trim();
+      if (!contenido) {
+        const bloqueada =
+          !!data.promptFeedback?.blockReason ||
+          ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'RECITATION'].includes(
+            data.candidates?.[0]?.finishReason ?? ''
+          );
+        if (bloqueada) throw new ErrorFatal(AI_BLOCKED_ERROR);
+        ultimoError = AI_CONNECTION_ERROR;
+        continue; // respuesta vacía: suele ser transitoria
+      }
+      return interpretarRespuesta(contenido);
+    } catch (err) {
+      if (err instanceof ErrorFatal) throw new Error(err.message);
+      ultimoError = AI_CONNECTION_ERROR; // red, timeout o JSON inválido: se reintenta
+    } finally {
+      clearTimeout(timeout);
     }
-
-    if (!res.ok) throw new Error(res.status === 429 ? AI_LIMIT_ERROR : AI_CONNECTION_ERROR);
-
-    const data = (await res.json()) as GeminiResponse;
-    const contenido = (data.candidates?.[0]?.content?.parts ?? [])
-      .map((p) => p.text ?? '')
-      .join('')
-      .trim();
-    if (!contenido) throw new Error(AI_CONNECTION_ERROR);
-    return interpretarRespuesta(contenido);
-  } catch {
-    throw new Error(AI_CONNECTION_ERROR);
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new Error(ultimoError);
 }

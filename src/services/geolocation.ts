@@ -1,6 +1,9 @@
 // ============================================
 // SERVICIO DE GEOLOCALIZACIÓN
 // ============================================
+// GPS: API del navegador (navigator.geolocation).
+// Reverse geocoding: proxy /api/geocode → Mapbox (clave en Vercel,
+// nunca en el bundle). Mismo patrón que /api/gemini del asistente IA.
 
 export interface GeoLocation {
   lat: number;
@@ -19,115 +22,81 @@ export interface GeolocationError {
  */
 export function getCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
-    // Verificar soporte del navegador
     if (!navigator.geolocation) {
       reject({
         code: 'NOT_SUPPORTED',
-        message: 'Tu navegador no soporta geolocalización'
+        message: 'Tu navegador no soporta geolocalización',
       });
       return;
     }
 
-    // Obtener posición actual
     navigator.geolocation.getCurrentPosition(
       (position) => {
         resolve(position);
       },
       (error) => {
         let errorMessage = 'Error al obtener la ubicación';
-        
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'Permiso de ubicación denegado. Por favor, permite el acceso a tu ubicación en la configuración del navegador.';
+            errorMessage =
+              'Permiso de ubicación denegado. Por favor, permite el acceso a tu ubicación en la configuración del navegador.';
             break;
           case error.POSITION_UNAVAILABLE:
             errorMessage = 'Información de ubicación no disponible';
             break;
           case error.TIMEOUT:
-            errorMessage = 'Tiempo de espera agotado al obtener la ubicación';
+            errorMessage =
+              'Tiempo de espera agotado al obtener la ubicación. Prueba "Marcar en mapa" o vuelve a intentar.';
             break;
         }
-        
+
         reject({
           code: error.code.toString(),
-          message: errorMessage
+          message: errorMessage,
         });
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+        // 20s: en móvil con GPS frío a menudo supera los 10s.
+        timeout: 20000,
+        maximumAge: 0,
       }
     );
   });
 }
 
 /**
- * Convertir coordenadas a dirección legible usando Nominatim (OpenStreetMap)
- * IMPORTANTE: Nominatim tiene límite de 1 solicitud por segundo
+ * Convertir coordenadas a dirección legible vía proxy Mapbox.
+ * El cliente llama a /api/geocode; el servidor añade MAPBOX_ACCESS_TOKEN
+ * y reenvía a la API de Mapbox (igual patrón que el asistente IA).
  */
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
-    // Nominatim requiere un User-Agent identificando la aplicación
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=es`,
-      {
-        headers: {
-          'User-Agent': 'ApiariosCarrion/1.0 (https://apiarioscarrion.com)'
-        }
-      }
-    );
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+    });
+    const response = await fetch(`/api/geocode?${params.toString()}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error('Error al obtener la dirección desde Nominatim');
+      throw new Error(
+        (data as { error?: string })?.error ||
+          'Error al obtener la dirección desde Mapbox'
+      );
     }
 
-    const data = await response.json();
-
-    // Construir dirección legible
-    if (data.address) {
-      const address = data.address;
-      const parts = [];
-
-      // Agregar componentes de la dirección en orden de especificidad
-      if (address.road || address.pedestrian || address.footway) {
-        parts.push(address.road || address.pedestrian || address.footway);
-      }
-      
-      if (address.suburb || address.neighbourhood || address.quarter) {
-        parts.push(address.suburb || address.neighbourhood || address.quarter);
-      }
-      
-      if (address.city || address.town || address.village || address.municipality) {
-        parts.push(address.city || address.town || address.village || address.municipality);
-      }
-      
-      if (address.county || address.state_district) {
-        parts.push(address.county || address.state_district);
-      }
-      
-      if (address.state) {
-        parts.push(address.state);
-      }
-      
-      if (address.country) {
-        parts.push(address.country);
-      }
-
-      // Si no pudimos construir una dirección, usar display_name
-      if (parts.length === 0 && data.display_name) {
-        return data.display_name;
-      }
-
-      return parts.join(', ');
+    const address = (data as { address?: string })?.address;
+    if (!address || typeof address !== 'string') {
+      throw new Error('No se pudo obtener la dirección');
     }
 
-    // Si no hay address, usar display_name
-    if (data.display_name) {
-      return data.display_name;
-    }
-
-    throw new Error('No se pudo obtener la dirección');
+    return address;
   } catch (error) {
     console.error('❌ [GEOLOCATION] Error en reverse geocoding:', error);
     throw error;
@@ -138,26 +107,25 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
  * Obtener ubicación actual con dirección legible
  */
 export async function getCurrentLocationWithAddress(): Promise<GeoLocation> {
-  // Obtener posición actual
   const position = await getCurrentPosition();
   const { latitude, longitude, accuracy } = position.coords;
 
-  // Obtener dirección legible
   try {
     const address = await reverseGeocode(latitude, longitude);
     return {
       lat: latitude,
       lng: longitude,
       address,
-      accuracy
+      accuracy,
     };
-  } catch (error) {
-    // Si falla el reverse geocoding, devolver solo coordenadas
-    console.warn('⚠️ [GEOLOCATION] Reverse geocoding falló, devolviendo solo coordenadas');
+  } catch {
+    console.warn(
+      '⚠️ [GEOLOCATION] Reverse geocoding falló, devolviendo solo coordenadas'
+    );
     return {
       lat: latitude,
       lng: longitude,
-      accuracy
+      accuracy,
     };
   }
 }

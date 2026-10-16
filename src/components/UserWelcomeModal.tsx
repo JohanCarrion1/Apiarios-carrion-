@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { backdropVariants, modalVariants } from '../lib/motion';
@@ -12,8 +12,11 @@ import {
   type HiveType,
 } from '../services/apiaryService';
 import { saveLastActiveApiaryId } from '../utils/storage';
-import MapPicker, { type LatLng } from './MapPicker';
+import type { LatLng } from './MapPicker';
 import { getCurrentPosition, reverseGeocode } from '../services/geolocation';
+
+// Leaflet solo se carga cuando el usuario abre el mapa (evita tumbar el onboarding).
+const MapPicker = lazy(() => import('./MapPicker'));
 
 interface UserWelcomeModalProps {
   open: boolean;
@@ -63,6 +66,17 @@ export default function UserWelcomeModal({
     onClose?.();
   };
 
+  const fillAddressIfEmpty = async (lat: number, lng: number) => {
+    try {
+      const address = await reverseGeocode(lat, lng);
+      if (address) {
+        setUbicacion((prev) => (prev.trim() ? prev : address));
+      }
+    } catch {
+      /* reverse geocode opcional: no bloquea el flujo */
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -81,7 +95,6 @@ export default function UserWelcomeModal({
       }
     }
 
-    // Coordenadas reales (GPS o mapa) + reverse geocoding con Nominatim
     let coordinates: { lat: number; lng: number; address?: string } | undefined;
     if (coords) {
       let address: string | undefined = ubicacion.trim() || undefined;
@@ -112,8 +125,6 @@ export default function UserWelcomeModal({
         ubicacion.trim() || undefined,
       );
       saveLastActiveApiaryId(apiaryId, user.uid);
-      // Completa el onboarding del perfil (users/{uid}.apiario) para que la
-      // pantalla de bienvenida no vuelva a mostrarse.
       const apiario: UserApiaryMeta = {
         nombre: nombre.trim(),
         ubicacion: ubicacion.trim() || (coordinates?.address ?? ''),
@@ -146,7 +157,6 @@ export default function UserWelcomeModal({
         />
       </div>
 
-      {/* Ubicación: texto libre (opcional) */}
       <div>
         <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
           Ubicación (texto, opcional)
@@ -160,7 +170,6 @@ export default function UserWelcomeModal({
         />
       </div>
 
-      {/* Coordenadas reales: GPS + mapa (Nominatim reverse geocode) */}
       <div>
         <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
           Ubicación en el mapa (opcional)
@@ -173,20 +182,13 @@ export default function UserWelcomeModal({
                 setGpsLoading(true);
                 setError('');
                 const pos = await getCurrentPosition();
-                setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                const next = {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                };
+                setCoords(next);
                 setMapMode(true);
-                // Rellenar dirección con reverse geocoding si el campo de texto está vacío
-                try {
-                  const address = await reverseGeocode(
-                    pos.coords.latitude,
-                    pos.coords.longitude,
-                  );
-                  if (address && !ubicacion.trim()) {
-                    setUbicacion(address);
-                  }
-                } catch {
-                  /* reverse geocode opcional */
-                }
+                void fillAddressIfEmpty(next.lat, next.lng);
               } catch (err: any) {
                 setError(err?.message || 'No se pudo obtener la ubicación');
               } finally {
@@ -213,24 +215,24 @@ export default function UserWelcomeModal({
           </button>
         </div>
         {(mapMode || coords) && (
-          <MapPicker
-            coordinates={coords}
-            onLocationSelect={async (c) => {
-              setCoords(c);
-              // Actualizar dirección si el campo de texto está vacío
-              try {
-                const address = await reverseGeocode(c.lat, c.lng);
-                if (address && !ubicacion.trim()) {
-                  setUbicacion(address);
-                }
-              } catch {
-                /* reverse geocode opcional */
-              }
-            }}
-            helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación."
-            showLocateButton={false}
-            heightClass="h-56 sm:h-64"
-          />
+          <Suspense
+            fallback={
+              <div className="flex h-56 items-center justify-center rounded-xl border border-line bg-ink text-xs text-husk">
+                Cargando mapa…
+              </div>
+            }
+          >
+            <MapPicker
+              coordinates={coords}
+              onLocationSelect={(c) => {
+                setCoords(c);
+                void fillAddressIfEmpty(c.lat, c.lng);
+              }}
+              helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación."
+              showLocateButton={false}
+              heightClass="h-56 sm:h-64"
+            />
+          </Suspense>
         )}
         {coords && (
           <p className="mt-2 font-mono text-xs text-husk">
@@ -239,7 +241,6 @@ export default function UserWelcomeModal({
         )}
       </div>
 
-      {/* Tipo de colmena */}
       <div>
         <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
           Tipo de colmena
@@ -318,12 +319,11 @@ export default function UserWelcomeModal({
 
   if (variant === 'screen') {
     return (
-      // Raíz anclada al viewport con scroll propio: el botón "Guardar y
-      // continuar" queda en el flujo normal, al final del formulario, y el
-      // usuario hace scroll natural hasta él. `inset-0` evita el recorte que
-      // provocaba `100vh` con la barra del navegador en móvil.
       <div className="fixed inset-0 z-10 overflow-y-auto overscroll-contain bg-ink">
-        <div className="pointer-events-none fixed top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }} />
+        <div
+          className="pointer-events-none fixed top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }}
+        />
         <div className="flex min-h-full items-center justify-center px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <motion.div
             initial={{ opacity: 0, y: 30 }}

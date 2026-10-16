@@ -15,12 +15,10 @@ import { saveLastActiveApiaryId } from '../utils/storage';
 import type { LatLng } from './MapPicker';
 import { getCurrentPosition, reverseGeocode } from '../services/geolocation';
 
-// Leaflet solo se carga cuando el usuario abre el mapa (evita tumbar el onboarding).
 const MapPicker = lazy(() => import('./MapPicker'));
 
 interface UserWelcomeModalProps {
   open: boolean;
-  /** 'modal' → ventana superpuesta | 'screen' → pantalla completa (bienvenida primer login) */
   variant?: 'modal' | 'screen';
   title?: string;
   subtitle?: string;
@@ -47,6 +45,7 @@ export default function UserWelcomeModal({
   const [altitud, setAltitud] = useState(current?.altitud || '');
   const [hiveType, setHiveType] = useState<HiveType>(DEFAULT_HIVE_TYPE);
   const [coords, setCoords] = useState<LatLng | null>(null);
+  const [accuracyMeters, setAccuracyMeters] = useState<number | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [mapMode, setMapMode] = useState(false);
   const [error, setError] = useState('');
@@ -73,7 +72,7 @@ export default function UserWelcomeModal({
         setUbicacion((prev) => (prev.trim() ? prev : address));
       }
     } catch {
-      /* reverse geocode opcional: no bloquea el flujo */
+      /* opcional */
     }
   };
 
@@ -187,6 +186,9 @@ export default function UserWelcomeModal({
                   lng: pos.coords.longitude,
                 };
                 setCoords(next);
+                setAccuracyMeters(
+                  typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null,
+                );
                 setMapMode(true);
                 void fillAddressIfEmpty(next.lat, next.lng);
               } catch (err: any) {
@@ -224,19 +226,23 @@ export default function UserWelcomeModal({
           >
             <MapPicker
               coordinates={coords}
+              accuracyMeters={accuracyMeters}
               onLocationSelect={(c) => {
                 setCoords(c);
+                setAccuracyMeters(null);
                 void fillAddressIfEmpty(c.lat, c.lng);
               }}
-              helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación."
+              helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación exacta."
               showLocateButton={false}
               heightClass="h-56 sm:h-64"
+              defaultZoom={17}
             />
           </Suspense>
         )}
         {coords && (
           <p className="mt-2 font-mono text-xs text-husk">
             {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+            {accuracyMeters != null ? ` · ±${Math.round(accuracyMeters)} m` : ''}
           </p>
         )}
       </div>

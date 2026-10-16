@@ -2078,6 +2078,18 @@ function Dashboard({ apiaryId, initialSection }: { apiaryId: string; initialSect
       saveLastView(section, user.uid);
       saveDashboardUltimaVista({ section }, user.uid);
     }
+    // El Asistente IA y Cajas Trampa tienen su propia ruta. Al salir de ellos
+    // por estado (sin pasar por jumpTo) la URL se quedaba en
+    // /dashboard/asistente-ia: al recargar estando en Colmenas, la ruta mandaba
+    // y abría el Asistente. Se corrige la URL sin re-montar el dashboard.
+    if (
+      section !== 'asistente-ia' &&
+      section !== 'cajas-trampa' &&
+      typeof window !== 'undefined' &&
+      /^\/dashboard\/(asistente-ia|cajas-trampa)\/?$/.test(window.location.pathname)
+    ) {
+      window.history.replaceState(window.history.state, '', '/dashboard');
+    }
   };
 
   // Al salir del Asistente IA (o al cambiar de sección) se abandona el modo

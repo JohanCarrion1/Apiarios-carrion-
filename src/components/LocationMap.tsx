@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Circle, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { reverseGeocode } from '../services/geolocation';
@@ -15,16 +15,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const MAPBOX_TOKEN = String(
-  (import.meta as ImportMeta & { env?: Record<string, string> }).env
-    ?.VITE_MAPBOX_ACCESS_TOKEN || '',
-).trim();
-
-const MAPBOX_SATELLITE_URL =
-  'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}@2x?access_token=' +
-  encodeURIComponent(MAPBOX_TOKEN);
-
-const MAPBOX_ATTRIBUTION =
+const MAP_TILE_URL = '/api/map-tiles?z={z}&x={x}&y={y}';
+const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' +
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
@@ -93,7 +85,6 @@ export default function LocationMap({
   };
 
   const isLowAccuracy = accuracy && accuracy > 100;
-  const hasToken = MAPBOX_TOKEN.length > 0;
 
   return (
     <div className="relative">
@@ -107,34 +98,34 @@ export default function LocationMap({
       )}
 
       <div className="rounded-lg overflow-hidden border border-line">
-        {!hasToken ? (
-          <div className="flex h-[300px] flex-col items-center justify-center gap-2 bg-ink px-4 text-center">
-            <p className="text-sm text-coral">Falta VITE_MAPBOX_ACCESS_TOKEN para el mapa satélite.</p>
-          </div>
-        ) : (
-          <MapContainer
-            center={[latitude, longitude]}
-            zoom={15}
-            style={{ height: '300px', width: '100%' }}
-            ref={mapRef}
-          >
-            <TileLayer
-              attribution={MAPBOX_ATTRIBUTION}
-              url={MAPBOX_SATELLITE_URL}
-              tileSize={512}
-              zoomOffset={-1}
-              maxZoom={22}
-            />
-            <Marker
-              position={markerPosition}
-              draggable={true}
-              eventHandlers={{
-                dragend: handleMarkerDragEnd,
+        <MapContainer
+          center={[latitude, longitude]}
+          zoom={16}
+          style={{ height: '300px', width: '100%' }}
+          ref={mapRef}
+        >
+          <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} maxZoom={22} />
+          {accuracy != null && accuracy > 0 && accuracy < 5000 && (
+            <Circle
+              center={markerPosition}
+              radius={accuracy}
+              pathOptions={{
+                color: '#ffa90a',
+                fillColor: '#ffa90a',
+                fillOpacity: 0.15,
+                weight: 1.5,
               }}
             />
-            <MapEvents onLocationChange={handleMapClick} />
-          </MapContainer>
-        )}
+          )}
+          <Marker
+            position={markerPosition}
+            draggable={true}
+            eventHandlers={{
+              dragend: handleMarkerDragEnd,
+            }}
+          />
+          <MapEvents onLocationChange={handleMapClick} />
+        </MapContainer>
       </div>
 
       {reverseGeocoding && (

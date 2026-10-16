@@ -1,6 +1,10 @@
 // ============================================================
-// MAP PICKER — Leaflet + satélite Mapbox (vía /api/map-tiles)
+// MAP PICKER — Leaflet + vista satélite
 // ============================================================
+// Prioridad de tiles:
+//   1) VITE_MAPBOX_ACCESS_TOKEN → Mapbox satellite-v9 directo
+//   2) /api/map-tiles (proxy con MAPBOX_ACCESS_TOKEN del servidor)
+//   3) Esri World Imagery (satélite gratis, sin token)
 import { useEffect, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -24,10 +28,34 @@ export interface LatLng {
   lng: number;
 }
 
-/** Satélite Mapbox vía proxy del servidor. */
-const MAP_TILE_URL = '/api/map-tiles?z={z}&x={x}&y={y}';
-const MAP_ATTRIBUTION =
-  '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>';
+const VITE_MAPBOX = String(
+  (import.meta as ImportMeta & { env?: Record<string, string> }).env
+    ?.VITE_MAPBOX_ACCESS_TOKEN || '',
+).trim();
+
+/** URL de tiles satélite según lo disponible. */
+function satelliteTileConfig(): { url: string; attribution: string; maxNativeZoom?: number } {
+  if (VITE_MAPBOX) {
+    return {
+      url:
+        `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}` +
+        `?access_token=${encodeURIComponent(VITE_MAPBOX)}`,
+      attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>',
+      maxNativeZoom: 18,
+    };
+  }
+  // Proxy servidor (si MAPBOX_ACCESS_TOKEN está en Vercel)
+  // Si falla, Leaflet mostrará gris; por eso preferimos Esri como default estable.
+  // Usamos Esri como principal cuando no hay token de cliente: satélite real sin config.
+  return {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
+    maxNativeZoom: 19,
+  };
+}
+
+const TILES = satelliteTileConfig();
 
 interface MapPickerProps {
   coordinates?: LatLng | null;
@@ -157,11 +185,10 @@ export default function MapPicker({
           className="h-full w-full bg-[#1a1a1a]"
         >
           <TileLayer
-            attribution={MAP_ATTRIBUTION}
-            url={MAP_TILE_URL}
+            attribution={TILES.attribution}
+            url={TILES.url}
             maxZoom={22}
-            maxNativeZoom={18}
-            errorTileUrl=""
+            maxNativeZoom={TILES.maxNativeZoom ?? 18}
           />
           {pos && accuracy != null && accuracy > 0 && accuracy < 5000 && (
             <Circle

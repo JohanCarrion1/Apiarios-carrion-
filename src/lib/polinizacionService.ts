@@ -7,6 +7,7 @@
 // ver firestore.rules). Los admins pueden supervisar.
 // ============================================================
 
+import { sinUndefined } from './firestoreSafe';
 import { useEffect, useState } from 'react';
 import {
   collection,
@@ -100,12 +101,12 @@ export async function savePolinizacion(
   const ref = doc(db, POLINIZACION_COLLECTION, finalId);
   console.log('[POLINIZACION] Guardando contrato:', JSON.stringify({ id: finalId, ...data }, null, 2));
   if (id) {
-    await updateDoc(ref, { ...data, id: finalId, updatedAt: serverTimestamp() });
+    await updateDoc(ref, { ...sinUndefined(data), id: finalId, updatedAt: serverTimestamp() });
   } else {
     // `id` se guarda DENTRO del documento, no solo como clave. El listener lo
     // necesita para materializar el contrato; sin este campo el documento se
     // escribia bien pero quedaba invisible en la lista.
-    await setDoc(ref, { id: finalId, ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await setDoc(ref, { id: finalId, ...sinUndefined(data), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   }
   return { id: finalId, ...data, saved: true };
 }

@@ -5,6 +5,7 @@
 // usuario). Cada usuario lee/escribe sus propias cajas; los admins supervisan
 // (ver firestore.rules). Incluye listener en tiempo real para el dashboard.
 
+import { sinUndefined } from './firestoreSafe';
 import { useEffect, useMemo, useState } from 'react';
 import {
   collection,
@@ -89,7 +90,7 @@ export async function addTrapBox(userId: string, input: TrapBoxInput): Promise<T
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  await setDoc(doc(db, TRAPBOXES_COLLECTION, id), data);
+  await setDoc(doc(db, TRAPBOXES_COLLECTION, id), sinUndefined(data));
   return { ...data, saved: true } as TrapBox;
 }
 

@@ -73,6 +73,7 @@ import { pullProductsFromFirestore, pushProductsToFirestore } from './productsSy
 import { STORE_SEED_PRODUCTS } from '../utils/storeSeed';
 import { normalizeStoreProduct } from '../types/store';
 import { prepararChatsParaNube, conservarFotosLocales } from '../lib/chatSync';
+import { sinUndefined, marcarPendiente, limpiarPendiente, hayPendiente } from '../lib/firestoreSafe';
 
 const APIARIOS_COLLECTION = 'apiarios';
 const APIARIO_DATA_COLLECTION = 'apiarioData';
@@ -228,13 +229,21 @@ const upsertApiaryEntity = async (
   items: unknown[]
 ): Promise<void> => {
   if (!canSync(userId)) return;
-  await setDoc(entityDoc(apiaryId, entity), {
-    userId,
-    apiaryId,
-    entity,
-    items,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
+  try {
+    await setDoc(entityDoc(apiaryId, entity), {
+      userId,
+      apiaryId,
+      entity,
+      // Sin `undefined`: Firestore rechaza el documento completo si lleva uno.
+      items: sinUndefined(items),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    limpiarPendiente(userId, apiaryId, entity);
+  } catch (error) {
+    // El cambio local queda marcado como pendiente: la hidratación no lo pisará.
+    marcarPendiente(userId, apiaryId, entity);
+    throw error;
+  }
 };
 
 const deleteApiaryEntities = async (apiaryId: string): Promise<void> => {
@@ -313,7 +322,7 @@ const reconcileUserApiaries = async (userId: string, list: any[]): Promise<void>
     const { userId: _owner, ...fields } = apiary;
     batch.set(
       doc(db!, APIARIOS_COLLECTION, apiary.id),
-      { userId, ...fields, updatedAt: serverTimestamp() },
+      { userId, ...sinUndefined(fields), updatedAt: serverTimestamp() },
       { merge: true }
     );
     pending += 1;
@@ -344,7 +353,7 @@ const updateUserDataDoc = async (
   if (!canSync(userId)) return;
   await setDoc(
     doc(db!, USER_DATA_COLLECTION, userId),
-    { userId, ...partial, updatedAt: serverTimestamp() },
+    { userId, ...sinUndefined(partial), updatedAt: serverTimestamp() },
     { merge: true }
   );
 };
@@ -415,6 +424,19 @@ export const hydrateEntity = async (
 ): Promise<void> => {
   const snap = await getDoc(entityDoc(apiaryId, entity));
   const remote = snap.data();
+  // Un cambio local que no llegó a subirse NO se pisa con lo viejo de la nube:
+  // se reintenta la subida y se conserva lo que el usuario ya guardó.
+  if (hayPendiente(userId, apiaryId, entity)) {
+    const local = loadFromLocal(entity, userId, apiaryId);
+    if (Array.isArray(local)) {
+      try {
+        await upsertApiaryEntity(userId, apiaryId, entity, local);
+      } catch (error) {
+        console.warn(`[FIRESTORE] Sigue pendiente de subir ${entity}/${apiaryId}:`, error);
+      }
+      return;
+    }
+  }
   if (remote && Array.isArray(remote.items)) {
     // Si la app escribió esta clave mientras nuestra petición estaba en vuelo,
     // el valor local es del usuario y más nuevo que esta instantánea: no se

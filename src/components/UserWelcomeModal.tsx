@@ -14,6 +14,8 @@ import {
 import { saveLastActiveApiaryId } from '../utils/storage';
 import type { LatLng } from './MapPicker';
 import { getCurrentPosition, reverseGeocode } from '../services/geolocation';
+import { SelectionBackdrop } from './StoreFx';
+import LivingHive from './LivingHive';
 
 const MapPicker = lazy(() => import('./MapPicker'));
 
@@ -326,36 +328,9 @@ export default function UserWelcomeModal({
   if (variant === 'screen') {
     return (
       <div className="fixed inset-0 z-10 overflow-y-auto overscroll-contain bg-ink">
-        {/* Fondo igual que CreateApiaryModal / post-login */}
-        <div className="pointer-events-none fixed inset-0">
-          <svg className="absolute inset-0 h-full w-full opacity-[0.08]" aria-hidden="true">
-            <defs>
-              <pattern
-                id="hex-pattern-welcome"
-                width="50"
-                height="87"
-                patternUnits="userSpaceOnUse"
-                patternTransform="scale(2)"
-              >
-                <path
-                  d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z"
-                  fill="none"
-                  stroke="#ffa90a"
-                  strokeWidth="0.8"
-                />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hex-pattern-welcome)" />
-          </svg>
-          <div
-            className="absolute left-1/4 top-1/4 h-96 w-96 rounded-full opacity-20 blur-3xl"
-            style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }}
-          />
-          <div
-            className="absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full opacity-15 blur-3xl"
-            style={{ background: 'radial-gradient(circle, #c98508 0%, transparent 70%)' }}
-          />
-        </div>
+        {/* Mismo fondo que /seleccionar (post-login) */}
+        <SelectionBackdrop />
+        <LivingHive />
         <div className="relative z-10 flex min-h-full items-center justify-center px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <motion.div
             initial={{ opacity: 0, y: 30 }}

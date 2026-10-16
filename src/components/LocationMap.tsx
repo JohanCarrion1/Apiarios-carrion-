@@ -16,9 +16,7 @@ L.Icon.Default.mergeOptions({
 });
 
 const MAP_TILE_URL = '/api/map-tiles?z={z}&x={x}&y={y}';
-const MAP_ATTRIBUTION =
-  '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' +
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const MAP_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>';
 
 interface LocationMapProps {
   latitude: number;
@@ -56,9 +54,7 @@ export default function LocationMap({
     const position = marker.getLatLng();
     const newLat = position.lat;
     const newLng = position.lng;
-
     setMarkerPosition([newLat, newLng]);
-
     setReverseGeocoding(true);
     try {
       const address = await reverseGeocode(newLat, newLng);
@@ -72,7 +68,6 @@ export default function LocationMap({
 
   const handleMapClick = async (lat: number, lng: number) => {
     setMarkerPosition([lat, lng]);
-
     setReverseGeocoding(true);
     try {
       const address = await reverseGeocode(lat, lng);
@@ -92,7 +87,7 @@ export default function LocationMap({
         <div className="mb-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <p className="text-sm text-amber-300">
             ⚠️ La ubicación puede no ser exacta (precisión: {Math.round(accuracy)}m).
-            Puedes ajustar la ubicación arrastrando el marcador o haciendo clic en el mapa.
+            Puedes ajustar arrastrando el marcador o tocando el mapa.
           </p>
         </div>
       )}
@@ -103,8 +98,9 @@ export default function LocationMap({
           zoom={16}
           style={{ height: '300px', width: '100%' }}
           ref={mapRef}
+          className="bg-[#1a1a1a]"
         >
-          <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} maxZoom={22} />
+          <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} maxZoom={22} maxNativeZoom={18} />
           {accuracy != null && accuracy > 0 && accuracy < 5000 && (
             <Circle
               center={markerPosition}
@@ -120,9 +116,7 @@ export default function LocationMap({
           <Marker
             position={markerPosition}
             draggable={true}
-            eventHandlers={{
-              dragend: handleMarkerDragEnd,
-            }}
+            eventHandlers={{ dragend: handleMarkerDragEnd }}
           />
           <MapEvents onLocationChange={handleMapClick} />
         </MapContainer>

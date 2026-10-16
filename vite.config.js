@@ -3,11 +3,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-// Debe coincidir con AI_MODEL en src/services/aiAssistant.ts.
 const GEMINI_MODEL = "gemini-3.5-flash";
+const MAPBOX_STYLE = "mapbox/satellite-streets-v12";
 
-// Headers de seguridad (dev/preview). Para producción, aplicarlos también
-// en el hosting estático/CDN (Netlify _headers, Vercel, Nginx, etc.).
 function securityHeaders() {
   return {
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
@@ -19,9 +17,6 @@ function securityHeaders() {
   };
 }
 
-// ------------------------------------------------------------
-// Proxy de Gemini con ROTACIÓN de claves (dev y preview)
-// ------------------------------------------------------------
 const parseGeminiKeys = (raw) =>
   String(raw || "")
     .split(/[\s,]+/)
@@ -89,11 +84,6 @@ function geminiProxyPlugin(keys) {
   };
 }
 
-// ------------------------------------------------------------
-// Proxy de Mapbox reverse geocoding (dev y preview)
-// ------------------------------------------------------------
-// Igual que Gemini: la clave MAPBOX_ACCESS_TOKEN se queda en el servidor.
-// El cliente llama a GET /api/geocode?lat=&lng= y aquí se reenvía a Mapbox.
 function installGeocodeMiddleware(middlewares, token) {
   middlewares.use("/api/geocode", async (req, res) => {
     const json = (status, data) => {
@@ -155,28 +145,83 @@ function installGeocodeMiddleware(middlewares, token) {
         place_name: feature?.place_name,
         place_type: feature?.place_type,
       });
-    } catch (err) {
+    } catch {
       return json(502, { error: "Error de conexión con Mapbox." });
     }
   });
 }
 
-function geocodeProxyPlugin(token) {
+function installMapTilesMiddleware(middlewares, token) {
+  middlewares.use("/api/map-tiles", async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    if (req.method !== "GET") {
+      res.statusCode = 405;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+
+    const url = new URL(req.url || "", "http://localhost");
+    const z = Number(url.searchParams.get("z"));
+    const x = Number(url.searchParams.get("x"));
+    const y = Number(String(url.searchParams.get("y") || "").replace(/\.png$/i, ""));
+
+    if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Faltan z, x, y válidos" }));
+      return;
+    }
+    if (!token) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Falta MAPBOX_ACCESS_TOKEN" }));
+      return;
+    }
+
+    try {
+      const mapboxUrl =
+        `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/512/${z}/${x}/${y}@2x` +
+        `?access_token=${encodeURIComponent(token)}`;
+      const r = await fetch(mapboxUrl);
+      if (!r.ok) {
+        res.statusCode = r.status;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: `Mapbox tiles ${r.status}` }));
+        return;
+      }
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.statusCode = 200;
+      res.setHeader("Content-Type", r.headers.get("content-type") || "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.end(buf);
+    } catch {
+      res.statusCode = 502;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Error al obtener tile de Mapbox" }));
+    }
+  });
+}
+
+function mapboxProxyPlugin(token) {
   return {
-    name: "mapbox-geocode-proxy",
+    name: "mapbox-proxy",
     configureServer(server) {
       installGeocodeMiddleware(server.middlewares, token);
+      installMapTilesMiddleware(server.middlewares, token);
     },
     configurePreviewServer(server) {
       installGeocodeMiddleware(server.middlewares, token);
+      installMapTilesMiddleware(server.middlewares, token);
     },
   };
 }
 
 export default defineConfig(({ mode }) => {
-  // El tercer argumento "" carga TODAS las variables (también las que no
-  // empiezan por VITE_), para poder leer GEMINI_API_KEY y MAPBOX_ACCESS_TOKEN
-  // solo en el servidor.
   const env = loadEnv(mode, process.cwd(), "");
   const mapboxToken = String(env.MAPBOX_ACCESS_TOKEN || "").trim();
 
@@ -198,12 +243,8 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         },
       }),
-      // El navegador llama a /api/gemini y este middleware añade la clave
-      // GEMINI_API_KEY (leída de .env), rotando entre varias si la primera está
-      // agotada. Así la clave nunca se incrusta en el bundle del cliente.
       geminiProxyPlugin(parseGeminiKeys(env.GEMINI_API_KEY)),
-      // Igual para Mapbox: /api/geocode → reverse geocoding sin exponer el token.
-      geocodeProxyPlugin(mapboxToken),
+      mapboxProxyPlugin(mapboxToken),
     ],
     server: {
       host: "0.0.0.0",

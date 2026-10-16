@@ -15,8 +15,27 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const MAP_TILE_URL = '/api/map-tiles?z={z}&x={x}&y={y}';
-const MAP_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>';
+const VITE_MAPBOX = String(
+  (import.meta as ImportMeta & { env?: Record<string, string> }).env
+    ?.VITE_MAPBOX_ACCESS_TOKEN || '',
+).trim();
+
+function satelliteTiles() {
+  if (VITE_MAPBOX) {
+    return {
+      url:
+        `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}` +
+        `?access_token=${encodeURIComponent(VITE_MAPBOX)}`,
+      attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>',
+    };
+  }
+  return {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
+  };
+}
+
+const TILES = satelliteTiles();
 
 interface LocationMapProps {
   latitude: number;
@@ -52,15 +71,13 @@ export default function LocationMap({
   const handleMarkerDragEnd = async (e: L.DragEndEvent) => {
     const marker = e.target;
     const position = marker.getLatLng();
-    const newLat = position.lat;
-    const newLng = position.lng;
-    setMarkerPosition([newLat, newLng]);
+    setMarkerPosition([position.lat, position.lng]);
     setReverseGeocoding(true);
     try {
-      const address = await reverseGeocode(newLat, newLng);
-      onLocationChange(newLat, newLng, address);
+      const address = await reverseGeocode(position.lat, position.lng);
+      onLocationChange(position.lat, position.lng, address);
     } catch {
-      onLocationChange(newLat, newLng);
+      onLocationChange(position.lat, position.lng);
     } finally {
       setReverseGeocoding(false);
     }
@@ -86,8 +103,7 @@ export default function LocationMap({
       {isLowAccuracy && (
         <div className="mb-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <p className="text-sm text-amber-300">
-            ⚠️ La ubicación puede no ser exacta (precisión: {Math.round(accuracy)}m).
-            Puedes ajustar arrastrando el marcador o tocando el mapa.
+            ⚠️ Precisión: ±{Math.round(accuracy)}m. Ajusta el marcador si hace falta.
           </p>
         </div>
       )}
@@ -100,7 +116,7 @@ export default function LocationMap({
           ref={mapRef}
           className="bg-[#1a1a1a]"
         >
-          <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} maxZoom={22} maxNativeZoom={18} />
+          <TileLayer attribution={TILES.attribution} url={TILES.url} maxZoom={22} maxNativeZoom={19} />
           {accuracy != null && accuracy > 0 && accuracy < 5000 && (
             <Circle
               center={markerPosition}

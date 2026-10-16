@@ -191,8 +191,8 @@ export function ResponsiveHeader({ onNavigate, onSettings, onHome, onChangeSecti
               </motion.button>
             )}
 
-            {/* Campana de notificaciones */}
-            {notifications.length > 0 && onMarkAsRead && onMarkAllAsRead && onNotificationClick && (
+            {/* Campana de notificaciones: siempre visible (sin avisos muestra «No hay notificaciones») */}
+            {onMarkAsRead && onMarkAllAsRead && onNotificationClick && (
               <NotificationBell
                 notifications={notifications}
                 onMarkAsRead={onMarkAsRead}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { backdropVariants, modalVariants } from '../lib/motion';
+import { IconMapPin } from '../ui';
 import { useAuth } from '../context/AuthContext';
 import { saveUserApiario, useProfile, type UserApiaryMeta } from '../services/profileService';
 import {
@@ -11,6 +12,8 @@ import {
   type HiveType,
 } from '../services/apiaryService';
 import { saveLastActiveApiaryId } from '../utils/storage';
+import MapPicker, { type LatLng } from './MapPicker';
+import { getCurrentPosition, reverseGeocode } from '../services/geolocation';
 
 interface UserWelcomeModalProps {
   open: boolean;
@@ -40,6 +43,9 @@ export default function UserWelcomeModal({
   const [ubicacion, setUbicacion] = useState(current?.ubicacion || '');
   const [altitud, setAltitud] = useState(current?.altitud || '');
   const [hiveType, setHiveType] = useState<HiveType>(DEFAULT_HIVE_TYPE);
+  const [coords, setCoords] = useState<LatLng | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [mapMode, setMapMode] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -75,25 +81,42 @@ export default function UserWelcomeModal({
       }
     }
 
+    // Coordenadas reales (GPS o mapa) + reverse geocoding con Nominatim
+    let coordinates: { lat: number; lng: number; address?: string } | undefined;
+    if (coords) {
+      let address: string | undefined = ubicacion.trim() || undefined;
+      try {
+        if (!address) {
+          address = await reverseGeocode(coords.lat, coords.lng);
+        }
+      } catch {
+        address = ubicacion.trim() || undefined;
+      }
+      coordinates = {
+        lat: coords.lat,
+        lng: coords.lng,
+        ...(address ? { address } : {}),
+      };
+    }
+
     try {
       setSaving(true);
-      // Se guarda solo name, hiveType y altitud (sin location/coordinates).
       const apiaryId = await createApiary(
         user.uid,
         nombre,
-        '',
-        undefined,
+        ubicacion.trim(),
+        coordinates,
         undefined,
         altitudNum,
         hiveType,
-        ubicacion.trim(),
+        ubicacion.trim() || undefined,
       );
       saveLastActiveApiaryId(apiaryId, user.uid);
       // Completa el onboarding del perfil (users/{uid}.apiario) para que la
       // pantalla de bienvenida no vuelva a mostrarse.
       const apiario: UserApiaryMeta = {
         nombre: nombre.trim(),
-        ubicacion: ubicacion.trim(),
+        ubicacion: ubicacion.trim() || (coordinates?.address ?? ''),
         altitud: altitud.trim(),
       };
       await saveUserApiario(user.uid, apiario);
@@ -123,7 +146,7 @@ export default function UserWelcomeModal({
         />
       </div>
 
-      {/* Ubicación: nombre del lugar / dirección (opcional) */}
+      {/* Ubicación: texto libre (opcional) */}
       <div>
         <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
           Ubicación (texto, opcional)
@@ -135,6 +158,85 @@ export default function UserWelcomeModal({
           placeholder="Ej: Zona rural, Provincia, Departamento"
           className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
+      </div>
+
+      {/* Coordenadas reales: GPS + mapa (Nominatim reverse geocode) */}
+      <div>
+        <label className="block text-xs font-mono uppercase tracking-widest text-husk mb-2">
+          Ubicación en el mapa (opcional)
+        </label>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setGpsLoading(true);
+                setError('');
+                const pos = await getCurrentPosition();
+                setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setMapMode(true);
+                // Rellenar dirección con reverse geocoding si el campo de texto está vacío
+                try {
+                  const address = await reverseGeocode(
+                    pos.coords.latitude,
+                    pos.coords.longitude,
+                  );
+                  if (address && !ubicacion.trim()) {
+                    setUbicacion(address);
+                  }
+                } catch {
+                  /* reverse geocode opcional */
+                }
+              } catch (err: any) {
+                setError(err?.message || 'No se pudo obtener la ubicación');
+              } finally {
+                setGpsLoading(false);
+              }
+            }}
+            disabled={gpsLoading || saving}
+            className="flex items-center gap-2 rounded-xl border border-honey/40 bg-honey/10 px-3.5 py-2 text-xs font-bold text-honey transition-colors hover:bg-honey/20 disabled:opacity-60"
+          >
+            <IconMapPin className="h-3.5 w-3.5" />
+            {gpsLoading ? 'Capturando…' : 'GPS actual'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMapMode((v) => !v);
+              setError('');
+            }}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-xl border border-line bg-ink px-3.5 py-2 text-xs font-bold text-husk transition-colors hover:border-honey/50 hover:text-honey"
+          >
+            <IconMapPin className="h-3.5 w-3.5" />
+            {mapMode ? 'Ocultar mapa' : 'Marcar en mapa'}
+          </button>
+        </div>
+        {(mapMode || coords) && (
+          <MapPicker
+            coordinates={coords}
+            onLocationSelect={async (c) => {
+              setCoords(c);
+              // Actualizar dirección si el campo de texto está vacío
+              try {
+                const address = await reverseGeocode(c.lat, c.lng);
+                if (address && !ubicacion.trim()) {
+                  setUbicacion(address);
+                }
+              } catch {
+                /* reverse geocode opcional */
+              }
+            }}
+            helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación."
+            showLocateButton={false}
+            heightClass="h-56 sm:h-64"
+          />
+        )}
+        {coords && (
+          <p className="mt-2 font-mono text-xs text-husk">
+            {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+          </p>
+        )}
       </div>
 
       {/* Tipo de colmena */}

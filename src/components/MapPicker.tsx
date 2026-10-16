@@ -1,8 +1,6 @@
 // ============================================================
-// MAP PICKER — selector de ubicación (Leaflet + Mapbox Satellite)
+// MAP PICKER — Leaflet + satélite Mapbox (vía /api/map-tiles)
 // ============================================================
-// Tiles satélite: GET /api/map-tiles?z=&x=&y= (proxy con MAPBOX_ACCESS_TOKEN).
-// El token no se expone al navegador.
 import { useEffect, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -26,12 +24,10 @@ export interface LatLng {
   lng: number;
 }
 
-/** Tiles satélite Mapbox vía proxy del servidor (sin token en el cliente). */
+/** Satélite Mapbox vía proxy del servidor. */
 const MAP_TILE_URL = '/api/map-tiles?z={z}&x={x}&y={y}';
-
 const MAP_ATTRIBUTION =
-  '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' +
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>';
 
 interface MapPickerProps {
   coordinates?: LatLng | null;
@@ -43,9 +39,7 @@ interface MapPickerProps {
   helpText?: string;
   className?: string;
   disabled?: boolean;
-  /** Precisión GPS en metros (dibuja círculo alrededor del marcador). */
   accuracyMeters?: number | null;
-  /** @deprecated ignorado */
   basemap?: string;
   scrollWheelZoom?: boolean;
 }
@@ -137,9 +131,7 @@ export default function MapPicker({
       const acc = position.coords.accuracy;
       pick(next, { accuracy: acc, fromGps: true });
       if (acc && acc > 100) {
-        setNote(
-          `Precisión aproximada (±${Math.round(acc)} m). Arrastra el marcador para afinar.`,
-        );
+        setNote(`Precisión aproximada (±${Math.round(acc)} m). Arrastra el marcador para afinar.`);
       } else {
         setNote('Ubicación actual marcada en el mapa.');
       }
@@ -162,9 +154,15 @@ export default function MapPicker({
           center={[center.lat, center.lng]}
           zoom={defaultZoom}
           scrollWheelZoom={scrollWheelZoom}
-          className="h-full w-full"
+          className="h-full w-full bg-[#1a1a1a]"
         >
-          <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} maxZoom={22} />
+          <TileLayer
+            attribution={MAP_ATTRIBUTION}
+            url={MAP_TILE_URL}
+            maxZoom={22}
+            maxNativeZoom={18}
+            errorTileUrl=""
+          />
           {pos && accuracy != null && accuracy > 0 && accuracy < 5000 && (
             <Circle
               center={[pos.lat, pos.lng]}

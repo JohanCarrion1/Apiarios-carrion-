@@ -2613,6 +2613,7 @@ queenAlerts={{
       <InspectionModal
         open={modalHive !== null}
         hives={hives}
+        inspections={inspections}
         initialHive={modalHive ?? selectedId}
         onClose={() => setModalHive(null)}
         onSubmit={handleInspection}
@@ -2622,6 +2623,7 @@ queenAlerts={{
       <InspectionModal
         open={modalNucleus !== null}
         hives={nuclei}
+        inspections={inspections}
         initialHive={modalNucleus ?? (selectedNucleusId || '')}
         onClose={() => setModalNucleus(null)}
         onSubmit={handleInspection}

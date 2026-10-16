@@ -26,6 +26,8 @@ export interface InspectionDraft {
 interface InspectionModalProps {
   open: boolean;
   hives: Hive[];
+  /** Inspecciones guardadas: el formulario arranca con los valores de la última de cada unidad. */
+  inspections?: Inspection[];
   initialHive: string;
   onClose: () => void;
   onSubmit: (d: InspectionDraft) => void;
@@ -87,7 +89,7 @@ function Slider({
   );
 }
 
-export default function InspectionModal({ open, hives, initialHive, onClose, onSubmit }: InspectionModalProps) {
+export default function InspectionModal({ open, hives, inspections = [], initialHive, onClose, onSubmit }: InspectionModalProps) {
   const [hiveId, setHiveId] = useState(initialHive || '');
   const [queenSeen, setQueenSeen] = useState(true);
   const [brood, setBrood] = useState(5);
@@ -107,22 +109,58 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
 
   useScrollLock(open);
 
-  useEffect(() => {
-    if (open) {
-      setHiveId(initialHive);
+  // Fecha de la inspección guardada que sirvió de base (null = valores por defecto).
+  const [baseFecha, setBaseFecha] = useState<string | null>(null);
+  // Se lee por ref: guardar una inspección cambia el array y no debe reiniciar
+  // el formulario que el usuario está rellenando.
+  const inspeccionesRef = useRef(inspections);
+  inspeccionesRef.current = inspections;
+  const hivesRef = useRef(hives);
+  hivesRef.current = hives;
+
+  const numero = (v: unknown, def: number) => (typeof v === 'number' && Number.isFinite(v) ? v : def);
+
+  // Carga en el formulario los valores GUARDADOS de la última inspección de la
+  // unidad (la base de datos manda). Sin inspecciones previas, valores por defecto.
+  const aplicarBase = (id: string) => {
+    const ultima = inspeccionesRef.current
+      .filter((i) => i.hiveId === id)
+      .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const unidad = hivesRef.current.find((h) => h.id === id);
+    setOrphanColony(unidad?.hasQueen === false);
+    if (ultima) {
+      setQueenSeen(!!ultima.queenSeen);
+      setBrood(numero(ultima.brood, 5));
+      setHoney(numero(ultima.honey, 4));
+      setVarroa(numero(ultima.varroa, 1));
+      setCalm(ultima.calm === 1 || ultima.calm === 3 ? ultima.calm : 2);
+      setFramesMounted(numero(ultima.framesMounted, 0));
+      setFramesWorked(numero(ultima.framesWorked, 0));
+      setBroodPattern(ultima.broodPattern ?? 'uniforme');
+      setHasSupers(!!ultima.hasSupers);
+      setBaseFecha(ultima.date);
+    } else {
       setQueenSeen(true);
       setBrood(5);
       setHoney(4);
       setVarroa(1);
       setCalm(2);
-      setNote('');
-      setPhotos([]);
-      setOrphanColony(false);
       setFramesMounted(0);
       setFramesWorked(0);
       setBroodPattern('uniforme');
       setHasSupers(false);
+      setBaseFecha(null);
     }
+  };
+
+  useEffect(() => {
+    if (open) {
+      setHiveId(initialHive);
+      aplicarBase(initialHive);
+      setNote('');
+      setPhotos([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialHive]);
 
   useEffect(() => {
@@ -241,13 +279,21 @@ export default function InspectionModal({ open, hives, initialHive, onClose, onS
 
               <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
                 <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6 sm:px-8">
+                {baseFecha && (
+                  <p className="rounded-lg border border-honey/30 bg-honey/10 px-3 py-2 text-xs text-honey">
+                    Partiendo de la última inspección guardada ({new Date(baseFecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}). Ajusta lo que haya cambiado.
+                  </p>
+                )}
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-husk">Colmena</span>
                       <select
                         value={hiveId}
-                        onChange={(e) => setHiveId(e.target.value)}
+                        onChange={(e) => {
+                          setHiveId(e.target.value);
+                          aplicarBase(e.target.value);
+                        }}
                         className="w-full rounded-xl border border-line bg-ink px-3.5 py-2.5 text-sm font-semibold text-cream focus:border-honey/70"
                       >
                         {hives.map((h) => (

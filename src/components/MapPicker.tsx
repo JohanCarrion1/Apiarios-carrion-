@@ -1,13 +1,10 @@
 // ============================================================
 // MAP PICKER — selector de ubicación (Leaflet + Mapbox Satellite)
 // ============================================================
-// Muestra un mapa satélite de Mapbox con un marcador. El usuario puede
-// tocar el mapa, arrastrar el marcador o usar su ubicación GPS.
-//
-// Tiles: Mapbox Satellite Streets (requiere VITE_MAPBOX_ACCESS_TOKEN).
-// Reverse geocoding: /api/geocode (MAPBOX_ACCESS_TOKEN en el servidor).
+// Tiles satélite: GET /api/map-tiles?z=&x=&y= (proxy con MAPBOX_ACCESS_TOKEN).
+// El token no se expone al navegador.
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, TileLayer, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getCurrentPosition } from '../services/geolocation';
@@ -29,18 +26,10 @@ export interface LatLng {
   lng: number;
 }
 
-/** Token público de Mapbox (pk.*) para las tiles en el navegador. */
-const MAPBOX_TOKEN = String(
-  (import.meta as ImportMeta & { env?: Record<string, string> }).env
-    ?.VITE_MAPBOX_ACCESS_TOKEN || '',
-).trim();
+/** Tiles satélite Mapbox vía proxy del servidor (sin token en el cliente). */
+const MAP_TILE_URL = '/api/map-tiles?z={z}&x={x}&y={y}';
 
-/** Satélite + etiquetas de calles (Mapbox). */
-const MAPBOX_SATELLITE_URL =
-  'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}@2x?access_token=' +
-  encodeURIComponent(MAPBOX_TOKEN);
-
-const MAPBOX_ATTRIBUTION =
+const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' +
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
@@ -54,7 +43,9 @@ interface MapPickerProps {
   helpText?: string;
   className?: string;
   disabled?: boolean;
-  /** @deprecated Ya solo hay satélite Mapbox; se ignora. */
+  /** Precisión GPS en metros (dibuja círculo alrededor del marcador). */
+  accuracyMeters?: number | null;
+  /** @deprecated ignorado */
   basemap?: string;
   scrollWheelZoom?: boolean;
 }
@@ -70,7 +61,15 @@ function ClickHandler({ onPick }: { onPick: (c: LatLng) => void }) {
   return null;
 }
 
-function Recenter({ position, zoom }: { position: LatLng | null; zoom: number }) {
+function Recenter({
+  position,
+  zoom,
+  forceZoom,
+}: {
+  position: LatLng | null;
+  zoom: number;
+  forceZoom?: boolean;
+}) {
   const map = useMap();
   const last = useRef('');
   useEffect(() => {
@@ -78,8 +77,9 @@ function Recenter({ position, zoom }: { position: LatLng | null; zoom: number })
     const key = `${position.lat.toFixed(6)},${position.lng.toFixed(6)}`;
     if (key === last.current) return;
     last.current = key;
-    map.flyTo([position.lat, position.lng], Math.max(map.getZoom(), zoom));
-  }, [position, zoom, map]);
+    const targetZoom = forceZoom ? Math.max(zoom, 17) : Math.max(map.getZoom(), zoom);
+    map.flyTo([position.lat, position.lng], targetZoom, { duration: 0.8 });
+  }, [position, zoom, forceZoom, map]);
   return null;
 }
 
@@ -87,19 +87,22 @@ export default function MapPicker({
   coordinates,
   onLocationSelect,
   defaultCenter,
-  defaultZoom = 15,
+  defaultZoom = 16,
   heightClass = 'h-64 sm:h-80',
   showLocateButton = true,
-  helpText = 'Toca el mapa o arrastra el marcador para ajustar la ubicación.',
+  helpText = 'Toca el mapa o arrastra el marcador para ajustar la ubicación exacta.',
   className,
   disabled = false,
+  accuracyMeters = null,
   scrollWheelZoom = true,
 }: MapPickerProps) {
   const [pos, setPos] = useState<LatLng | null>(
     coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : null,
   );
+  const [accuracy, setAccuracy] = useState<number | null>(accuracyMeters ?? null);
   const [locating, setLocating] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [fromGps, setFromGps] = useState(false);
 
   useEffect(() => {
     if (!coordinates) return;
@@ -110,8 +113,15 @@ export default function MapPicker({
     );
   }, [coordinates?.lat, coordinates?.lng]);
 
-  const pick = (c: LatLng) => {
+  useEffect(() => {
+    if (accuracyMeters != null) setAccuracy(accuracyMeters);
+  }, [accuracyMeters]);
+
+  const pick = (c: LatLng, opts?: { accuracy?: number; fromGps?: boolean }) => {
     setPos(c);
+    if (opts?.accuracy != null) setAccuracy(opts.accuracy);
+    else if (!opts?.fromGps) setAccuracy(null);
+    setFromGps(!!opts?.fromGps);
     onLocationSelect(c);
   };
 
@@ -120,13 +130,18 @@ export default function MapPicker({
       setLocating(true);
       setNote(null);
       const position = await getCurrentPosition();
-      const next = { lat: position.coords.latitude, lng: position.coords.longitude };
-      pick(next);
-      const accuracy = position.coords.accuracy;
-      if (accuracy && accuracy > 100) {
+      const next = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      const acc = position.coords.accuracy;
+      pick(next, { accuracy: acc, fromGps: true });
+      if (acc && acc > 100) {
         setNote(
-          `Precisión aproximada (±${Math.round(accuracy)} m). Ajusta el marcador si hace falta.`,
+          `Precisión aproximada (±${Math.round(acc)} m). Arrastra el marcador para afinar.`,
         );
+      } else {
+        setNote('Ubicación actual marcada en el mapa.');
       }
     } catch (err) {
       setNote(
@@ -139,53 +154,59 @@ export default function MapPicker({
   };
 
   const center = pos ?? defaultCenter ?? FALLBACK_CENTER;
-  const hasToken = MAPBOX_TOKEN.length > 0;
 
   return (
     <div className={className}>
       <div className={`relative overflow-hidden rounded-xl border border-line ${heightClass}`}>
-        {!hasToken ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-ink px-4 text-center">
-            <p className="text-sm text-coral">Falta el token de Mapbox para el mapa satélite.</p>
-            <p className="text-xs text-husk">
-              Configura <code className="text-honey">VITE_MAPBOX_ACCESS_TOKEN</code> en Vercel y
-              vuelve a desplegar.
-            </p>
-          </div>
-        ) : (
-          <MapContainer
-            center={[center.lat, center.lng]}
-            zoom={defaultZoom}
-            scrollWheelZoom={scrollWheelZoom}
-            className="h-full w-full"
-          >
-            <TileLayer
-              attribution={MAPBOX_ATTRIBUTION}
-              url={MAPBOX_SATELLITE_URL}
-              tileSize={512}
-              zoomOffset={-1}
-              maxZoom={22}
+        <MapContainer
+          center={[center.lat, center.lng]}
+          zoom={defaultZoom}
+          scrollWheelZoom={scrollWheelZoom}
+          className="h-full w-full"
+        >
+          <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} maxZoom={22} />
+          {pos && accuracy != null && accuracy > 0 && accuracy < 5000 && (
+            <Circle
+              center={[pos.lat, pos.lng]}
+              radius={accuracy}
+              pathOptions={{
+                color: '#ffa90a',
+                fillColor: '#ffa90a',
+                fillOpacity: 0.15,
+                weight: 1.5,
+              }}
             />
-            {pos && (
-              <Marker
-                position={[pos.lat, pos.lng]}
-                draggable={!disabled}
-                eventHandlers={{
-                  dragend: (e) => {
-                    const ll = (e.target as L.Marker).getLatLng();
-                    pick({ lat: ll.lat, lng: ll.lng });
-                  },
-                }}
-              />
-            )}
-            <ClickHandler onPick={disabled ? () => {} : pick} />
-            <Recenter position={pos} zoom={defaultZoom} />
-          </MapContainer>
-        )}
+          )}
+          {pos && (
+            <Marker
+              position={[pos.lat, pos.lng]}
+              draggable={!disabled}
+              eventHandlers={{
+                dragend: (e) => {
+                  const ll = (e.target as L.Marker).getLatLng();
+                  pick({ lat: ll.lat, lng: ll.lng });
+                  setNote('Marcador ajustado manualmente.');
+                },
+              }}
+            />
+          )}
+          <ClickHandler
+            onPick={
+              disabled
+                ? () => {}
+                : (c) => {
+                    pick(c);
+                    setNote('Ubicación marcada en el mapa.');
+                  }
+            }
+          />
+          <Recenter position={pos} zoom={defaultZoom} forceZoom={fromGps} />
+        </MapContainer>
 
-        {pos && hasToken && (
+        {pos && (
           <div className="pointer-events-none absolute left-2 top-2 z-[400] rounded-lg bg-ink/85 px-2.5 py-1 font-mono text-[11px] text-cream backdrop-blur">
             {pos.lat.toFixed(6)}, {pos.lng.toFixed(6)}
+            {accuracy != null && accuracy > 0 ? ` · ±${Math.round(accuracy)} m` : ''}
           </div>
         )}
       </div>

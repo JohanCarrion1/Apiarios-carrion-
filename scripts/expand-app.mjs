@@ -6,10 +6,12 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const scriptsDir = path.join(root, 'scripts');
 const outPath = path.join(root, 'src', 'App.tsx');
+const N = 23;
 
 let b64 = '';
-for (let i = 0; i < 20; i++) {
-  const p = path.join(scriptsDir, `app.chunk${String(i).padStart(2, '0')}.b64`);
+for (let i = 0; i < N; i++) {
+  const name = 'app.chunk' + String(i).padStart(2, '0') + '.b64';
+  const p = path.join(scriptsDir, name);
   if (!fs.existsSync(p)) {
     console.error('Missing', p);
     process.exit(1);

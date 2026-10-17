@@ -1,24 +1,45 @@
 import fs from 'node:fs';
-import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const scriptsDir = path.join(root, 'scripts');
 const outPath = path.join(root, 'src', 'App.tsx');
-const N = 23;
 
-let b64 = '';
-for (let i = 0; i < N; i++) {
-  const name = 'app.chunk' + String(i).padStart(2, '0') + '.b64';
-  const p = path.join(scriptsDir, name);
-  if (!fs.existsSync(p)) {
-    console.error('Missing', p);
+// Commit conocido con App.tsx completo y funcional
+const GOOD_COMMIT = 'e2679742427ebe16f77c612a0c59526118c1c215';
+const URL =
+  'https://raw.githubusercontent.com/JohanCarrion1/Apiarios-carrion-/' +
+  GOOD_COMMIT +
+  '/src/App.tsx';
+
+async function main() {
+  // Si ya hay un App.tsx grande (local dev restaurado), no tocar
+  try {
+    const existing = fs.readFileSync(outPath, 'utf8');
+    if (existing.length > 50000 && existing.includes('IntroHead')) {
+      console.log('src/App.tsx already OK (' + existing.length + ' bytes)');
+      return;
+    }
+  } catch {
+    /* falta el archivo */
+  }
+
+  console.log('Downloading App.tsx from commit', GOOD_COMMIT, '...');
+  const res = await fetch(URL);
+  if (!res.ok) {
+    console.error('Failed to download App.tsx:', res.status, res.statusText);
     process.exit(1);
   }
-  b64 += fs.readFileSync(p, 'utf8').trim();
+  const text = await res.text();
+  if (text.length < 50000 || !text.includes('IntroHead')) {
+    console.error('Downloaded App.tsx looks invalid (len=' + text.length + ')');
+    process.exit(1);
+  }
+  fs.writeFileSync(outPath, text);
+  console.log('Restored src/App.tsx (' + text.length + ' bytes)');
 }
 
-const buf = zlib.gunzipSync(Buffer.from(b64, 'base64'));
-fs.writeFileSync(outPath, buf);
-console.log('Restored src/App.tsx (' + buf.length + ' bytes)');
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

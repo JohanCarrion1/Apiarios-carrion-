@@ -123,7 +123,7 @@ export default function FecundadorDetail({
   };
 
   return (
-    <aside>
+    <aside className="mx-auto w-full max-w-[720px]">
       {/* Ancho acotado a 720px y centrado (como en móvil). Antes la tarjeta se quedaba en max-w-lg
           (media pantalla) y dejaba media grilla en negro, rompiendo la
           armonía con la grilla de hexágonos y el historial de inspecciones,

@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
+import { SelectionBackdrop } from './StoreFx';
+import LivingHive from './LivingHive';
 import { clearAdminSession } from '../lib/adminSession';
 import { useAdminList, isEmailAdmin } from '../lib/adminAccess';
 
@@ -192,20 +194,11 @@ export default function Login() {
   // intenta entrar a la tienda/admin sin estar autorizado.
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-ink lg:grid lg:grid-cols-[1.1fr_1fr]">
-      {/* Fondo con patrón hexagonal */}
-      <div className="absolute inset-0">
-        <svg className="absolute inset-0 w-full h-full opacity-[0.08]" aria-hidden="true">
-          <defs>
-            <pattern id="hex-pattern" width="50" height="87" patternUnits="userSpaceOnUse" patternTransform="scale(2)">
-              <path d="M25 7.5L43.3 18.5v22L25 51.5 6.7 40.5v-22Z" fill="none" stroke="#ffa90a" strokeWidth="0.8" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hex-pattern)" />
-        </svg>
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #ffa90a 0%, transparent 70%)' }} />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #c98508 0%, transparent 70%)' }} />
-      </div>
+    <div className="relative min-h-[100dvh] overflow-hidden lg:grid lg:grid-cols-[1.1fr_1fr]">
+      {/* Mismo fondo que Control de Colmenas: orbes de miel + panal vivo con abejas
+          que siguen el puntero (o el dedo) e iluminan los hexágonos. */}
+      <SelectionBackdrop fixed />
+      <LivingHive />
 
       {/* Panel de marca: solo en pantallas grandes (PC) */}
       <aside className="relative z-10 hidden flex-col justify-center px-14 xl:px-24 lg:flex">
@@ -240,14 +233,14 @@ export default function Login() {
 
       {/* Contenido: en móvil ocupa toda la pantalla sin tarjeta; en tablet
           es una tarjeta centrada; en PC es el panel derecho a pantalla completa. */}
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-5 py-8 sm:p-8 lg:border-l lg:border-line/60 lg:bg-pane/50 lg:backdrop-blur-md">
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-5 py-8 sm:p-8 lg:border-l lg:border-honey/15 lg:bg-ink/40 lg:backdrop-blur-xl">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="relative w-full sm:max-w-md"
       >
-        <div className="sm:rounded-2xl sm:border sm:border-line sm:bg-pane/90 sm:p-10 sm:shadow-[0_24px_70px_rgba(0,0,0,.45)] lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <div className="sm:rounded-2xl sm:border sm:border-line sm:bg-ink/60 sm:p-10 sm:backdrop-blur-xl sm:shadow-[0_24px_70px_rgba(0,0,0,.5),0_0_60px_rgba(255,169,10,.08)] lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           {/* Encabezado solo en PC */}
           <div className="mb-8 hidden lg:block">
             <h2 className="font-display text-3xl font-black tracking-tight text-cream">

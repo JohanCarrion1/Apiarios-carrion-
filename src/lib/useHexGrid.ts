@@ -29,7 +29,7 @@ export function useHexGrid<T extends HTMLElement = HTMLDivElement>() {
     // modo escritorio, ~6 en celular (celdas grandes y legibles).
     const gap = inner < 520 ? 3 : inner < 1000 ? 6 : 5;
     const cap = inner < 760 ? 96 : 110;
-    const target = inner >= 1000 ? 20 : inner >= 760 ? 12 : 6;
+    const target = inner >= 1000 ? 20 : inner >= 640 ? 12 : 6;
     const n = Math.max(3, Math.min(target, Math.floor((inner + gap) / (28 + gap))));
     const w = Math.min(cap, Math.floor(((inner - (n - 1) * gap) / n) * 100) / 100);
 

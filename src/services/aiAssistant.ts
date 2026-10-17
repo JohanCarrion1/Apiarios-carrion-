@@ -401,7 +401,7 @@ export function construirContextoChat(p: ContextoChatParams): string {
 // ------------------------------------------------------------
 
 /** Extrae la línea "ALERTA: SÍ/NO" y devuelve el texto limpio + flag. */
-function interpretarRespuesta(texto: string): RespuestaAsistente {
+export function interpretarRespuesta(texto: string): RespuestaAsistente {
   const limpio = texto.trim();
   // Sin \b: tras la Í (no ASCII) JS no ve frontera de palabra y fallaba con "SÍ".
   const match = limpio.match(/^\**ALERTA\s*:\s*(S[ÍIiíi]|NO)\**(?![\p{L}\d])[.:]?[ \t]*/iu);

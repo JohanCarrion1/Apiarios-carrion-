@@ -650,13 +650,13 @@ export default function Cotizaciones() {
                   <p className="text-sm text-husk/70">Prueba con otro término o categoría</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
                   {visibleProducts.map((p) => (
                     <div
                       key={p.id}
                       className="card group flex flex-col overflow-hidden transition-colors hover:border-honey/50"
                     >
-                      <div className="relative aspect-square w-full overflow-hidden bg-pane">
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-pane">
                         {p.imageUrl && p.imageUrl !== 'data:,' ? (
                           <img
                             src={p.imageUrl}

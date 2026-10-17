@@ -331,7 +331,7 @@ export default function HiveDetail({
           </div>
 
           {/* Acciones principales: registrar reina / registrar inspección */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-[repeat(2,minmax(0,15rem))] lg:justify-start">
             <motion.button
               onClick={() => onRegisterQueen && onRegisterQueen(hive)}
               className="flex items-center justify-center gap-1.5 rounded-xl border-2 border-honey/50 bg-honey/10 px-3 py-2.5 text-sm font-semibold text-honey hover:bg-honey/20"
@@ -354,8 +354,8 @@ export default function HiveDetail({
 
           {/* En PC el contenido se reparte en dos columnas: izquierda ficha + equipamiento,
               derecha ubicación, notas, historial y acciones. En móvil sigue apilado. */}
-          <div className="space-y-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:space-y-0">
-          <div className="space-y-3">
+          <div className="space-y-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-4 lg:space-y-0">
+          <div className="space-y-3 lg:space-y-4 lg:rounded-xl lg:border lg:border-line lg:bg-ink/30 lg:p-4">
           {/* Ficha técnica (datos de la última inspección) */}
           <HiveTechCard hive={hive} inspections={inspections} queen={queen} />
 
@@ -428,7 +428,7 @@ export default function HiveDetail({
           )}
 
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3 lg:space-y-4 lg:rounded-xl lg:border lg:border-line lg:bg-ink/30 lg:p-4">
           {/* Ubicación */}
           {hive.location && (
             <p className="text-sm text-husk">

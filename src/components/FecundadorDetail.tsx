@@ -175,7 +175,7 @@ export default function FecundadorDetail({
         <p className="text-xs text-husk mb-3">Creado el {formatDate(fecundador.createdAt)}</p>
 
         {/* Acciones principales: registrar reina/celda / registrar inspección */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-[repeat(2,minmax(0,15rem))] lg:justify-start mb-3">
           <motion.button
             onClick={() => next && onAdvanceState(fecundador.id, next)}
             disabled={!next || fecundador.estado !== 'activo'}
@@ -199,7 +199,8 @@ export default function FecundadorDetail({
 
         {/* A ancho completo el contenido se reparte en 2 columnas desde lg para
             no dejar líneas de texto endless. En móvil/tablet sigue a 1 columna. */}
-        <div className="grid gap-3 lg:grid-cols-2 lg:gap-x-4">
+        <div className="grid gap-3 lg:grid-cols-2 lg:items-start lg:gap-x-4">
+        <div className="space-y-3 lg:space-y-4 lg:rounded-xl lg:border lg:border-line lg:bg-ink/30 lg:p-4">
         {/* Sección REINA: estado y línea de tiempo */}
         <div>
           <p className="tick-label mb-2 flex items-center gap-2">
@@ -300,6 +301,8 @@ export default function FecundadorDetail({
           )}
         </div>
 
+        </div>
+        <div className="space-y-3 lg:space-y-4 lg:rounded-xl lg:border lg:border-line lg:bg-ink/30 lg:p-4">
         {/* Notas */}
         {fecundador.notes && (
           <div>
@@ -380,11 +383,13 @@ export default function FecundadorDetail({
             }
             onRegisterInspection={onRegisterInspection}
           />
-        </div>        </div>
+        </div>
+        </div>
+        </div>
 
 
         {/* Acciones: Editar / Eliminar */}
-        <div className="flex gap-2 mb-3">
+        <div className="flex gap-2 mb-3 lg:max-w-md">
           <motion.button
             onClick={onEdit}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-honey/40 bg-honey/10 py-2 text-xs font-semibold text-honey hover:bg-honey/20"
@@ -407,7 +412,7 @@ export default function FecundadorDetail({
 
         {/* Mover a otro apiario */}
         {onTransfer && (
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-3 lg:max-w-md">
             <motion.button
               onClick={handleOpenMoveModal}
               disabled={availableApiaries.length === 0}

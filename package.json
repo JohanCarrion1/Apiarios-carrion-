@@ -10,10 +10,7 @@
     "test:scroll": "node --test tests/scrollLock.test.mjs",
     "test:motion": "node --test tests/motionSection.test.mjs",
     "bootstrap:admins": "node scripts/bootstrap-admins.mjs",
-    "migrate:products": "node scripts/migrate-products-to-firestore.mjs",
-    "prebuild": "node scripts/expand-app.mjs",
-    "predev": "node scripts/expand-app.mjs",
-    "postinstall": "node scripts/expand-app.mjs || true"
+    "migrate:products": "node scripts/migrate-products-to-firestore.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

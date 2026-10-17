@@ -192,7 +192,7 @@ export default function Login() {
   // intenta entrar a la tienda/admin sin estar autorizado.
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-ink">
+    <div className="relative min-h-[100dvh] overflow-hidden bg-ink lg:grid lg:grid-cols-[1.1fr_1fr]">
       {/* Fondo con patrón hexagonal */}
       <div className="absolute inset-0">
         <svg className="absolute inset-0 w-full h-full opacity-[0.08]" aria-hidden="true">
@@ -207,23 +207,66 @@ export default function Login() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl" style={{ background: 'radial-gradient(circle, #c98508 0%, transparent 70%)' }} />
       </div>
 
-      {/* Contenido */}
+      {/* Panel de marca: solo en pantallas grandes (PC) */}
+      <aside className="relative z-10 hidden flex-col justify-center px-14 xl:px-24 lg:flex">
+        <motion.div
+          initial={{ opacity: 0, x: -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.7 }}
+          className="max-w-xl"
+        >
+          <Logo variant="icon" className="mb-8 h-28 w-28 xl:h-36 xl:w-36" />
+          <h1 className="font-display text-5xl font-black leading-[1.05] tracking-tight text-cream xl:text-6xl">
+            Apiarios <span className="text-honey">Carrión</span>
+          </h1>
+          <p className="mt-4 font-mono text-sm tracking-wider text-husk">Miel &amp; Productos Naturales • Huaraz</p>
+          <ul className="mt-10 space-y-4 text-base text-cream/90">
+            {[
+              ['🐝', 'Control de colmenas, núcleos y fecundadores'],
+              ['👑', 'Cría de reinas con seguimiento real'],
+              ['📅', 'Calendario, tareas, cosecha e inventario'],
+              ['✨', 'Asistente apícola con IA que conoce tu apiario'],
+            ].map(([icono, texto]) => (
+              <li key={texto} className="flex items-center gap-3">
+                <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-honey/30 bg-honey/10">
+                  {icono}
+                </span>
+                {texto}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      </aside>
+
+      {/* Contenido: en móvil ocupa toda la pantalla sin tarjeta; en tablet
+          es una tarjeta centrada; en PC es el panel derecho a pantalla completa. */}
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-5 py-8 sm:p-8 lg:border-l lg:border-line/60 lg:bg-pane/50 lg:backdrop-blur-md">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative z-10 w-full max-w-md"
+        className="relative w-full sm:max-w-md"
       >
-        <div className="card p-8 sm:p-10">
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
+        <div className="sm:rounded-2xl sm:border sm:border-line sm:bg-pane/90 sm:p-10 sm:shadow-[0_24px_70px_rgba(0,0,0,.45)] lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          {/* Encabezado solo en PC */}
+          <div className="mb-8 hidden lg:block">
+            <h2 className="font-display text-3xl font-black tracking-tight text-cream">
+              {isRegistering ? 'Crea tu cuenta' : 'Bienvenido de nuevo'}
+            </h2>
+            <p className="mt-1.5 text-sm text-husk">
+              {isRegistering ? 'Empieza a llevar tu apiario en minutos.' : 'Inicia sesión para continuar con tu apiario.'}
+            </p>
+          </div>
+
+          {/* Logo (móvil y tablet) */}
+          <div className="mb-8 flex flex-col items-center lg:hidden">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
               className="mb-4"
             >
-              <Logo variant="icon" className="w-24 h-24 sm:w-32 sm:h-32" />
+              <Logo variant="icon" className="h-20 w-20 sm:h-28 sm:w-28" />
             </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
@@ -469,6 +512,7 @@ export default function Login() {
           </p>
         </div>
       </motion.div>
+      </div>
     </div>
   );
 }

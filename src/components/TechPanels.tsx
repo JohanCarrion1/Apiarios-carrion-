@@ -102,25 +102,6 @@ function TechBadge() {
   );
 }
 
-/* ---------- Mini gráfico de tendencia de varroa ---------- */
-function VarroaSpark({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const w = 220, h = 54, max = Math.max(6, ...values), pad = 4;
-  const pts = values.map((v, i) => [pad + (i * (w - pad * 2)) / (values.length - 1), h - pad - (v / max) * (h - pad * 2)]);
-  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
-  const ty = h - pad - (VARROA_THRESHOLD / max) * (h - pad * 2);
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" aria-label="Tendencia de varroa">
-      <line x1="0" x2={w} y1={ty} y2={ty} stroke="#ffa90a" strokeDasharray="4 4" strokeOpacity=".6" />
-      <motion.path d={d} fill="none" stroke="#ffa90a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: EASE }} />
-      {pts.map((p, i) => (
-        <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={varroaColor(values[i])} />
-      ))}
-    </svg>
-  );
-}
-
 /* ---------- Ficha técnica de una colmena ---------- */
 export function HiveTechCard({ hive, inspections, queen }: { hive: Hive; inspections: Inspection[]; queen?: Queen | null }) {
   const mine = useMemo(
@@ -198,13 +179,6 @@ export function HiveTechCard({ hive, inspections, queen }: { hive: Hive; inspect
         )}
         <Tile label="Alza" value={last.hasSupers ? 'Sí' : 'No'} />
       </div>
-
-      {mine.length >= 2 && (
-        <div>
-          <p className="mb-1 font-mono text-[9px] uppercase tracking-wider text-husk">Tendencia de varroa · últimas {Math.min(8, mine.length)}</p>
-          <VarroaSpark values={mine.slice(-8).map((i) => i.varroa || 0)} />
-        </div>
-      )}
 
       <div className="rounded-xl border p-3" style={{ borderColor: recColor + '66', background: recColor + '14' }}>
         <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.16em]" style={{ color: recColor }}>Recomendación técnica</p>

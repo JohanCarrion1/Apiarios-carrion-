@@ -108,7 +108,7 @@ export default function CalendarView({ events, onDateSelect, selectedDate }: Cal
             <motion.button
               key={day.toString()}
               onClick={() => onDateSelect(day)}
-              className={`relative aspect-square rounded-lg border transition-all ${
+              className={`relative aspect-square lg:aspect-auto lg:h-[84px] rounded-lg border transition-all ${
                 isSelected
                   ? 'border-honey bg-honey/20'
                   : isCurrentDay

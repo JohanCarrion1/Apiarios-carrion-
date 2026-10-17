@@ -141,13 +141,21 @@ const isViewSection = (v: string | null | undefined): v is ViewSection =>
 function Ambient() {
   return (
     <>
-      <svg className="pointer-events-none fixed inset-0 z-0 h-full w-full opacity-[0.05]" aria-hidden="true">
+      <svg className="pointer-events-none fixed inset-0 z-0 h-full w-full opacity-[0.05] lg:hidden" aria-hidden="true">
         <defs>
           <pattern id="hexes" width="28" height="49" patternUnits="userSpaceOnUse" patternTransform="scale(2.4)">
             <path d="M13.99 9.25l13 7.5v15l-13 7.5-13-7.5v-15z" fill="none" stroke="#ffa90a" strokeWidth="0.5" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#hexes)" />
+      </svg>
+      <svg className="pointer-events-none fixed inset-0 z-0 hidden h-full w-full opacity-[0.05] lg:block" aria-hidden="true">
+        <defs>
+          <pattern id="hexes-pc" width="28" height="49" patternUnits="userSpaceOnUse" patternTransform="scale(1.5)">
+            <path d="M13.99 9.25l13 7.5v15l-13 7.5-13-7.5v-15z" fill="none" stroke="#ffa90a" strokeWidth="0.5" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#hexes-pc)" />
       </svg>
       <div className="glow-a pointer-events-none fixed -left-44 -top-44 z-0 h-[36rem] w-[36rem] rounded-full opacity-[0.13]" style={{ background: "radial-gradient(circle, #ffa90a 0%, transparent 65%)" }} />
       <div className="glow-b pointer-events-none fixed -bottom-52 -right-40 z-0 h-[40rem] w-[40rem] rounded-full opacity-[0.1]" style={{ background: "radial-gradient(circle, #c98508 0%, transparent 65%)" }} />

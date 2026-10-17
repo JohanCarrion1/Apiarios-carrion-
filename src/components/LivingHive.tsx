@@ -56,7 +56,7 @@ export default function LivingHive({ bees: withBees = true }: { bees?: boolean }
       [bg, fx, grid].forEach((c) => { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); });
       bg.style.width = fx.style.width = W + 'px';
       bg.style.height = fx.style.height = H + 'px';
-      R = W < 520 ? 26 : 32; cw = Math.sqrt(3) * R; rh = 1.5 * R;
+      R = W < 520 ? 26 : W < 1024 ? 28 : 20; // en PC los hexágonos son más chicos cw = Math.sqrt(3) * R; rh = 1.5 * R;
       cols = Math.ceil(W / cw) + 3; rows = Math.ceil(H / rh) + 3;
       gctx.setTransform(DPR, 0, 0, DPR, 0, 0); gctx.clearRect(0, 0, W, H);
       gctx.strokeStyle = 'rgba(242,167,27,.10)'; gctx.lineWidth = 1; gctx.beginPath();

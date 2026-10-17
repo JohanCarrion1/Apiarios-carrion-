@@ -124,7 +124,7 @@ export default function FecundadorDetail({
 
   return (
     <aside>
-      {/* Ancho completo: sin max-w-*. Antes la tarjeta se quedaba en max-w-lg
+      {/* Ancho acotado a 720px y centrado (como en móvil). Antes la tarjeta se quedaba en max-w-lg
           (media pantalla) y dejaba media grilla en negro, rompiendo la
           armonía con la grilla de hexágonos y el historial de inspecciones,
           que sí son fluidos. Equivale al contenedor de HiveDetail. */}

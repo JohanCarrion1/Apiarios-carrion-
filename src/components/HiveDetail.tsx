@@ -273,7 +273,7 @@ export default function HiveDetail({
   };
 
   return (
-    <aside>
+    <aside className="mx-auto w-full max-w-[720px]">
       <div
         key={hive.id}
         className={`card relative overflow-hidden ${animClass}`}

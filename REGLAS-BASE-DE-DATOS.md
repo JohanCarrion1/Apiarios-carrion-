@@ -1,16 +1,14 @@
 # Reglas de la base de datos — Apiarios Carrión
 
-Aquí está todo el código en un solo bloque, listo para copiar (Firestore arriba, Storage abajo). Fuente de verdad en el repo:
+Aquí está el código completo, en DOS bloques separados porque la consola de Firebase solo acepta uno por pantalla (Firestore y Storage son servicios distintos). Fuente de verdad en el repo:
 `firestore.rules` y `storage.rules` (este archivo es una copia; si cambias uno,
 actualiza el otro).
 
 ## Cómo publicarlas
 
 - **Sin instalar nada:** Firebase Console → Firestore Database → pestaña
-  **Reglas** → borrar todo y pegar SOLO la parte de FIRESTORE → **Publicar**.
-  Luego Storage → **Reglas** y pegar SOLO la parte de STORAGE. Son dos
-  servicios distintos: cada consola acepta únicamente su parte (si pegas todo
-  junto da error por el doble `rules_version`).
+  **Reglas** → borrar todo, pegar el bloque 1 → **Publicar**. Después Storage →
+  **Reglas** → pegar el bloque 2 → **Publicar**. No mezclar los bloques.
 - **Con la CLI:** `firebase deploy --only firestore:rules,storage`
 
 ## Qué cubren (revisado el 2026-10-17)
@@ -35,13 +33,9 @@ Notas:
 
 ---
 
-## Reglas (Firestore + Storage)
+## Bloque 1 — Firestore (`firestore.rules`)
 
 ```
-// ######################################################################
-// ##  FIRESTORE  (pegar en Firestore Database → Reglas)                   ##
-// ######################################################################
-
 rules_version = '2';
 
 // =====================================================================
@@ -375,11 +369,13 @@ service cloud.firestore {
     }
   }
 }
+```
 
-// ######################################################################
-// ##  A PARTIR DE AQUÍ: STORAGE  (pegar en Storage → Reglas)               ##
-// ######################################################################
+---
 
+## Bloque 2 — Storage (`storage.rules`)
+
+```
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {

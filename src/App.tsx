@@ -1,1 +1,1 @@
-PLACEHOLDER_WILL_REPLACE
+@/home/workdir/artifacts/App_RESTORE.tsx

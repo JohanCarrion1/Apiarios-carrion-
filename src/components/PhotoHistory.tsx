@@ -131,7 +131,7 @@ export default function PhotoHistory({ photos, onDeletePhoto }: PhotoHistoryProp
                     <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-husk">
                       {group.label}
                     </p>
-                    <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                       {group.photos.map((photo, idx) => (
                         <motion.div
                           key={photo.id}

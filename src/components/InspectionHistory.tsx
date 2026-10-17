@@ -257,7 +257,7 @@ export default function InspectionHistory({
 
                               {/* c) Imágenes de esa inspección */}
                               {photos.length > 0 && (
-                                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                                   {photos.map((photo, idx) => (
                                     <motion.div
                                       key={photo.id}
@@ -335,7 +335,7 @@ export default function InspectionHistory({
                   <p className="mb-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-husk">
                     📷 Fotos sin inspección ({loosePhotos.length})
                   </p>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                     {loosePhotos.map((photo, idx) => (
                       <motion.div
                         key={photo.id}

@@ -41,7 +41,7 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
   return (
     <div className="space-y-4">
       {/* Grid de fotos */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         <AnimatePresence>
           {photos.map((photo, index) => (
             <motion.div

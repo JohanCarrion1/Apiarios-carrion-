@@ -14,6 +14,7 @@ import {
   subirComprobante,
   crearPedido,
 } from '../lib/pedidosService';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 /* ============================================================
    Modal "Pagar con Yape"
@@ -202,6 +203,8 @@ export default function PagoYapeModal({
     `w-full rounded-xl border bg-ink/60 px-4 py-3 text-sm text-cream placeholder:text-husk/50 focus:outline-none transition-colors ${
       err ? 'border-coral/60 focus:border-coral' : 'border-line focus:border-honey'
     }`;
+
+  useScrollLock(open);
 
   return (
     <AnimatePresence>

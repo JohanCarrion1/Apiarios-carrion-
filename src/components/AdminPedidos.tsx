@@ -44,6 +44,7 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 /** Colores de la insignia de cada estado. */
 const BADGE: Record<PedidoEstado, string> = {
@@ -100,6 +101,9 @@ export default function AdminPedidos() {
   const [rechazo, setRechazo] = useState<Pedido | null>(null);
   const [motivo, setMotivo] = useState('');
   const [trabajando, setTrabajando] = useState(false);
+
+  // Los modales (detalle, comprobante, rechazo) congelan el scroll del fondo.
+  useScrollLock(!!detalle || comprobanteAbierto || !!rechazo);
 
   // Orden: más recientes primero (PED-NNN descendente).
   const visibles = useMemo(() => {

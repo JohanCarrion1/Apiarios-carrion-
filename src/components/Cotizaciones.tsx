@@ -40,6 +40,7 @@ import { uid, type Toast } from '../data';
 import { ArrowLeft, FileDown, History, Loader2, MessageCircle, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import QuantityInput from './QuantityInput';
 import LoadingScreen from './LoadingScreen';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 const inputCls =
   'w-full rounded-xl border border-line bg-ink px-4 py-2.5 text-sm text-cream placeholder:text-husk/50 focus:border-honey/70 focus:outline-none';
@@ -141,6 +142,8 @@ function PickerModal({
       .filter((x): x is NonNullable<typeof x> => !!x);
     return cotizacionTotal(seleccion);
   }, [products, qty]);
+
+  useScrollLock(open);
 
   const distinct = Object.values(qty).filter((c) => c > 0).length;
 
@@ -506,6 +509,9 @@ export default function Cotizaciones() {
 
   // Detalle de una cotización del historial.
   const [detalle, setDetalle] = useState<Cotizacion | null>(null);
+
+  // Los modales "Generar cotización" y "detalle del historial" congelan el fondo.
+  useScrollLock(modalAbierto || !!detalle);
 
   // `detalle` guardaba una copia congelada del documento: el historial de
   // estados (y cualquier cambio hecho por otro admin en otra pestaña) no se

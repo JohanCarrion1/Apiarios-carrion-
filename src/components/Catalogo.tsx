@@ -72,6 +72,7 @@ import {
 import { catEmoji, esPrecioConsultar, formatSoles, sortProducts, STORE_MACROS, type StoreProduct } from '../types/store';
 import StoreImage from './StoreImage';
 import LoadingScreen from './LoadingScreen';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 const inputCls =
   'rounded-xl border border-line bg-ink px-3.5 py-2.5 text-sm text-cream focus:border-honey/70 focus:outline-none';
@@ -1270,6 +1271,9 @@ function CatalogoSelectionModal({
   }, [porCategoria, q]);
 
   const todosLosProductos = useMemo(() => porCategoria.flatMap(([, ps]) => ps), [porCategoria]);
+
+  // El modal bloquea el scroll del fondo mientras está montado.
+  useScrollLock(true);
 
   // Cerrar con Escape.
   useEffect(() => {

@@ -287,7 +287,7 @@ export default function HiveComb({
       <div
         ref={gridRef}
         className="card map-panal relative overflow-visible"
-        style={{ padding: "clamp(20px, 4.5vw, 56px)" }}
+        style={{ padding: "clamp(20px, 3vw, 40px)" }}
       >
         {/* Botón flotante de agregar - Eliminado: el "+" vive en el encabezado de sección */}
 

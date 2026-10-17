@@ -468,7 +468,7 @@ export default function FecundadoresSection({
           <div
             ref={gridRef}
             className="card map-panal map-fecundadores relative overflow-visible"
-            style={{ padding: "clamp(20px, 4.5vw, 56px)" }}
+            style={{ padding: "clamp(20px, 3vw, 40px)" }}
           >
             <div className="mapa-hex-container">
               {visibleFecundadores.length === 0 && (

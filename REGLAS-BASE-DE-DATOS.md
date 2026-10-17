@@ -124,3 +124,18 @@ Para saber si las reglas publicadas están al día, compara la fecha de
   de publicar cualquier cambio de reglas.
 - Sí se ejecutaron y pasaron: `npm run test:sync` (sanitizado de datos y
   límite de tamaño de chats), `npm run test:scroll` y `npm run test:motion`.
+
+## 5. Estado real en Firebase (2026-10-17)
+
+Las reglas que Johan tenía publicadas en la consola ya restringían `trapBoxes`
+al propietario (el archivo `firestore.rules` del repositorio estaba desfasado en
+ese punto). Diferencias entre lo publicado y el archivo del repo tras los
+cambios de hoy:
+
+- `apiarioData`: el repo añade que `userId` no se pueda cambiar al actualizar.
+- `apiarios`: el repo permite además a un admin crear apiarios; lo publicado no.
+
+Todo lo demás es equivalente. Las reglas publicadas ya permiten el
+funcionamiento de los chats, la sincronización y las fotos; publicar la versión
+del repo solo suma esos dos matices. Para evitar desfases, la fuente de verdad
+debe ser `firestore.rules` y publicarse siempre desde ahí.

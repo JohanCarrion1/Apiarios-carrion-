@@ -195,10 +195,10 @@ export default function Login() {
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden lg:grid lg:grid-cols-[1.1fr_1fr]">
-      {/* Mismo fondo que Control de Colmenas: orbes de miel + panal vivo con abejas
-          que siguen el puntero (o el dedo) e iluminan los hexágonos. */}
+      {/* Mismo fondo que Control de Colmenas: orbes de miel + panal que brilla, sin abejas,
+          en toda la pantalla (sin paneles que lo corten). */}
       <SelectionBackdrop fixed />
-      <LivingHive />
+      <LivingHive bees={false} />
 
       {/* Panel de marca: solo en pantallas grandes (PC) */}
       <aside className="relative z-10 hidden flex-col justify-center px-14 xl:px-24 lg:flex">
@@ -233,14 +233,14 @@ export default function Login() {
 
       {/* Contenido: en móvil ocupa toda la pantalla sin tarjeta; en tablet
           es una tarjeta centrada; en PC es el panel derecho a pantalla completa. */}
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-5 py-8 sm:p-8 lg:border-l lg:border-honey/15 lg:bg-ink/40 lg:backdrop-blur-xl">
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-5 py-8 sm:p-8">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="relative w-full sm:max-w-md"
       >
-        <div className="sm:rounded-2xl sm:border sm:border-line sm:bg-ink/60 sm:p-10 sm:backdrop-blur-xl sm:shadow-[0_24px_70px_rgba(0,0,0,.5),0_0_60px_rgba(255,169,10,.08)] lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <div className="sm:rounded-2xl sm:border sm:border-line sm:bg-ink/50 sm:p-10 sm:backdrop-blur-sm sm:shadow-[0_24px_70px_rgba(0,0,0,.5),0_0_60px_rgba(255,169,10,.08)] lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
           {/* Encabezado solo en PC */}
           <div className="mb-8 hidden lg:block">
             <h2 className="font-display text-3xl font-black tracking-tight text-cream">

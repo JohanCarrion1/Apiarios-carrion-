@@ -549,3 +549,60 @@ describe('productos', () => {
     await assertFails(db.doc('products/p2').set({ nombre: 'Miel', precio: 1 }));
   });
 });
+
+/* ================================================================
+   ENTIDADES POR DOCUMENTO, CHATS Y userId INMUTABLE
+   (reglas reestructuradas el 2026-10-17)
+   ================================================================ */
+describe('entidades por documento, chats del asistente y userId inmutable', () => {
+  test('trapBoxes: solo el propietario las lee, crea y edita', async () => {
+    await sembrar(entorno, (db) =>
+      db.doc('trapBoxes/TRP-001').set({ userId: USUARIO_A.uid, name: 'Caja 1' })
+    );
+    const a = como(entorno, USUARIO_A).firestore();
+    const b = como(entorno, USUARIO_B).firestore();
+    await assertSucceeds(a.doc('trapBoxes/TRP-001').get());
+    await assertSucceeds(a.doc('trapBoxes/TRP-001').update({ name: 'Caja 1b' }));
+    await assertFails(b.doc('trapBoxes/TRP-001').get());
+    await assertFails(b.doc('trapBoxes/TRP-001').update({ name: 'x' }));
+    await assertFails(b.doc('trapBoxes/TRP-001').delete());
+    await assertFails(b.doc('trapBoxes/TRP-002').set({ userId: USUARIO_A.uid }));
+    await assertSucceeds(b.doc('trapBoxes/TRP-002').set({ userId: USUARIO_B.uid }));
+  });
+
+  test('polinizacion, nucleos y fecundadores aíslan por propietario', async () => {
+    for (const col of ['polinizacion', 'nucleos', 'fecundadores']) {
+      await sembrar(entorno, (db) => db.doc(`${col}/d-1`).set({ userId: USUARIO_A.uid }));
+      await assertSucceeds(como(entorno, USUARIO_A).firestore().doc(`${col}/d-1`).get());
+      await assertFails(como(entorno, USUARIO_B).firestore().doc(`${col}/d-1`).get());
+      await assertSucceeds(comoAdmin(entorno).firestore().doc(`${col}/d-1`).get());
+    }
+  });
+
+  test('apiarioData: el userId no se puede reasignar a otra cuenta', async () => {
+    await sembrar(entorno, (db) =>
+      db.doc('apiarioData/api-1_colmenas').set({ userId: USUARIO_A.uid, apiaryId: 'api-1', entity: 'colmenas', items: [] })
+    );
+    const a = como(entorno, USUARIO_A).firestore();
+    await assertSucceeds(a.doc('apiarioData/api-1_colmenas').update({ items: [{ id: 'c1' }] }));
+    await assertFails(a.doc('apiarioData/api-1_colmenas').update({ userId: USUARIO_B.uid }));
+    await assertFails(
+      como(entorno, USUARIO_B).firestore().doc('apiarioData/api-1_colmenas').update({ items: [] })
+    );
+  });
+
+  test('userData: el dueño guarda sus chats (conversacionesIA) y otro no los lee', async () => {
+    const a = como(entorno, USUARIO_A).firestore();
+    await assertSucceeds(
+      a.doc(`userData/${USUARIO_A.uid}`).set(
+        { userId: USUARIO_A.uid, conversacionesIA: { activaId: 'c1', conversaciones: [{ id: 'c1', mensajes: [] }] } },
+        { merge: true }
+      )
+    );
+    await assertFails(como(entorno, USUARIO_B).firestore().doc(`userData/${USUARIO_A.uid}`).get());
+  });
+
+  test('colecciones desconocidas: cerradas por defecto', async () => {
+    await assertFails(como(entorno, USUARIO_A).firestore().doc('cualquiera/x').set({ a: 1 }));
+  });
+});

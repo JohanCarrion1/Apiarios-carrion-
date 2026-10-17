@@ -1,17 +1,54 @@
 rules_version = '2';
+
+// =====================================================================
+// REGLAS DE FIRESTORE — Apiarios Carrión
+// =====================================================================
+// Mapa de colecciones (de arriba abajo):
+//
+//   1. CONFIGURACIÓN      config/admins
+//   2. CUENTA Y DATOS     users · userData · apiarios · apiarioData
+//   3. ENTIDADES          colmenas · nucleos · fecundadores · trapBoxes ·
+//                         polinizacion            (documento por entidad)
+//   4. TIENDA             products · pedidos · cotizaciones
+//   (apiarios incluye las subcolecciones de LEGADO colmenas|tareas)
+//   5. TODO LO DEMÁS      denegado
+//
+// Modelo: app de un solo cliente, sin multi-tenant. El aislamiento es por
+// PROPIETARIO (campo `userId` del documento) y, para supervisar y gestionar
+// la tienda, por la lista de admins de `config/admins`.
+//
+// Los chats del Asistente IA, ajustes, inventario, etc. viven DENTRO de
+// `userData/{uid}`; colmenas, núcleos, fecundadores, inspecciones, tareas...
+// viven en `apiarioData/{apiaryId}_{entidad}`. Ambos los cubre la sección 2.
+// =====================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ================================================================
-    // HELPERS GLOBALES
+    // HELPERS
     // ================================================================
-    // App de un solo cliente: NO hay multi-tenant ni super-admin. El
-    // aislamiento es por PROPIETARIO (userId) y, para la gestión de la
-    // tienda, por la lista de admins de `config/admins`.
 
-    // Helper: sesión iniciada
+    // Sesión iniciada.
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    // El documento (existente) pertenece a quien hace la petición.
+    // Usar SOLO con `resource.data` (en un create `resource` es null).
+    function isOwner(data) {
+      return isSignedIn() && data.userId == request.auth.uid;
+    }
+
+    // En un create/update, el documento que se va a escribir es del propio
+    // usuario: nadie puede crear ni reasignar datos a nombre de otro.
+    function writesAsSelf() {
+      return isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // El `userId` no cambia al actualizar.
+    function keepsOwner() {
+      return request.resource.data.userId == resource.data.userId;
     }
 
     // Helper: el correo de la cuenta está en la lista de admins de tienda
@@ -73,131 +110,17 @@ service cloud.firestore {
         && emails[0] == emails[0].lower();
     }
 
-    // ============================================
-    // REGLAS PARA APIARIOS
-    // ============================================
-    match /apiarios/{apiaryId} {
-      // Aislamiento por PROPIETARIO: cada usuario gestiona solo su apiario.
-      // El admin de tienda puede supervisar cualquiera (panel de colonias).
-      allow read, update, delete: if isSignedIn() && (
-        resource.data.userId == request.auth.uid
-        || isAdmin());
-
-      // Al crear, el dueño tiene que ser el propio usuario: nadie puede crear
-      // un apiario a nombre de otro.
-      allow create: if isSignedIn() && (
-        request.resource.data.userId == request.auth.uid
-        || isAdmin());
-
-      // ============================================
-      // REGLAS PARA COLMENAS (subcolección de apiarios)
-      // ============================================
-      match /colmenas/{hiveId} {
-        allow read: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
-          || isAdmin());
-
-        allow create, update, delete: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
-          || isAdmin());
-
-        // ============================================
-        // REGLAS PARA INSPECCIONES (subcolección de colmenas)
-        // ============================================
-        match /inspecciones/{inspectionId} {
-          allow read, write: if isSignedIn() && (
-            request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
-            || isAdmin());
-        }
-
-        // ============================================
-        // REGLAS PARA COSECHAS (subcolección de colmenas)
-        // ============================================
-        match /cosechas/{harvestId} {
-          allow read, write: if isSignedIn() && (
-            request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
-            || isAdmin());
-        }
-      }
-
-      // ============================================
-      // REGLAS PARA TAREAS (subcolección de apiarios)
-      // ============================================
-      match /tareas/{taskId} {
-        allow read, write: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
-          || isAdmin());
-      }
-    }
-
-    // ============================================
-    // REGLAS PARA COLECCIONES DE NIVEL SUPERIOR
-    // ============================================
-
-    // NOTA: la app NO usa colecciones top-level de inspecciones/cosechas/
-    // tareas. Todo ese dato vive en `apiarioData/{apiaryId}_{entidad}`. Se
-    // eliminaron aquí reglas huérfanas que además denegaban el `create`
-    // (en create `resource` es null, y `resource.data.userId` revienta la
-    // evaluación). Con la ausencia de `match`, aplica deny por defecto.
-
-    // ============================================
-    // REGLAS PARA DATOS POR APIARIO (apiarioData)
-    // ============================================
-    // Doc id = `${apiaryId}_${entidad}` con { userId, apiaryId, entity, items }.
-    // Es la fuente de verdad de la app: la hidratación de Firestore lee solo de
-    // aquí. Cada usuario escribe únicamente sus propios documentos; los admins
-    // supervisan todos. SIN límite de plan por tenant.
-    match /apiarioData/{dataId} {
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      // `userId` no se puede reasignar a otra cuenta.
-      allow update: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin())
-        && request.resource.data.userId == resource.data.userId;
-      allow delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // ============================================
-    // REGLAS PARA DATOS DE USUARIO (userData)
-    // ============================================
-    // Doc id = userId con { userId, inventory, transferHistory }.
-    match /userData/{userId} {
-      allow read: if isSignedIn()
-        && (request.auth.uid == userId || isAdmin());
-      allow write: if isSignedIn()
-        && (request.auth.uid == userId || isAdmin());
-    }
-
-    // ============================================
-    // REGLAS PARA USUARIOS
-    // ============================================
-    match /users/{userId} {
-      // El usuario edita su propio perfil; un admin puede leerlo.
-      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      // No se borran perfiles desde el cliente.
-      allow delete: if false;
-    }
-
-    // ============================================
-    // REGLAS PARA PRODUCTOS DE LA TIENDA (products)
-    // ============================================
-    // Catálogo de lectura pública; escritura exclusiva de admins de tienda.
-    match /products/{productId} {
-      allow read: if true;
-      allow create, update, delete: if isSignedIn() && isAdmin();
+    // Propietario del documento o administrador de la tienda.
+    function isOwnerOrAdmin(data) {
+      return isOwner(data) || isAdmin();
     }
 
     // ================================================================
-    // REGLAS PARA LA LISTA DE ADMINISTRADORES DE LA TIENDA (config/admins)
+    // 1. CONFIGURACIÓN
     // ================================================================
-    // Quién es admin de la tienda se decide EXCLUSIVAMENTE por esta lista.
-    // La crea el Admin SDK (`npm run bootstrap:admins`); el cliente solo
-    // puede leerla y, si ya es admin, modificarse a sí mismo.
+    // Lista de administradores de la tienda.
+    // La crea el Admin SDK (`npm run bootstrap:admins`); el cliente solo la
+    // lee y, si es la cuenta propietaria, la modifica.
     match /config/admins {
       allow read: if isSignedIn()
         && (!exists(/databases/$(database)/documents/config/admins) || isAdmin());
@@ -237,10 +160,118 @@ service cloud.firestore {
     }
 
     // ================================================================
-    // REGLAS PARA COTIZACIONES (POS exclusivo de administradores)
+    // 2. CUENTA Y DATOS DEL USUARIO
     // ================================================================
-    // Documentos: id = "COT-001" con datos, productos, total, estado,
-    // adminEmail. Solo un admin listado en `config/admins` puede leer/escribir.
+
+    // Perfil. El usuario edita el suyo; un admin puede leerlo y actualizarlo.
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if false;
+    }
+
+    // Datos del usuario: inventario, historial de traslados, ajustes, meta
+    // anual, precio base y CHATS del Asistente IA (`conversacionesIA`).
+    // Doc id = uid. El cliente mantiene este documento por debajo de 1 MiB
+    // (los chats se recortan a 600 KB y sin fotos en base64).
+    match /userData/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Datos por apiario: fuente de verdad de la app.
+    // Doc id = `${apiaryId}_${entidad}` con { userId, apiaryId, entity, items }.
+    match /apiarioData/{dataId} {
+      allow read, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf();
+      allow update: if isOwnerOrAdmin(resource.data) && keepsOwner();
+    }
+
+    // ================================================================
+    // 2b. APIARIOS (+ subcolecciones de LEGADO)
+    // ================================================================
+    // El documento del apiario es del dueño; un admin lo supervisa. Las
+    // subcolecciones (colmenas, tareas...) ya no se usan —la app escribe en
+    // `apiarioData`— pero se conservan por si quedan datos antiguos.
+    match /apiarios/{apiaryId} {
+      allow read, update, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf() || isAdmin();
+
+      match /colmenas/{hiveId} {
+        allow read, write: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
+          || isAdmin());
+
+        match /inspecciones/{inspectionId} {
+          allow read, write: if isSignedIn() && (
+            request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
+            || isAdmin());
+        }
+
+        match /cosechas/{harvestId} {
+          allow read, write: if isSignedIn() && (
+            request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
+            || isAdmin());
+        }
+      }
+
+      match /tareas/{taskId} {
+        allow read, write: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/apiarios/$(apiaryId)).data.userId
+          || isAdmin());
+      }
+    }
+
+    // ================================================================
+    // 3. ENTIDADES (un documento por entidad, con `userId`)
+    // ================================================================
+    // colmenas · nucleos · fecundadores · trapBoxes · polinizacion:
+    // el dueño crea, lee, edita y borra los suyos; el admin supervisa.
+
+    match /colmenas/{id} {
+      allow read, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf();
+      allow update: if isOwnerOrAdmin(resource.data) && keepsOwner();
+    }
+
+    match /nucleos/{id} {
+      allow read, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf();
+      allow update: if isOwnerOrAdmin(resource.data) && keepsOwner();
+    }
+
+    match /fecundadores/{id} {
+      allow read, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf();
+      allow update: if isOwnerOrAdmin(resource.data) && keepsOwner();
+    }
+
+    // Cajas trampa. Doc id = "TRP-001". (Antes: cualquier usuario con sesión.)
+    match /trapBoxes/{id} {
+      allow read, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf();
+      allow update: if isOwnerOrAdmin(resource.data) && keepsOwner();
+    }
+
+    // Contratos de polinización. Doc id = "POL-001".
+    match /polinizacion/{id} {
+      allow read, delete: if isOwnerOrAdmin(resource.data);
+      allow create: if writesAsSelf();
+      allow update: if isOwnerOrAdmin(resource.data) && keepsOwner();
+    }
+
+    // ================================================================
+    // 4. TIENDA
+    // ================================================================
+
+    // Catálogo: lectura pública; escritura solo de admins.
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // Cotizaciones (POS exclusivo de administradores).
+    // Doc id = "COT-001".
     match /cotizaciones/{quoteId} {
       allow read: if isSignedIn() && isAdmin();
 
@@ -259,18 +290,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isAdmin();
     }
 
-    // ================================================================
-    // REGLAS PARA PEDIDOS (pago con Yape)
-    // ================================================================
-    // Documentos: id = "PED-001" con { numero, clienteUid, cliente, productos,
-    // total, comprobantePago, metodoPago:'yape', estado, historial,
-    // fechaCreacion }.
-    // - CREATE: cualquier usuario autenticado puede crear SU pedido en
-    //   'pendiente_pago' con su comprobante.
-    // - READ: el cliente dueño (clienteUid) o un admin de la tienda.
-    // - UPDATE: solo un admin cambia el estado; el total y el clienteUid no
-    //   pueden mutar.
-    // - DELETE: denegado.
+    // Pedidos (pago con Yape). Doc id = "PED-001".
+    //  - CREATE: cualquier usuario con sesión crea SU pedido en 'pendiente_pago'.
+    //  - READ:   el cliente dueño (clienteUid) o un admin.
+    //  - UPDATE: solo un admin cambia el estado; total y cliente no mutan.
+    //  - DELETE: denegado.
     match /pedidos/{pedidoId} {
       allow read: if isSignedIn()
         && (resource.data.clienteUid == request.auth.uid || isAdmin());
@@ -300,73 +324,10 @@ service cloud.firestore {
     }
 
     // ================================================================
-    // REGLAS PARA CONTRATOS DE POLINIZACIÓN (alquiler de colmenas)
+    // 5. TODO LO DEMÁS: DENEGADO
     // ================================================================
-    // Doc id = "POL-001" con { userId, cliente, cultivo, ... }.
-    // Cada usuario lee/escribe sus propios contratos; los admins supervisan.
-    match /polinizacion/{docId} {
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // ================================================================
-    // REGLAS PARA COLMENAS (documento por colmena a nivel raíz)
-    // ================================================================
-    // Doc id = "{hiveId}" con { userId, apiaryId, status, ... }.
-    // El propietario o un admin pueden leer; el dueño crea y edita.
-    match /colmenas/{hiveId} {
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // ================================================================
-    // REGLAS PARA NÚCLEOS (documento por núcleo a nivel raíz)
-    // ================================================================
-    // Idéntico a /colmenas (ver lógica de permisos arriba).
-    match /nucleos/{nucleoId} {
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // ================================================================
-    // REGLAS PARA FECUNDADORES (documento por fecundador a nivel raíz)
-    // ================================================================
-    // Idéntico a /colmenas (ver lógica de permisos arriba).
-    match /fecundadores/{fecundadorId} {
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // ================================================================
-    // REGLAS PARA CAJAS TRAMPA (documento por caja a nivel raíz)
-    // ================================================================
-    // Doc id = "TRP-001" con { userId, apiaryId, name, location, ... }.
-    // Idéntico a /colmenas (ver lógica de permisos arriba).
-    match /trapBoxes/{boxId} {
-      // Aislamiento por PROPIETARIO (antes cualquier usuario con sesión podía
-      // leer, modificar y borrar las cajas de otros).
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

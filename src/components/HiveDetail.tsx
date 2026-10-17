@@ -273,7 +273,7 @@ export default function HiveDetail({
   };
 
   return (
-    <aside className="mx-auto w-full max-w-[720px]">
+    <aside>
       <div
         key={hive.id}
         className={`card relative overflow-hidden ${animClass}`}
@@ -352,6 +352,10 @@ export default function HiveDetail({
             </motion.button>
           </div>
 
+          {/* En PC el contenido se reparte en dos columnas: izquierda ficha + equipamiento,
+              derecha ubicación, notas, historial y acciones. En móvil sigue apilado. */}
+          <div className="space-y-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:space-y-0">
+          <div className="space-y-3">
           {/* Ficha técnica (datos de la última inspección) */}
           <HiveTechCard hive={hive} inspections={inspections} queen={queen} />
 
@@ -423,6 +427,8 @@ export default function HiveDetail({
             </div>
           )}
 
+          </div>
+          <div className="space-y-3">
           {/* Ubicación */}
           {hive.location && (
             <p className="text-sm text-husk">
@@ -589,6 +595,8 @@ export default function HiveDetail({
               )}
             </div>
           )}
+          </div>
+          </div>
         </div>
       </div>
 

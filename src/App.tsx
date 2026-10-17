@@ -1,1 +1,4 @@
-@/home/workdir/artifacts/App_RESTORE.tsx
+// Temporary: restored on build via scripts/expand-app.mjs
+export default function App() {
+  return null;
+}

@@ -1,15 +1,16 @@
 # Reglas de la base de datos — Apiarios Carrión
 
-Aquí está el código completo, en DOS bloques separados porque la consola de Firebase solo acepta uno por pantalla (Firestore y Storage son servicios distintos). Fuente de verdad en el repo:
-`firestore.rules` y `storage.rules` (este archivo es una copia; si cambias uno,
-actualiza el otro).
+Aquí está el código COMPLETO de las reglas de Firestore en un solo bloque, para
+copiar y pegar. Fuente de verdad en el repo: `firestore.rules` (este archivo es
+una copia; si cambias uno, actualiza el otro).
+
+Las reglas de **Storage** (`storage.rules`) NO cambiaron: no hace falta tocarlas.
 
 ## Cómo publicarlas
 
 - **Sin instalar nada:** Firebase Console → Firestore Database → pestaña
-  **Reglas** → borrar todo, pegar el bloque 1 → **Publicar**. Después Storage →
-  **Reglas** → pegar el bloque 2 → **Publicar**. No mezclar los bloques.
-- **Con la CLI:** `firebase deploy --only firestore:rules,storage`
+  **Reglas** → borrar todo, pegar el bloque de abajo → **Publicar**.
+- **Con la CLI:** `firebase deploy --only firestore:rules`
 
 ## Qué cubren (revisado el 2026-10-17)
 
@@ -33,7 +34,7 @@ Notas:
 
 ---
 
-## Bloque 1 — Firestore (`firestore.rules`)
+## Reglas de Firestore (copiar y pegar todo)
 
 ```
 rules_version = '2';
@@ -366,57 +367,6 @@ service cloud.firestore {
     // ================================================================
     match /{document=**} {
       allow read, write: if false;
-    }
-  }
-}
-```
-
----
-
-## Bloque 2 — Storage (`storage.rules`)
-
-```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    // Helper: sesión iniciada. Storage NO tiene funciones predefinidas como
-    // en Firestore, así que hay que declararla aquí. Si falta, el ruleset no
-    // compila y `firebase deploy --only storage` falla, dejando el bucket con
-    // las reglas antiguas (o en denegar todo) y rompiendo la subida del
-    // comprobante de pago.
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // Comprobantes de pago Yape (`comprobantes/{pedidoId}/{fileName}`).
-    // - write: solo usuarios autenticados, imagen ≤2 MB, solo formatos
-    //   aceptados por el cliente (JPG/PNG/WebP).
-    // - read: público (la URL lleva token de descarga); la privacidad del
-    //   pedido se aísla en Firestore por tenantId/clienteUid.
-    // - delete: denegado (se evita borrar evidencia de pago).
-    match /comprobantes/{pedidoId}/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn()
-        && request.resource.size <= (2 * 1024 * 1024)
-        && (request.resource.contentType.matches('image/jpeg')
-            || request.resource.contentType.matches('image/png')
-            || request.resource.contentType.matches('image/webp'));
-      allow delete: if false;
-    }
-
-    // Fotos de inspección (`inspections/{colmenaId}/{fileName}`).
-    // - write: solo usuarios autenticados, imagen ≤10 MB (el cliente las
-    //   comprime a JPEG antes de subirlas), solo formatos imagen.
-    // - read: público (la URL lleva token de descarga); el documento de la
-    //   inspección guarda esas URLs en `photos`.
-    // - delete: permitido para sesiones iniciadas (al quitar una foto de una
-    //   inspección se evita acumular huérfanos en el bucket).
-    match /inspections/{colmenaId}/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn()
-        && request.resource.size <= (10 * 1024 * 1024)
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if isSignedIn();
     }
   }
 }

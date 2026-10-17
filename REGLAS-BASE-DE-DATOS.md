@@ -30,10 +30,10 @@ recorta a 600 KB para no pasar el límite de 1 MiB por documento.
 
 ## 2. Mejoras recomendadas (opcionales, no urgentes)
 
-Estas **no** están aplicadas en `firestore.rules`; son endurecimientos que
-conviene hacer cuando quieras.
+**Aplicadas en `firestore.rules` el 2026-10-17** (2.1 y 2.2). Falta publicarlas
+(sección 3).
 
-### 2.1 `trapBoxes` está abierta a cualquier usuario con sesión (la más importante)
+### 2.1 (APLICADA) `trapBoxes` estaba abierta a cualquier usuario con sesión (la más importante)
 
 Hoy:
 
@@ -61,7 +61,7 @@ Antes de aplicarla, comprobar que todas las cajas existentes tengan el campo
 `userId` (las que no lo tengan dejarían de verse). La app ya consulta con
 `where('userId', '==', uid)`, así que las creadas desde la app lo tienen.
 
-### 2.2 Que `userId` no se pueda cambiar en `apiarioData`
+### 2.2 (APLICADA) Que `userId` no se pueda cambiar en `apiarioData`
 
 Hoy el dueño puede actualizar el documento y poner otro `userId`. Añadir a
 `update`:
@@ -71,6 +71,14 @@ allow update: if isSignedIn()
   && (resource.data.userId == request.auth.uid || isAdmin())
   && request.resource.data.userId == resource.data.userId;
 ```
+
+### Aviso sobre los IDs de cajas trampa
+
+Los IDs (`TRP-001`, …) se calculan por usuario pero el documento vive en una
+colección compartida. Si un segundo usuario crea su primera caja, chocaría con
+el `TRP-001` del primero y ahora Firestore lo rechazará (antes lo habría
+sobrescrito en silencio). Con una sola cuenta de apicultor no pasa; si algún día
+hay varios usuarios, hay que incluir el uid en el ID.
 
 ### 2.3 Tope de tamaño para `userData`
 

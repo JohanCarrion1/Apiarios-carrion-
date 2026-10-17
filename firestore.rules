@@ -152,8 +152,10 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
+      // `userId` no se puede reasignar a otra cuenta.
       allow update: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
+        && (resource.data.userId == request.auth.uid || isAdmin())
+        && request.resource.data.userId == resource.data.userId;
       allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isAdmin());
     }
@@ -357,8 +359,14 @@ service cloud.firestore {
     // Doc id = "TRP-001" con { userId, apiaryId, name, location, ... }.
     // Idéntico a /colmenas (ver lógica de permisos arriba).
     match /trapBoxes/{boxId} {
-      // Cualquier usuario autenticado puede leer y escribir.
-      allow read, write: if isSignedIn();
+      // Aislamiento por PROPIETARIO (antes cualquier usuario con sesión podía
+      // leer, modificar y borrar las cajas de otros).
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }

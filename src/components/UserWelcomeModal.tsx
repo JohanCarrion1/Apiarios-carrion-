@@ -13,7 +13,11 @@ import {
 } from '../services/apiaryService';
 import { saveLastActiveApiaryId } from '../utils/storage';
 import type { LatLng } from './MapPicker';
-import { getCurrentPosition, reverseGeocode } from '../services/geolocation';
+import {
+  getCurrentPosition,
+  reverseGeocode,
+  fetchElevation,
+} from '../services/geolocation';
 import { SelectionBackdrop } from './StoreFx';
 import LivingHive from './LivingHive';
 
@@ -49,9 +53,11 @@ export default function UserWelcomeModal({
   const [coords, setCoords] = useState<LatLng | null>(null);
   const [accuracyMeters, setAccuracyMeters] = useState<number | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [mapMode, setMapMode] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [locationNote, setLocationNote] = useState('');
 
   useEffect(() => {
     if (!current) return;
@@ -67,14 +73,32 @@ export default function UserWelcomeModal({
     onClose?.();
   };
 
-  const fillAddressIfEmpty = async (lat: number, lng: number) => {
+  /** Rellena dirección + msnm a partir del pin actual. */
+  const applyLocation = async (lat: number, lng: number, opts?: { forceAddress?: boolean }) => {
+    setApplying(true);
+    setError('');
+    setLocationNote('');
     try {
-      const address = await reverseGeocode(lat, lng);
-      if (address) {
-        setUbicacion((prev) => (prev.trim() ? prev : address));
+      const [addressResult, elevResult] = await Promise.allSettled([
+        reverseGeocode(lat, lng),
+        fetchElevation(lat, lng),
+      ]);
+
+      if (addressResult.status === 'fulfilled' && addressResult.value) {
+        if (opts?.forceAddress || !ubicacion.trim()) {
+          setUbicacion(addressResult.value);
+        }
       }
-    } catch {
-      /* opcional */
+
+      if (elevResult.status === 'fulfilled' && elevResult.value != null) {
+        setAltitud(String(elevResult.value));
+      }
+
+      setLocationNote('Ubicación aplicada: dirección y altitud actualizadas.');
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo completar la ubicación');
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -182,6 +206,7 @@ export default function UserWelcomeModal({
               try {
                 setGpsLoading(true);
                 setError('');
+                setLocationNote('');
                 const pos = await getCurrentPosition();
                 const next = {
                   lat: pos.coords.latitude,
@@ -192,14 +217,14 @@ export default function UserWelcomeModal({
                   typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null,
                 );
                 setMapMode(true);
-                void fillAddressIfEmpty(next.lat, next.lng);
+                await applyLocation(next.lat, next.lng, { forceAddress: true });
               } catch (err: any) {
                 setError(err?.message || 'No se pudo obtener la ubicación');
               } finally {
                 setGpsLoading(false);
               }
             }}
-            disabled={gpsLoading || saving}
+            disabled={gpsLoading || saving || applying}
             className="flex items-center gap-2 rounded-xl border border-honey/40 bg-honey/10 px-3.5 py-2 text-xs font-bold text-honey transition-colors hover:bg-honey/20 disabled:opacity-60"
           >
             <IconMapPin className="h-3.5 w-3.5" />
@@ -232,20 +257,34 @@ export default function UserWelcomeModal({
               onLocationSelect={(c) => {
                 setCoords(c);
                 setAccuracyMeters(null);
-                void fillAddressIfEmpty(c.lat, c.lng);
+                setLocationNote('Pin movido. Pulsa «Usar esta ubicación» para aplicar.');
               }}
-              helpText="Toca el mapa o arrastra el marcador para ajustar la ubicación exacta."
+              helpText="Toca el mapa o arrastra el marcador. Luego pulsa «Usar esta ubicación»."
               showLocateButton={false}
               heightClass="h-56 sm:h-64"
-              defaultZoom={17}
+              defaultZoom={18}
             />
           </Suspense>
         )}
         {coords && (
-          <p className="mt-2 font-mono text-xs text-husk">
-            {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
-            {accuracyMeters != null ? ` · ±${Math.round(accuracyMeters)} m` : ''}
-          </p>
+          <div className="mt-3 space-y-2">
+            <p className="font-mono text-xs text-husk">
+              {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+              {accuracyMeters != null ? ` · ±${Math.round(accuracyMeters)} m` : ''}
+            </p>
+            <button
+              type="button"
+              onClick={() => void applyLocation(coords.lat, coords.lng, { forceAddress: true })}
+              disabled={applying || saving}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-honey/50 bg-honey/15 px-4 py-2.5 text-sm font-bold text-honey transition-colors hover:bg-honey/25 disabled:opacity-60"
+            >
+              <IconMapPin className="h-4 w-4" />
+              {applying ? 'Aplicando…' : 'Usar esta ubicación'}
+            </button>
+            {locationNote && (
+              <p className="text-xs text-honey/90">{locationNote}</p>
+            )}
+          </div>
         )}
       </div>
 
@@ -286,10 +325,13 @@ export default function UserWelcomeModal({
           type="number"
           value={altitud}
           onChange={(e) => setAltitud(e.target.value)}
-          placeholder="Ej: 2500"
+          placeholder="Se rellena al usar la ubicación"
           min={-500}
           className="w-full rounded-xl border border-line bg-ink px-4 py-3 text-sm text-cream placeholder:text-husk/60 focus:border-honey/70 focus:shadow-[0_0_0_3px_rgba(255,169,10,.12)]"
         />
+        <p className="mt-1 text-[11px] text-husk">
+          Se calcula sola al pulsar «Usar esta ubicación» o «GPS actual».
+        </p>
       </div>
 
       {error && (
@@ -328,7 +370,6 @@ export default function UserWelcomeModal({
   if (variant === 'screen') {
     return (
       <div className="fixed inset-0 z-10 overflow-y-auto overscroll-contain bg-ink">
-        {/* Mismo fondo que /seleccionar (post-login) */}
         <SelectionBackdrop />
         <LivingHive />
         <div className="relative z-10 flex min-h-full items-center justify-center px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">

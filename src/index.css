@@ -156,7 +156,7 @@ body {
      contando los 6px de --hex-pad). Antes había un `margin-inline: -16px`
      que cancelaba ese padding y pegaba la rejilla al contenedor. */
   .map-panal {
-    padding: var(--hex-pad) !important;
+    padding: clamp(20px, 4.5vw, 56px) !important;
   }
 
   /* El texto acompaña al ancho de la celda con un suelo legible, en vez de

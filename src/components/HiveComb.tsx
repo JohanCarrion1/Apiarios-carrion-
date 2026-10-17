@@ -138,9 +138,12 @@ export default function HiveComb({
   // La lista filtrada completa (`visibleHives`) sigue alimentando los chips y
   // el total; lo que se recorta es el DOM. Se reinicia a la primera página
   // cuando cambia el conjunto filtrado (filtro, búsqueda o entidad).
-  const [visibleCount, setVisibleCount] = useState(pageSize);
+  // Hasta 60 se muestran todas (sin botón); "Cargar más" solo aparece si pasan de 60.
+  const inicial = (n: number) => (n <= 60 ? n : pageSize);
+  const [visibleCount, setVisibleCount] = useState(() => inicial(visibleHives.length));
   useEffect(() => {
-    setVisibleCount(pageSize);
+    setVisibleCount(inicial(visibleHives.length));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleHives, pageSize]);
 
   const shownHives = useMemo(

@@ -25,11 +25,10 @@ export function useHexGrid<T extends HTMLElement = HTMLDivElement>() {
     const inner = el.clientWidth - parseFloat(cs.paddingLeft || '0') - parseFloat(cs.paddingRight || '0');
     if (inner <= 0) return;
 
-    // Columnas por fila: 9 en PC/tablet; en celular de verdad 9 también si caben
-    // (celda mínima 36 px) y menos en pantallas muy angostas.
+    // Columnas por fila: 9 en PC/tablet; ~6 en celular (celdas grandes y legibles).
     const gap = inner < 520 ? 3 : 8;
     const cap = inner < 760 ? 96 : 150;
-    const n = Math.max(3, Math.min(9, Math.floor((inner + gap) / (36 + gap))));
+    const n = Math.max(3, Math.min(9, Math.floor((inner + gap) / ((inner < 520 ? 52 : 36) + gap))));
     const w = Math.min(cap, Math.floor(((inner - (n - 1) * gap) / n) * 100) / 100);
 
     el.style.setProperty('--hex-count', String(n));
